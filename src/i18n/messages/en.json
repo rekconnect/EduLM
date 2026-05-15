@@ -1,0 +1,39 @@
+{
+  "app": {
+    "name": "EduLM",
+    "tagline": "Modern multi-tenant school management."
+  },
+  "nav": {
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "dashboard": "Dashboard",
+    "students": "Students",
+    "classes": "Classes",
+    "attendance": "Attendance",
+    "discipline": "Discipline",
+    "billing": "Billing",
+    "settings": "Settings"
+  },
+  "signIn": {
+    "title": "Sign in",
+    "subtitle": "Access your {tenantName} workspace.",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "forgot": "Forgot password?",
+    "errorInvalid": "Invalid email or password."
+  },
+  "landing": {
+    "heading": "EduLM",
+    "lead": "A complete school management platform — students, attendance, discipline, billing, parent portal.",
+    "ctaSignIn": "Sign in",
+    "ctaLearn": "Learn more"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "loading": "Loading…"
+  }
+}

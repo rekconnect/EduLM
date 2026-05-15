@@ -1,0 +1,39 @@
+{
+  "app": {
+    "name": "EduLM",
+    "tagline": "Gestion scolaire moderne, multi-établissements."
+  },
+  "nav": {
+    "signIn": "Se connecter",
+    "signOut": "Se déconnecter",
+    "dashboard": "Tableau de bord",
+    "students": "Élèves",
+    "classes": "Classes",
+    "attendance": "Présences",
+    "discipline": "Discipline",
+    "billing": "Facturation",
+    "settings": "Paramètres"
+  },
+  "signIn": {
+    "title": "Connexion",
+    "subtitle": "Accédez à votre espace {tenantName}.",
+    "email": "Adresse e-mail",
+    "password": "Mot de passe",
+    "submit": "Se connecter",
+    "forgot": "Mot de passe oublié ?",
+    "errorInvalid": "E-mail ou mot de passe invalide."
+  },
+  "landing": {
+    "heading": "EduLM",
+    "lead": "Un système de gestion scolaire complet — élèves, présences, discipline, facturation, portail parents.",
+    "ctaSignIn": "Se connecter",
+    "ctaLearn": "En savoir plus"
+  },
+  "common": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "loading": "Chargement…"
+  }
+}

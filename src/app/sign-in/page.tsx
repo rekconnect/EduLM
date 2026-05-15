@@ -1,23 +1,33 @@
+import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { signIn } from "@/lib/auth";
+import { auth, signIn } from "@/lib/auth";
+import { postSignInPath } from "@/lib/post-signin-redirect";
 
 export default async function SignInPage({
   searchParams,
 }: {
   searchParams: Promise<{ tenant?: string; error?: string }>;
 }) {
+  const session = await auth();
+  if (session?.user) {
+    redirect(postSignInPath(session.user.role));
+  }
+
   const { tenant, error } = await searchParams;
   const t = await getTranslations("signIn");
   const tApp = await getTranslations("app");
 
   async function authenticate(formData: FormData) {
     "use server";
-    await signIn("credentials", {
-      email: formData.get("email"),
-      password: formData.get("password"),
-      tenantSlug: formData.get("tenantSlug"),
-      redirectTo: "/dashboard",
-    });
+    const slug = formData.get("tenantSlug");
+    const credentials: Record<string, string> = {
+      email: String(formData.get("email") ?? ""),
+      password: String(formData.get("password") ?? ""),
+    };
+    if (typeof slug === "string" && slug.length > 0) {
+      credentials.tenantSlug = slug;
+    }
+    await signIn("credentials", { ...credentials, redirectTo: "/post-signin" });
   }
 
   return (

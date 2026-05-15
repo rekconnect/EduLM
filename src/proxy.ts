@@ -14,7 +14,7 @@ function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => p !== "/" && pathname.startsWith(p));
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { nextUrl } = request;
   const host = request.headers.get("host");
 

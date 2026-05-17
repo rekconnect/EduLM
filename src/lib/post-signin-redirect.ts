@@ -10,7 +10,8 @@ export function postSignInPath(role: Role): string {
       return "/super-admin";
     case "SCHOOL_ADMIN":
     case "TEACHER":
-    case "PARENT":
       return "/dashboard";
+    case "PARENT":
+      return "/parent/dashboard";
   }
 }

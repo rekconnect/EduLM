@@ -28,12 +28,19 @@ async function main() {
     await db.attendanceRecord.upsert({
       where: { studentId_date: { studentId: student.id, date: today } },
       update: { status: "ABSENT", note: "test-phase2" },
-      create: { studentId: student.id, date: today, status: "ABSENT", note: "test-phase2" },
+      create: {
+        tenantId: montaigne.id,
+        studentId: student.id,
+        date: today,
+        status: "ABSENT",
+        note: "test-phase2",
+      },
     });
 
     // Insert a discipline event.
     const event = await db.disciplineEvent.create({
       data: {
+        tenantId: montaigne.id,
         studentId: student.id,
         type: "Bavardage en classe",
         severity: "WARNING",

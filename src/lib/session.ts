@@ -56,3 +56,31 @@ export async function withTenantSession<T>(
   const bound = user as SessionUser & { tenantId: string };
   return runWithTenant({ tenantId: bound.tenantId, slug: null }, () => fn(bound));
 }
+
+/**
+ * Require a PARENT user, resolve their Guardian row + list of childIds, and
+ * run inside the tenant scope. Used by all parent-portal pages so they can
+ * safely query `where: { studentId: { in: childIds } }` without leaking other
+ * families' data.
+ */
+export async function withParentSession<T>(
+  fn: (
+    user: SessionUser & { tenantId: string },
+    childIds: string[],
+  ) => Promise<T>,
+): Promise<T> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) redirect("/sign-in");
+  const bound = user as SessionUser & { tenantId: string };
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    // Lazy import to avoid a circular dependency between session.ts and db.ts
+    const { db } = await import("./db");
+    const guardian = await db.guardian.findUnique({
+      where: { userId: bound.id },
+      select: { id: true, childLinks: { select: { studentId: true } } },
+    });
+    const childIds = guardian?.childLinks.map((l) => l.studentId) ?? [];
+    return fn(bound, childIds);
+  });
+}

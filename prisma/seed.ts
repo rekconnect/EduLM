@@ -203,6 +203,77 @@ async function main() {
     }
   }
 
+  // ── Billing: tuition invoices for each enrolled student ─────────
+  const existingInvoiceCount = await prisma.invoice.count({ where: { tenantId: tenant.id } });
+  if (existingInvoiceCount === 0) {
+    const enrolledStudents = await prisma.student.findMany({
+      where: { tenantId: tenant.id, status: "ENROLLED" },
+      select: { id: true, firstName: true, lastName: true },
+    });
+
+    let n = 1;
+    for (const s of enrolledStudents) {
+      const number = `INV-2526-${String(n).padStart(4, "0")}`;
+      const invoice = await prisma.invoice.create({
+        data: {
+          tenantId: tenant.id,
+          studentId: s.id,
+          academicYearId: year.id,
+          number,
+          totalCents: 350000, // $3,500
+          currency: "USD",
+          status: "ISSUED",
+          dueAt: new Date("2025-10-15"),
+          lines: {
+            create: [
+              { description: "Frais de scolarité — Trimestre 1", amountCents: 300000, quantity: 1 },
+              { description: "Frais d'inscription", amountCents: 50000, quantity: 1 },
+            ],
+          },
+        },
+      });
+      // Sami's first child gets a partial payment to demo the PARTIALLY_PAID state.
+      if (s.firstName === "Layla") {
+        await prisma.payment.create({
+          data: {
+            tenantId: tenant.id,
+            invoiceId: invoice.id,
+            amountCents: 150000,
+            method: "BANK_TRANSFER",
+            paidAt: new Date("2025-09-20"),
+            recordedById: admin.id,
+            reference: "WIRE-2025-001",
+          },
+        });
+        await prisma.invoice.update({
+          where: { id: invoice.id },
+          data: { status: "PARTIALLY_PAID" },
+        });
+      }
+      // Joseph: fully paid.
+      if (s.firstName === "Joseph") {
+        await prisma.payment.create({
+          data: {
+            tenantId: tenant.id,
+            invoiceId: invoice.id,
+            amountCents: 350000,
+            method: "CASH",
+            paidAt: new Date("2025-09-05"),
+            recordedById: admin.id,
+          },
+        });
+        await prisma.invoice.update({
+          where: { id: invoice.id },
+          data: { status: "PAID" },
+        });
+      }
+      n++;
+    }
+    console.log(`(seeded ${enrolledStudents.length} invoices)`);
+  } else {
+    console.log(`(${existingInvoiceCount} invoices already seeded — skipping)`);
+  }
+
   console.log("✔ seed complete\n");
   console.log("Demo accounts (all password = " + DEMO_PASSWORD + "):");
   console.log("  super@edulm.app             — SUPER_ADMIN");

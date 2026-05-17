@@ -1,13 +1,14 @@
+import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { AppHeader } from "@/components/shell/app-header";
 import { PageHeader } from "@/components/shell/page-header";
 import { Stat } from "@/components/ui/card";
-import { db } from "@/lib/db";
-import { unscopedDb } from "@/lib/db";
+import { db, unscopedDb } from "@/lib/db";
 import { withTenantSession } from "@/lib/session";
 
 export default async function DashboardPage() {
   return withTenantSession(async (user) => {
+    if (user.role === "PARENT") redirect("/parent/dashboard");
     const t = await getTranslations("dashboard");
 
     // Tenant lookup uses unscoped client (we look up by id, no implicit scoping).

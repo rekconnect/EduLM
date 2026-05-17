@@ -17,17 +17,21 @@ async function navForRole(role: Role): Promise<NavItem[]> {
         { label: t("dashboard"), href: "/dashboard" },
         { label: t("students"), href: "/students" },
         { label: t("classes"), href: "/classes" },
-        { label: t("settings"), href: "/settings" },
+        { label: t("attendance"), href: "/attendance" },
+        { label: t("discipline"), href: "/discipline" },
+        { label: t("billing"), href: "/billing" },
       ];
     case "TEACHER":
       return [
         { label: t("dashboard"), href: "/dashboard" },
         { label: t("students"), href: "/students" },
         { label: t("attendance"), href: "/attendance" },
+        { label: t("discipline"), href: "/discipline" },
       ];
     case "PARENT":
       return [
-        { label: t("dashboard"), href: "/dashboard" },
+        { label: t("dashboard"), href: "/parent/dashboard" },
+        { label: t("billing"), href: "/parent/invoices" },
       ];
   }
 }
@@ -49,7 +53,13 @@ export async function AppHeader({
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-3">
         <div className="flex items-center gap-6">
           <Link
-            href={role === "SUPER_ADMIN" ? "/super-admin" : "/dashboard"}
+            href={
+              role === "SUPER_ADMIN"
+                ? "/super-admin"
+                : role === "PARENT"
+                  ? "/parent/dashboard"
+                  : "/dashboard"
+            }
             className="text-base font-semibold tracking-tight"
           >
             EduLM

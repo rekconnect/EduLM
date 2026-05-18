@@ -274,6 +274,37 @@ async function main() {
     console.log(`(${existingInvoiceCount} invoices already seeded — skipping)`);
   }
 
+  // ── Next academic year (2026-2027) — inactive by default ──────
+  await prisma.academicYear.upsert({
+    where: { tenantId_label: { tenantId: tenant.id, label: "2026-2027" } },
+    update: {},
+    create: {
+      tenantId: tenant.id,
+      label: "2026-2027",
+      startDate: new Date("2026-09-01"),
+      endDate: new Date("2027-06-30"),
+      isActive: false,
+    },
+  });
+
+  // ── Admissions cycle for 2026-2027 ─────────────────────────────
+  await prisma.admissionCycle.upsert({
+    where: { tenantId_label: { tenantId: tenant.id, label: "Inscriptions 2026-2027" } },
+    update: { isActive: true },
+    create: {
+      tenantId: tenant.id,
+      label: "Inscriptions 2026-2027",
+      targetYearLabel: "2026-2027",
+      openAt: new Date("2026-01-15"),
+      closeAt: new Date("2026-06-30"),
+      inscriptionFeeCents: 20000, // $200
+      currency: "USD",
+      isActive: true,
+      description:
+        "Bienvenue. Créez le dossier de votre enfant pour la rentrée 2026-2027. Frais d'inscription $200.",
+    },
+  });
+
   console.log("✔ seed complete\n");
   console.log("Demo accounts (all password = " + DEMO_PASSWORD + "):");
   console.log("  super@edulm.app             — SUPER_ADMIN");

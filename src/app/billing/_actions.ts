@@ -3,10 +3,14 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import { db, unscopedDb } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
 import { decimalStringToCents, sumLines } from "@/lib/money";
+import {
+  sendInvoiceIssuedEmail,
+  sendPaymentReceiptEmail,
+} from "@/lib/emails/notifications";
 
 const STATUSES = ["DRAFT", "ISSUED", "PARTIALLY_PAID", "PAID", "CANCELLED", "OVERDUE"] as const;
 const METHODS = ["CASH", "BANK_TRANSFER", "CHEQUE", "CARD", "OTHER"] as const;
@@ -141,6 +145,11 @@ export async function recordPayment(invoiceId: string, formData: FormData) {
   const amountCents = decimalStringToCents(parsed.data.amount);
   if (amountCents === null || amountCents <= 0) return;
 
+  let notifyContext: {
+    remainingCents: number;
+    paidAt: Date;
+  } | null = null;
+
   await runWithTenant({ tenantId, slug: null }, async () => {
     const invoice = await db.invoice.findUnique({
       where: { id: invoiceId },
@@ -148,15 +157,17 @@ export async function recordPayment(invoiceId: string, formData: FormData) {
     });
     if (!invoice) return;
 
+    const paidAt = parsed.data.paidAt
+      ? new Date(`${parsed.data.paidAt}T00:00:00.000Z`)
+      : new Date();
+
     await db.payment.create({
       data: {
         tenantId,
         invoiceId,
         amountCents,
         method: parsed.data.method,
-        paidAt: parsed.data.paidAt
-          ? new Date(`${parsed.data.paidAt}T00:00:00.000Z`)
-          : new Date(),
+        paidAt,
         recordedById: user.id,
         reference: parsed.data.reference ?? null,
         notes: parsed.data.notes ?? null,
@@ -175,11 +186,73 @@ export async function recordPayment(invoiceId: string, formData: FormData) {
       where: { id: invoiceId },
       data: { status: newStatus },
     });
+
+    notifyContext = {
+      remainingCents: Math.max(0, invoice.totalCents - totalPaid),
+      paidAt,
+    };
   });
+
+  if (notifyContext) {
+    notifyParentOfPayment(tenantId, invoiceId, amountCents, parsed.data.method, notifyContext).catch(
+      (e) => console.error("[email] paymentReceipt notify failed:", e),
+    );
+  }
 
   revalidatePath(`/billing/${invoiceId}`);
   revalidatePath("/billing");
   revalidatePath("/parent/invoices");
+}
+
+async function notifyParentOfPayment(
+  tenantId: string,
+  invoiceId: string,
+  amountCents: number,
+  method: string,
+  ctx: { remainingCents: number; paidAt: Date },
+) {
+  const u = unscopedDb();
+  try {
+    const [tenant, invoice] = await Promise.all([
+      u.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
+      u.invoice.findUnique({
+        where: { id: invoiceId },
+        select: {
+          number: true,
+          currency: true,
+          student: {
+            select: {
+              firstName: true,
+              lastName: true,
+              guardianLinks: {
+                where: { isPrimary: true },
+                take: 1,
+                select: {
+                  guardian: { select: { user: { select: { email: true, name: true } } } },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+    if (!tenant || !invoice) return;
+    const guardianUser = invoice.student.guardianLinks[0]?.guardian.user;
+    if (!guardianUser?.email) return;
+    await sendPaymentReceiptEmail({
+      to: { email: guardianUser.email, name: guardianUser.name },
+      tenantName: tenant.name,
+      invoiceNumber: invoice.number,
+      studentName: `${invoice.student.firstName} ${invoice.student.lastName}`,
+      amountCents,
+      currency: invoice.currency,
+      remainingCents: ctx.remainingCents,
+      paymentMethod: method,
+      paymentDate: ctx.paidAt,
+    });
+  } finally {
+    await u.$disconnect();
+  }
 }
 
 export async function deleteInvoice(invoiceId: string) {
@@ -203,6 +276,55 @@ export async function issueInvoice(invoiceId: string) {
       data: { status: "ISSUED", issuedAt: new Date() },
     });
   });
+  notifyParentOfInvoiceIssued(tenantId, invoiceId).catch((e) =>
+    console.error("[email] invoiceIssued notify failed:", e),
+  );
   revalidatePath(`/billing/${invoiceId}`);
   revalidatePath("/billing");
+}
+
+async function notifyParentOfInvoiceIssued(tenantId: string, invoiceId: string) {
+  const u = unscopedDb();
+  try {
+    const [tenant, invoice] = await Promise.all([
+      u.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
+      u.invoice.findUnique({
+        where: { id: invoiceId },
+        select: {
+          number: true,
+          currency: true,
+          totalCents: true,
+          dueAt: true,
+          student: {
+            select: {
+              firstName: true,
+              lastName: true,
+              guardianLinks: {
+                where: { isPrimary: true },
+                take: 1,
+                select: {
+                  guardian: { select: { user: { select: { email: true, name: true } } } },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+    if (!tenant || !invoice) return;
+    const guardianUser = invoice.student.guardianLinks[0]?.guardian.user;
+    if (!guardianUser?.email) return;
+    await sendInvoiceIssuedEmail({
+      to: { email: guardianUser.email, name: guardianUser.name },
+      tenantName: tenant.name,
+      invoiceNumber: invoice.number,
+      studentName: `${invoice.student.firstName} ${invoice.student.lastName}`,
+      totalCents: invoice.totalCents,
+      currency: invoice.currency,
+      dueAt: invoice.dueAt,
+      invoiceId,
+    });
+  } finally {
+    await u.$disconnect();
+  }
 }

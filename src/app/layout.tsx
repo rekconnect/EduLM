@@ -6,7 +6,15 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "EduLM",
-  description: "Multi-tenant school management platform",
+  description: "Portail parents — inscriptions, finance, communication.",
+  appleWebApp: { capable: true, title: "EduLM", statusBarStyle: "default" },
+};
+
+export const viewport = {
+  themeColor: "#1e40af",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 export default async function RootLayout({

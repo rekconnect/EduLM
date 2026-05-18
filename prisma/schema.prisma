@@ -52,6 +52,11 @@ model Tenant {
   disciplineEvents DisciplineEvent[]
   invoices         Invoice[]
   payments         Payment[]
+  admissionCycles  AdmissionCycle[]
+  applications     Application[]
+  documents        TenantDocument[]
+  announcements    Announcement[]
+  contactMessages  ContactMessage[]
 }
 
 model User {
@@ -67,12 +72,20 @@ model User {
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
-  tenant            Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  guardianProfile   Guardian?
-  disciplineReports DisciplineEvent[] @relation("DisciplineReporter")
-  recordedPayments  Payment[]         @relation("PaymentRecorder")
-  sessions          Session[]
-  accounts          Account[]
+  tenant             Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  guardianProfile    Guardian?
+  disciplineReports  DisciplineEvent[] @relation("DisciplineReporter")
+  recordedPayments   Payment[]         @relation("PaymentRecorder")
+  sessions           Session[]
+  accounts           Account[]
+  submittedApps      Application[]     @relation("ApplicationSubmitter")
+  reviewedApps       Application[]     @relation("ApplicationReviewer")
+  uploadedDocs       TenantDocument[]  @relation("DocumentUploader")
+  documentAcks       DocumentAcknowledgment[]
+  publishedAnnouncements Announcement[] @relation("AnnouncementPublisher")
+  announcementReads  AnnouncementRead[]
+  sentMessages       ContactMessage[]  @relation("ContactSender")
+  readMessages       ContactMessage[]  @relation("ContactReader")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -126,10 +139,12 @@ model AcademicYear {
   isActive  Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  classes     Class[]
-  enrollments Enrollment[]
-  invoices    Invoice[]
+  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classes       Class[]
+  enrollments   Enrollment[]
+  invoices      Invoice[]
+  documents     TenantDocument[]
+  announcements Announcement[]
 
   @@unique([tenantId, label])
   @@index([tenantId])
@@ -143,9 +158,11 @@ model Class {
   section        String
   name           String
 
-  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  academicYear AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
-  enrollments  Enrollment[]
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  academicYear  AcademicYear     @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  enrollments   Enrollment[]
+  documents     TenantDocument[]
+  announcements Announcement[]
 
   @@unique([tenantId, academicYearId, level, section])
   @@index([tenantId, academicYearId])
@@ -171,12 +188,14 @@ model Student {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
-  tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  guardianLinks    StudentGuardian[]
-  enrollments      Enrollment[]
-  attendance       AttendanceRecord[]
-  disciplineEvents DisciplineEvent[]
-  invoices         Invoice[]
+  tenant                   Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  guardianLinks            StudentGuardian[]
+  enrollments              Enrollment[]
+  attendance               AttendanceRecord[]
+  disciplineEvents         DisciplineEvent[]
+  invoices                 Invoice[]
+  originApplication        Application?
+  renewalApplications      Application[]      @relation("StudentRenewal")
 
   @@index([tenantId, lastName, firstName])
 }
@@ -348,4 +367,243 @@ model Payment {
 
   @@index([tenantId, invoiceId])
   @@index([tenantId, paidAt])
+}
+
+// ───────────────────────── Admissions / nouvelle inscription ─────────────────────────
+
+model AdmissionCycle {
+  id                  String   @id @default(cuid())
+  tenantId            String
+  label               String
+  targetYearLabel     String
+  openAt              DateTime @default(now())
+  closeAt             DateTime?
+  inscriptionFeeCents Int?     @default(0)
+  currency            String   @default("USD")
+  isActive            Boolean  @default(true)
+  description         String?
+  createdAt           DateTime @default(now())
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@unique([tenantId, label])
+  @@index([tenantId, isActive])
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  INTERVIEW_SCHEDULED
+  ACCEPTED
+  WAITLISTED
+  DECLINED
+  WITHDRAWN
+}
+
+enum ChildGender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+model Application {
+  id                String            @id @default(cuid())
+  tenantId          String
+  cycleId           String
+  submittedByUserId String
+  status            ApplicationStatus @default(DRAFT)
+
+  // Child identity (Step 1)
+  childFirstName    String
+  childLastName     String
+  childDob          DateTime?
+  childGender       ChildGender?
+  childNationality  String?
+  childPlaceOfBirth String?
+
+  // Family (Step 2)
+  primaryParentName    String
+  primaryParentPhone   String?
+  primaryParentEmail   String?
+  secondaryParentName  String?
+  secondaryParentPhone String?
+  secondaryParentEmail String?
+  address              String?
+  city                 String?
+  postalCode           String?
+  country              String?
+
+  // Academic history (Step 3)
+  currentSchool   String?
+  currentLevel    String?
+  requestedLevel  String?
+  motivationNote  String?
+
+  // Internal notes (admin-only)
+  internalNotes   String?
+
+  // Renewal: if set, this is a re-inscription for an existing Student.
+  // The accept handler skips Student creation and just creates a new Enrollment
+  // in the chosen class for the target year.
+  existingStudentId String?
+
+  // Workflow
+  submittedAt        DateTime?
+  reviewedAt         DateTime?
+  reviewedByUserId   String?
+  decisionAt         DateTime?
+  decisionNote       String?
+  resultingStudentId String?  @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cycle            AdmissionCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  submittedBy      User           @relation("ApplicationSubmitter", fields: [submittedByUserId], references: [id])
+  reviewedBy       User?          @relation("ApplicationReviewer", fields: [reviewedByUserId], references: [id])
+  resultingStudent Student?       @relation(fields: [resultingStudentId], references: [id])
+  existingStudent  Student?       @relation("StudentRenewal", fields: [existingStudentId], references: [id])
+
+  @@unique([cycleId, existingStudentId])
+  @@index([tenantId, cycleId, status])
+  @@index([tenantId, submittedByUserId])
+  @@index([tenantId, status, submittedAt])
+  @@index([tenantId, existingStudentId])
+}
+
+// ───────────────────────── Document portal ─────────────────────────
+
+enum DocumentCategory {
+  REGULATION   // règlement intérieur
+  CALENDAR     // calendrier scolaire
+  FORM         // formulaires
+  NEWSLETTER   // lettre d'information
+  OTHER
+}
+
+enum DocumentAudience {
+  ALL_PARENTS
+  CLASS
+  ACADEMIC_YEAR
+}
+
+model TenantDocument {
+  id               String           @id @default(cuid())
+  tenantId         String
+  title            String
+  description      String?
+  category         DocumentCategory @default(OTHER)
+  storagePath      String?          // Supabase Storage object key
+  externalUrl      String?          // Fallback when storage isn't wired
+  fileSizeBytes    Int?
+  mimeType         String?
+  audience         DocumentAudience @default(ALL_PARENTS)
+  classId          String?
+  academicYearId   String?
+  requiresAck      Boolean          @default(false)
+  publishedAt      DateTime         @default(now())
+  unpublishedAt    DateTime?
+  uploadedByUserId String
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  tenant          Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class           Class?                   @relation(fields: [classId], references: [id], onDelete: SetNull)
+  academicYear    AcademicYear?            @relation(fields: [academicYearId], references: [id], onDelete: SetNull)
+  uploadedBy      User                     @relation("DocumentUploader", fields: [uploadedByUserId], references: [id])
+  acknowledgments DocumentAcknowledgment[]
+
+  @@index([tenantId, publishedAt])
+  @@index([tenantId, category])
+  @@index([tenantId, classId])
+  @@index([tenantId, academicYearId])
+}
+
+model DocumentAcknowledgment {
+  id             String   @id @default(cuid())
+  documentId     String
+  userId         String
+  acknowledgedAt DateTime @default(now())
+
+  document TenantDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+  @@index([documentId])
+  @@index([userId])
+}
+
+// ───────────────────────── Communication ─────────────────────────
+
+enum AnnouncementAudience {
+  ALL_PARENTS
+  CLASS
+  ACADEMIC_YEAR
+}
+
+model Announcement {
+  id                String               @id @default(cuid())
+  tenantId          String
+  title             String
+  body              String
+  audience          AnnouncementAudience @default(ALL_PARENTS)
+  classId           String?
+  academicYearId    String?
+  publishedAt       DateTime             @default(now())
+  publishedByUserId String
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class        Class?             @relation(fields: [classId], references: [id], onDelete: SetNull)
+  academicYear AcademicYear?      @relation(fields: [academicYearId], references: [id], onDelete: SetNull)
+  publishedBy  User               @relation("AnnouncementPublisher", fields: [publishedByUserId], references: [id])
+  reads        AnnouncementRead[]
+
+  @@index([tenantId, publishedAt])
+  @@index([tenantId, classId])
+  @@index([tenantId, academicYearId])
+}
+
+model AnnouncementRead {
+  announcementId String
+  userId         String
+  readAt         DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([announcementId, userId])
+  @@index([userId])
+}
+
+enum ContactMessageStatus {
+  NEW
+  READ
+  CLOSED
+}
+
+model ContactMessage {
+  id           String               @id @default(cuid())
+  tenantId     String
+  fromUserId   String
+  subject      String
+  body         String
+  status       ContactMessageStatus @default(NEW)
+  readAt       DateTime?
+  readByUserId String?
+  closedAt     DateTime?
+  adminReply   String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fromUser User   @relation("ContactSender", fields: [fromUserId], references: [id])
+  readBy   User?  @relation("ContactReader", fields: [readByUserId], references: [id])
+
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, fromUserId])
 }

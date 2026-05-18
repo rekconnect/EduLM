@@ -3,25 +3,89 @@ import { getTranslations } from "next-intl/server";
 import { AppHeader } from "@/components/shell/app-header";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { LinkButton } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
 import { db } from "@/lib/db";
 import { withParentSession } from "@/lib/session";
 import { formatMoney } from "@/lib/money";
+import { startRenewal } from "../applications/_actions";
 
 export default async function ParentDashboardPage() {
   return withParentSession(async (user, childIds) => {
     const t = await getTranslations("parent");
     const tAtt = await getTranslations("attendance");
+    const tAdm = await getTranslations("admissions");
 
     if (childIds.length === 0) {
+      // New parents (signed up for admissions but no accepted application yet)
+      // see a friendly welcome with their applications + a CTA to start one.
+      const apps = await db.application.findMany({
+        where: { submittedByUserId: user.id },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        include: { cycle: { select: { label: true } } },
+      });
+
       return (
         <div className="min-h-screen">
           <AppHeader role={user.role} userLabel={user.name ?? user.email} />
-          <main className="mx-auto max-w-3xl px-6 py-10">
-            <PageHeader title={t("dashboardTitle")} />
+          <main className="mx-auto max-w-3xl space-y-6 px-6 py-10">
+            <PageHeader
+              title={t("dashboardTitle")}
+              description={t("welcome", { name: user.name ?? user.email })}
+            />
             <Card>
               <CardBody>
-                <p className="text-sm text-[color:var(--muted-fg)]">{t("noChildren")}</p>
+                {apps.length === 0 ? (
+                  <>
+                    <p className="text-sm text-[color:var(--muted-fg)]">{t("noChildren")}</p>
+                    <div className="mt-4">
+                      <Link
+                        href="/parent/applications/new"
+                        className="inline-flex items-center rounded-md bg-[color:var(--primary)] px-4 py-2 text-sm font-medium text-[color:var(--primary-foreground)] transition hover:opacity-90"
+                      >
+                        + Nouvelle inscription
+                      </Link>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="text-base font-semibold">Mes dossiers</h2>
+                    <ul className="mt-3 space-y-2 text-sm">
+                      {apps.map((a) => (
+                        <li key={a.id}>
+                          <Link
+                            href={
+                              a.status === "DRAFT"
+                                ? `/parent/applications/${a.id}/edit`
+                                : `/parent/applications/${a.id}`
+                            }
+                            className="flex items-center justify-between rounded-md border border-[color:var(--border)] px-3 py-2 transition hover:bg-[color:var(--muted)]"
+                          >
+                            <span>
+                              <span className="font-medium">
+                                {a.childFirstName || "—"} {a.childLastName || ""}
+                              </span>
+                              <span className="ms-2 text-xs text-[color:var(--muted-fg)]">
+                                {a.cycle.label}
+                              </span>
+                            </span>
+                            <span className="text-xs text-[color:var(--muted-fg)]">
+                              {a.status}
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="mt-4">
+                      <Link
+                        href="/parent/applications"
+                        className="text-sm text-[color:var(--primary)] hover:underline"
+                      >
+                        Voir tous mes dossiers →
+                      </Link>
+                    </div>
+                  </>
+                )}
               </CardBody>
             </Card>
           </main>
@@ -32,28 +96,54 @@ export default async function ParentDashboardPage() {
     const since = new Date();
     since.setUTCDate(since.getUTCDate() - 30);
     since.setUTCHours(0, 0, 0, 0);
+    const now = new Date();
 
-    const children = await db.student.findMany({
-      where: { id: { in: childIds } },
-      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        enrollments: {
-          where: { academicYear: { isActive: true } },
-          select: { class: { select: { name: true } } },
-          take: 1,
+    const [children, openCycles, existingRenewals] = await Promise.all([
+      db.student.findMany({
+        where: { id: { in: childIds } },
+        orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          enrollments: {
+            where: { academicYear: { isActive: true } },
+            select: { class: { select: { name: true } } },
+            take: 1,
+          },
+          attendance: {
+            where: { date: { gte: since } },
+            select: { status: true },
+          },
+          invoices: {
+            select: { totalCents: true, currency: true, payments: { select: { amountCents: true } } },
+          },
         },
-        attendance: {
-          where: { date: { gte: since } },
-          select: { status: true },
+      }),
+      db.admissionCycle.findMany({
+        where: {
+          isActive: true,
+          openAt: { lte: now },
+          OR: [{ closeAt: null }, { closeAt: { gte: now } }],
         },
-        invoices: {
-          select: { totalCents: true, currency: true, payments: { select: { amountCents: true } } },
+        orderBy: { openAt: "desc" },
+        select: { id: true, label: true, targetYearLabel: true },
+      }),
+      db.application.findMany({
+        where: {
+          existingStudentId: { in: childIds },
+          status: { not: "WITHDRAWN" },
         },
-      },
-    });
+        select: { existingStudentId: true, cycleId: true, id: true, status: true },
+      }),
+    ]);
+
+    const renewalMap = new Map<string, { id: string; status: string }>();
+    for (const r of existingRenewals) {
+      if (r.existingStudentId) {
+        renewalMap.set(`${r.existingStudentId}::${r.cycleId}`, { id: r.id, status: r.status });
+      }
+    }
 
     return (
       <div className="min-h-screen">
@@ -125,6 +215,53 @@ export default async function ParentDashboardPage() {
                             {formatMoney(bal, cur)}
                           </span>
                         ))}
+                      </div>
+                    ) : null}
+
+                    {openCycles.length > 0 ? (
+                      <div className="space-y-1 border-t border-[color:var(--border)] pt-3">
+                        {openCycles.map((cycle) => {
+                          const existing = renewalMap.get(`${c.id}::${cycle.id}`);
+                          if (existing) {
+                            return (
+                              <Link
+                                key={cycle.id}
+                                href={
+                                  existing.status === "DRAFT"
+                                    ? `/parent/applications/${existing.id}/edit`
+                                    : `/parent/applications/${existing.id}`
+                                }
+                                className="flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm transition hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/40"
+                              >
+                                <span>
+                                  <span className="font-medium">
+                                    {tAdm("renewalBadge")}
+                                  </span>{" "}
+                                  <span className="text-[color:var(--muted-fg)]">
+                                    {cycle.targetYearLabel}
+                                  </span>
+                                </span>
+                                <span className="text-xs uppercase">{existing.status}</span>
+                              </Link>
+                            );
+                          }
+                          return (
+                            <form
+                              key={cycle.id}
+                              action={startRenewal}
+                              className="flex items-center justify-between gap-2"
+                            >
+                              <input type="hidden" name="studentId" value={c.id} />
+                              <input type="hidden" name="cycleId" value={cycle.id} />
+                              <span className="text-sm text-[color:var(--muted-fg)]">
+                                {tAdm("renewCta", { year: cycle.targetYearLabel })}
+                              </span>
+                              <Button type="submit" size="sm">
+                                + {tAdm("renewalBadge")}
+                              </Button>
+                            </form>
+                          );
+                        })}
                       </div>
                     ) : null}
 

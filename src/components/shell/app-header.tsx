@@ -15,8 +15,13 @@ async function navForRole(role: Role): Promise<NavItem[]> {
     case "SCHOOL_ADMIN":
       return [
         { label: t("dashboard"), href: "/dashboard" },
+        { label: t("admissions"), href: "/admissions-admin" },
         { label: t("students"), href: "/students" },
         { label: t("classes"), href: "/classes" },
+        { label: "Années", href: "/admin/years" },
+        { label: "Documents", href: "/admin/documents" },
+        { label: "Annonces", href: "/admin/announcements" },
+        { label: "Messages", href: "/admin/messages" },
         { label: t("attendance"), href: "/attendance" },
         { label: t("discipline"), href: "/discipline" },
         { label: t("billing"), href: "/billing" },
@@ -31,7 +36,11 @@ async function navForRole(role: Role): Promise<NavItem[]> {
     case "PARENT":
       return [
         { label: t("dashboard"), href: "/parent/dashboard" },
+        { label: t("applications"), href: "/parent/applications" },
+        { label: "Documents", href: "/parent/documents" },
+        { label: "Annonces", href: "/parent/announcements" },
         { label: t("billing"), href: "/parent/invoices" },
+        { label: "Contact", href: "/parent/contact" },
       ];
   }
 }

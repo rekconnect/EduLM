@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Role } from "@prisma/client";
 import { auth } from "./auth";
+import { db } from "./db";
 import { runWithTenant } from "./tenant-context";
 import { postSignInPath } from "./post-signin-redirect";
 
@@ -74,8 +75,6 @@ export async function withParentSession<T>(
   if (!tenantId) redirect("/sign-in");
   const bound = user as SessionUser & { tenantId: string };
   return runWithTenant({ tenantId, slug: null }, async () => {
-    // Lazy import to avoid a circular dependency between session.ts and db.ts
-    const { db } = await import("./db");
     const guardian = await db.guardian.findUnique({
       where: { userId: bound.id },
       select: { id: true, childLinks: { select: { studentId: true } } },

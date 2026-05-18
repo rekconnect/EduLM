@@ -8,13 +8,14 @@ import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
 
 const classSchema = z.object({
+  academicYearId: z.string().min(1).optional(),
   level: z.string().trim().min(1).max(40),
   section: z.string().trim().min(1).max(20),
   name: z.string().trim().min(1).max(80),
 });
 
 export type ClassFormState = {
-  errors?: Partial<Record<"level" | "section" | "name", string>>;
+  errors?: Partial<Record<"academicYearId" | "level" | "section" | "name", string>>;
   formError?: string;
 };
 
@@ -27,6 +28,7 @@ export async function createClass(
   if (!tenantId) return { formError: "No tenant" };
 
   const parsed = classSchema.safeParse({
+    academicYearId: String(formData.get("academicYearId") ?? "") || undefined,
     level: String(formData.get("level") ?? ""),
     section: String(formData.get("section") ?? ""),
     name: String(formData.get("name") ?? ""),
@@ -42,15 +44,21 @@ export async function createClass(
 
   let newId: string | undefined;
   await runWithTenant({ tenantId, slug: null }, async () => {
-    const activeYear = await db.academicYear.findFirst({
-      where: { isActive: true },
-      select: { id: true },
-    });
-    if (!activeYear) return;
+    // Use explicit year if provided, otherwise fall back to active.
+    const yearId = parsed.data.academicYearId
+      ? (await db.academicYear.findUnique({
+          where: { id: parsed.data.academicYearId },
+          select: { id: true },
+        }))?.id
+      : (await db.academicYear.findFirst({
+          where: { isActive: true },
+          select: { id: true },
+        }))?.id;
+    if (!yearId) return;
     const created = await db.class.create({
       data: {
         tenantId,
-        academicYearId: activeYear.id,
+        academicYearId: yearId,
         level: parsed.data.level,
         section: parsed.data.section,
         name: parsed.data.name,
@@ -60,7 +68,7 @@ export async function createClass(
     newId = created.id;
   });
 
-  if (!newId) return { formError: "No active academic year" };
+  if (!newId) return { formError: "No academic year" };
 
   revalidatePath("/classes");
   redirect(`/classes/${newId}`);

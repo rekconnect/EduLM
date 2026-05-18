@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { AppHeader } from "@/components/shell/app-header";
+import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { Stat } from "@/components/ui/card";
 import { db, unscopedDb } from "@/lib/db";
@@ -14,16 +14,11 @@ export default async function DashboardPage() {
     // Tenant lookup uses unscoped client (we look up by id, no implicit scoping).
     const unscoped = unscopedDb();
     let tenantName = "";
-    try {
-      const tenant = await unscoped.tenant.findUnique({
+          const tenant = await unscoped.tenant.findUnique({
         where: { id: user.tenantId },
         select: { name: true },
       });
       tenantName = tenant?.name ?? "";
-    } finally {
-      await unscoped.$disconnect();
-    }
-
     // 7-day attendance window for the dashboard absence counter.
     const since = new Date();
     since.setUTCDate(since.getUTCDate() - 7);
@@ -43,8 +38,7 @@ export default async function DashboardPage() {
       ]);
 
     return (
-      <div className="min-h-screen">
-        <AppHeader role={user.role} userLabel={user.name ?? user.email} tenantLabel={tenantName} />
+      <AppShell role={user.role} userLabel={user.name ?? user.email} tenantLabel={tenantName} >
         <main className="mx-auto max-w-6xl px-6 py-10">
           <PageHeader
             title={t("welcome", { name: user.name ?? user.email })}
@@ -59,7 +53,7 @@ export default async function DashboardPage() {
             <Stat label={t("statIncidentsWeek")} value={disciplineWeek} />
           </div>
         </main>
-      </div>
+      </AppShell>
     );
   });
 }

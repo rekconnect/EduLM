@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { AppHeader } from "@/components/shell/app-header";
+import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
@@ -12,8 +12,7 @@ export default async function SuperAdminPage() {
   const t = await getTranslations("tenants");
 
   const db = unscopedDb();
-  try {
-    const tenants = await db.tenant.findMany({
+      const tenants = await db.tenant.findMany({
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -26,8 +25,7 @@ export default async function SuperAdminPage() {
     });
 
     return (
-      <div className="min-h-screen">
-        <AppHeader role={user.role} userLabel={user.email} />
+      <AppShell role={user.role} userLabel={user.email} >
         <main className="mx-auto max-w-6xl px-6 py-10">
           <PageHeader
             title={t("title")}
@@ -78,9 +76,6 @@ export default async function SuperAdminPage() {
             </tbody>
           </Table>
         </main>
-      </div>
+      </AppShell>
     );
-  } finally {
-    await db.$disconnect();
-  }
 }

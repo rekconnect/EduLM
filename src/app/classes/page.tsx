@@ -1,26 +1,32 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { AppHeader } from "@/components/shell/app-header";
+import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
+import { YearPicker } from "@/components/shell/year-picker";
 import { db } from "@/lib/db";
 import { withTenantSession } from "@/lib/session";
 
-export default async function ClassesPage() {
+export default async function ClassesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ yearId?: string }>;
+}) {
+  const { yearId: yearIdParam } = await searchParams;
+
   return withTenantSession(async (user) => {
     const t = await getTranslations("classes");
 
-    const activeYear = await db.academicYear.findFirst({
-      where: { isActive: true },
-      select: { id: true, label: true },
+    const years = await db.academicYear.findMany({
+      orderBy: { startDate: "desc" },
+      select: { id: true, label: true, isActive: true },
     });
 
-    if (!activeYear) {
+    if (years.length === 0) {
       return (
-        <div className="min-h-screen">
-          <AppHeader role={user.role} userLabel={user.name ?? user.email} />
+        <AppShell role={user.role} userLabel={user.name ?? user.email}>
           <main className="mx-auto max-w-5xl px-6 py-10">
             <PageHeader title={t("title")} />
             <Card>
@@ -29,12 +35,16 @@ export default async function ClassesPage() {
               </CardBody>
             </Card>
           </main>
-        </div>
+        </AppShell>
       );
     }
 
+    const defaultYear = years.find((y) => y.isActive) ?? years[0]!;
+    const selectedYear =
+      (yearIdParam && years.find((y) => y.id === yearIdParam)) || defaultYear;
+
     const classes = await db.class.findMany({
-      where: { academicYearId: activeYear.id },
+      where: { academicYearId: selectedYear.id },
       orderBy: [{ level: "asc" }, { section: "asc" }],
       select: {
         id: true,
@@ -46,20 +56,28 @@ export default async function ClassesPage() {
     });
 
     return (
-      <div className="min-h-screen">
-        <AppHeader role={user.role} userLabel={user.name ?? user.email} />
+      <AppShell role={user.role} userLabel={user.name ?? user.email}>
         <main className="mx-auto max-w-5xl px-6 py-10">
           <PageHeader
             title={t("title")}
-            description={`${t("subtitle")} — ${activeYear.label}`}
+            description={`${t("subtitle")} — ${selectedYear.label}${
+              !selectedYear.isActive ? " · année non active" : ""
+            }`}
             action={
               user.role === "SCHOOL_ADMIN" ? (
-                <LinkButton href="/classes/new" size="sm">
+                <LinkButton
+                  href={`/classes/new${selectedYear.id ? `?yearId=${selectedYear.id}` : ""}`}
+                  size="sm"
+                >
                   {t("createCta")}
                 </LinkButton>
               ) : undefined
             }
           />
+
+          <div className="mb-4 max-w-xs">
+            <YearPicker years={years} selectedId={selectedYear.id} />
+          </div>
 
           <Table>
             <THead>
@@ -90,7 +108,7 @@ export default async function ClassesPage() {
             </tbody>
           </Table>
         </main>
-      </div>
+      </AppShell>
     );
   });
 }

@@ -1,36 +1,86 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #0a0a0a;
-  --muted: #f4f4f5;
-  --muted-fg: #71717a;
+  /* Surfaces */
+  --background: #f8fafc;
+  --surface: #ffffff;
+  --foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-fg: #64748b;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  /* Brand */
   --primary: #1e40af;
-  --primary-fg: #ffffff;
-  --border: #e4e4e7;
+  --primary-hover: #1d3a9a;
+  --primary-foreground: #ffffff;
+  --primary-soft: #dbeafe;
+  --primary-soft-fg: #1e3a8a;
+
+  /* Semantic */
+  --success: #16a34a;
+  --success-soft: #dcfce7;
+  --success-soft-fg: #14532d;
+  --warning: #d97706;
+  --warning-soft: #fef3c7;
+  --warning-soft-fg: #78350f;
+  --danger: #dc2626;
+  --danger-soft: #fee2e2;
+  --danger-soft-fg: #7f1d1d;
+
+  /* Sidebar */
+  --sidebar-bg: #0f172a;
+  --sidebar-fg: #e2e8f0;
+  --sidebar-muted: #94a3b8;
+  --sidebar-active-bg: #1e40af;
+  --sidebar-active-fg: #ffffff;
+  --sidebar-hover-bg: #1e293b;
+  --sidebar-border: #1e293b;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #fafafa;
-    --muted: #18181b;
-    --muted-fg: #a1a1aa;
+    --background: #020617;
+    --surface: #0f172a;
+    --foreground: #f8fafc;
+    --muted: #1e293b;
+    --muted-fg: #94a3b8;
+    --border: #1e293b;
+    --border-strong: #334155;
+
     --primary: #3b82f6;
-    --primary-fg: #ffffff;
-    --border: #27272a;
+    --primary-hover: #2563eb;
+    --primary-foreground: #ffffff;
+    --primary-soft: #1e3a8a;
+    --primary-soft-fg: #dbeafe;
+
+    --success-soft: #14532d;
+    --success-soft-fg: #bbf7d0;
+    --warning-soft: #78350f;
+    --warning-soft-fg: #fde68a;
+    --danger-soft: #7f1d1d;
+    --danger-soft-fg: #fecaca;
+
+    --sidebar-bg: #020617;
+    --sidebar-fg: #cbd5e1;
+    --sidebar-muted: #64748b;
+    --sidebar-active-bg: #1e40af;
+    --sidebar-active-fg: #ffffff;
+    --sidebar-hover-bg: #0f172a;
+    --sidebar-border: #1e293b;
   }
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-fg);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-fg);
   --color-border: var(--border);
-  --font-sans: var(--font-sans, "Inter", system-ui, sans-serif);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --font-sans: var(--font-sans, "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
 }
 
 html,
@@ -43,4 +93,25 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Cards / tables get a slightly elevated surface */
+.surface {
+  background: var(--surface);
+}
+
+/* <option> uses OS-default popup colors that don't pick up our CSS vars —
+   explicitly style so dropdowns stay readable in both light and dark mode. */
+option,
+optgroup {
+  background-color: var(--surface);
+  color: var(--foreground);
+}
+
+/* Explicit foreground on form controls so native widgets (date pickers,
+   selects in closed state) inherit the theme color reliably. */
+select,
+input,
+textarea {
+  color: var(--foreground);
 }

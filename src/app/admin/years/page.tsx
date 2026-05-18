@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { AppHeader } from "@/components/shell/app-header";
+import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
@@ -22,8 +22,7 @@ export default async function YearsPage() {
     });
 
     return (
-      <div className="min-h-screen">
-        <AppHeader role={user.role} userLabel={user.name ?? user.email} />
+      <AppShell role={user.role} userLabel={user.name ?? user.email} >
         <main className="mx-auto max-w-5xl space-y-4 px-6 py-10">
           <PageHeader
             title={t("yearsTitle")}
@@ -83,7 +82,7 @@ export default async function YearsPage() {
             </tbody>
           </Table>
         </main>
-      </div>
+      </AppShell>
     );
   });
 }

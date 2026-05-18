@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { AppHeader } from "@/components/shell/app-header";
+import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody, CardHeader, Stat } from "@/components/ui/card";
 import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
@@ -102,8 +102,7 @@ export default async function ParentChildPage({
     const year = child.enrollments[0]?.academicYear.label ?? "";
 
     return (
-      <div className="min-h-screen">
-        <AppHeader role={user.role} userLabel={user.name ?? user.email} />
+      <AppShell role={user.role} userLabel={user.name ?? user.email} >
         <main className="mx-auto max-w-5xl space-y-6 px-6 py-10">
           <PageHeader
             title={`${child.firstName} ${child.lastName}`}
@@ -251,7 +250,7 @@ export default async function ParentChildPage({
             </Table>
           </Card>
         </main>
-      </div>
+      </AppShell>
     );
   });
 }

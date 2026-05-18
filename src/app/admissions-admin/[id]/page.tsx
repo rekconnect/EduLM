@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { AppHeader } from "@/components/shell/app-header";
+import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { db } from "@/lib/db";
@@ -86,17 +86,25 @@ export default async function AdmissionsAdminDetailPage({
     const existingChildren = app.submittedBy.guardianProfile?.childLinks ?? [];
     const isExistingFamily = existingChildren.length > 0;
 
-    const classes = await db.class.findMany({
-      where: { academicYear: { isActive: true } },
-      orderBy: [{ level: "asc" }, { section: "asc" }],
-      select: { id: true, name: true, level: true, section: true },
+    // Load classes from the cycle's TARGET year — not the currently active one.
+    // Otherwise the admin can accidentally enrol an applicant into the wrong year.
+    const targetYear = await db.academicYear.findUnique({
+      where: { tenantId_label: { tenantId, label: app.cycle.targetYearLabel } },
+      select: { id: true, label: true },
     });
+
+    const classes = targetYear
+      ? await db.class.findMany({
+          where: { academicYearId: targetYear.id },
+          orderBy: [{ level: "asc" }, { section: "asc" }],
+          select: { id: true, name: true, level: true, section: true },
+        })
+      : [];
 
     const finalized = ["ACCEPTED", "DECLINED", "WAITLISTED"].includes(app.status);
 
     return (
-      <div className="min-h-screen">
-        <AppHeader role={user.role} userLabel={user.name ?? user.email} />
+      <AppShell role={user.role} userLabel={user.name ?? user.email} >
         <main className="mx-auto max-w-4xl space-y-6 px-6 py-10">
           <PageHeader
             title={`${app.childLastName} ${app.childFirstName}`}
@@ -164,8 +172,28 @@ export default async function AdmissionsAdminDetailPage({
 
           {!finalized ? (
             <Card>
-              <CardHeader title={t("adminReview")} />
-              <CardBody>
+              <CardHeader
+                title={t("adminReview")}
+                description={`Cible : ${app.cycle.targetYearLabel}`}
+              />
+              <CardBody className="space-y-3">
+                {!targetYear ? (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+                    L&apos;année scolaire <strong>{app.cycle.targetYearLabel}</strong> n&apos;existe pas encore. Créez-la dans{" "}
+                    <Link href="/admin/years/new" className="underline">
+                      Configuration → Années
+                    </Link>{" "}
+                    avant d&apos;accepter ce dossier.
+                  </div>
+                ) : classes.length === 0 ? (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+                    Aucune classe pour <strong>{targetYear.label}</strong>. Créez les classes dans{" "}
+                    <Link href={`/classes/new?yearId=${targetYear.id}`} className="underline">
+                      Classes → Nouvelle classe
+                    </Link>{" "}
+                    pour pouvoir affecter cet élève.
+                  </div>
+                ) : null}
                 <DecideForm applicationId={app.id} classes={classes} />
               </CardBody>
             </Card>
@@ -229,7 +257,7 @@ export default async function AdmissionsAdminDetailPage({
             </CardBody>
           </Card>
         </main>
-      </div>
+      </AppShell>
     );
   });
 }

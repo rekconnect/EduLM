@@ -77,8 +77,7 @@ async function notifyAdminsOfContactMessage(
   body: string,
 ) {
   const u = unscopedDb();
-  try {
-    const [tenant, admins] = await Promise.all([
+      const [tenant, admins] = await Promise.all([
       u.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
       u.user.findMany({
         where: { tenantId, role: "SCHOOL_ADMIN", status: "ACTIVE" },
@@ -95,9 +94,6 @@ async function notifyAdminsOfContactMessage(
       body,
       messageId,
     });
-  } finally {
-    await u.$disconnect();
-  }
 }
 
 export async function markMessageRead(messageId: string) {

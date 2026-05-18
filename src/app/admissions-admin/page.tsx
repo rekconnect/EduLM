@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { ApplicationStatus } from "@prisma/client";
-import { AppHeader } from "@/components/shell/app-header";
+import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -130,8 +130,7 @@ export default async function AdmissionsAdminListPage({
     }
 
     return (
-      <div className="min-h-screen">
-        <AppHeader role={user.role} userLabel={user.name ?? user.email} />
+      <AppShell role={user.role} userLabel={user.name ?? user.email} >
         <main className="mx-auto max-w-6xl space-y-6 px-6 py-10">
           <PageHeader
             title={t("adminTitle")}
@@ -189,7 +188,7 @@ export default async function AdmissionsAdminListPage({
             showChildCount
           />
         </main>
-      </div>
+      </AppShell>
     );
   });
 }

@@ -19,8 +19,11 @@ function getClient(): Resend | null {
 export type MailRecipient = string | { name?: string | null; email: string };
 
 function normalizeRecipient(r: MailRecipient): string {
-  if (typeof r === "string") return r;
-  return r.name ? `${r.name} <${r.email}>` : r.email;
+  // Send bare email addresses. The `Name <email>` format trips up Resend's
+  // testing-sandbox strict recipient check (e.g. with onboarding@resend.dev),
+  // and most clients display the From name anyway, not the To name.
+  if (typeof r === "string") return r.trim();
+  return r.email.trim();
 }
 
 export type SendMailInput = {

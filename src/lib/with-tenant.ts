@@ -21,16 +21,12 @@ export async function getCurrentTenant(): Promise<ResolvedTenant> {
   if (!slug) notFound();
 
   const db = unscopedDb();
-  try {
-    const tenant = await db.tenant.findUnique({
+      const tenant = await db.tenant.findUnique({
       where: { slug },
       select: { id: true, slug: true, name: true, defaultLocale: true, enabledLocales: true },
     });
     if (!tenant) notFound();
     return tenant;
-  } finally {
-    await db.$disconnect();
-  }
 }
 
 /**

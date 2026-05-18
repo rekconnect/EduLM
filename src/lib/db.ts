@@ -102,8 +102,12 @@ function extend(client: ReturnType<typeof basePrisma>) {
 }
 
 type ExtendedClient = ReturnType<typeof extend>;
+type BasePrisma = ReturnType<typeof basePrisma>;
 
-const globalForPrisma = globalThis as unknown as { prisma?: ExtendedClient };
+const globalForPrisma = globalThis as unknown as {
+  prisma?: ExtendedClient;
+  prismaUnscoped?: BasePrisma;
+};
 
 export const db: ExtendedClient = globalForPrisma.prisma ?? extend(basePrisma());
 
@@ -114,7 +118,17 @@ if (process.env.NODE_ENV !== "production") {
 /**
  * Escape hatch for super-admin / system code that must read across tenants
  * (creating tenants, cron jobs, migrations). Use sparingly.
+ *
+ * Singleton: keep one PrismaClient per process so we reuse the pool instead
+ * of opening + closing a connection on every request. DON'T call
+ * `$disconnect()` on this — Next.js will tear it down at process exit.
+ *
+ * For standalone CLI scripts that need to exit cleanly, call $disconnect()
+ * at the end of the script.
  */
-export function unscopedDb() {
-  return basePrisma();
+export function unscopedDb(): BasePrisma {
+  if (!globalForPrisma.prismaUnscoped) {
+    globalForPrisma.prismaUnscoped = basePrisma();
+  }
+  return globalForPrisma.prismaUnscoped;
 }

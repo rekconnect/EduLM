@@ -212,8 +212,7 @@ async function notifyParentOfPayment(
   ctx: { remainingCents: number; paidAt: Date },
 ) {
   const u = unscopedDb();
-  try {
-    const [tenant, invoice] = await Promise.all([
+      const [tenant, invoice] = await Promise.all([
       u.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
       u.invoice.findUnique({
         where: { id: invoiceId },
@@ -225,9 +224,11 @@ async function notifyParentOfPayment(
               firstName: true,
               lastName: true,
               guardianLinks: {
-                where: { isPrimary: true },
+                // Prefer the primary guardian; fall back to any guardian if none is primary.
+                orderBy: { isPrimary: "desc" },
                 take: 1,
                 select: {
+                  isPrimary: true,
                   guardian: { select: { user: { select: { email: true, name: true } } } },
                 },
               },
@@ -236,10 +237,22 @@ async function notifyParentOfPayment(
         },
       }),
     ]);
-    if (!tenant || !invoice) return;
-    const guardianUser = invoice.student.guardianLinks[0]?.guardian.user;
-    if (!guardianUser?.email) return;
-    await sendPaymentReceiptEmail({
+    if (!tenant || !invoice) {
+      console.log("[email:paymentReceipt] tenant or invoice missing, skip");
+      return;
+    }
+    const link = invoice.student.guardianLinks[0];
+    const guardianUser = link?.guardian.user;
+    if (!guardianUser?.email) {
+      console.log(
+        `[email:paymentReceipt] no guardian for ${invoice.student.firstName} ${invoice.student.lastName} (invoice ${invoice.number})`,
+      );
+      return;
+    }
+    console.log(
+      `[email:paymentReceipt] → ${guardianUser.email} (primary=${link!.isPrimary}) for invoice ${invoice.number}`,
+    );
+    const result = await sendPaymentReceiptEmail({
       to: { email: guardianUser.email, name: guardianUser.name },
       tenantName: tenant.name,
       invoiceNumber: invoice.number,
@@ -250,9 +263,7 @@ async function notifyParentOfPayment(
       paymentMethod: method,
       paymentDate: ctx.paidAt,
     });
-  } finally {
-    await u.$disconnect();
-  }
+    console.log(`[email:paymentReceipt] result:`, result);
 }
 
 export async function deleteInvoice(invoiceId: string) {
@@ -285,8 +296,7 @@ export async function issueInvoice(invoiceId: string) {
 
 async function notifyParentOfInvoiceIssued(tenantId: string, invoiceId: string) {
   const u = unscopedDb();
-  try {
-    const [tenant, invoice] = await Promise.all([
+      const [tenant, invoice] = await Promise.all([
       u.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
       u.invoice.findUnique({
         where: { id: invoiceId },
@@ -300,9 +310,10 @@ async function notifyParentOfInvoiceIssued(tenantId: string, invoiceId: string) 
               firstName: true,
               lastName: true,
               guardianLinks: {
-                where: { isPrimary: true },
+                orderBy: { isPrimary: "desc" },
                 take: 1,
                 select: {
+                  isPrimary: true,
                   guardian: { select: { user: { select: { email: true, name: true } } } },
                 },
               },
@@ -311,10 +322,22 @@ async function notifyParentOfInvoiceIssued(tenantId: string, invoiceId: string) 
         },
       }),
     ]);
-    if (!tenant || !invoice) return;
-    const guardianUser = invoice.student.guardianLinks[0]?.guardian.user;
-    if (!guardianUser?.email) return;
-    await sendInvoiceIssuedEmail({
+    if (!tenant || !invoice) {
+      console.log("[email:invoiceIssued] tenant or invoice missing, skip");
+      return;
+    }
+    const link = invoice.student.guardianLinks[0];
+    const guardianUser = link?.guardian.user;
+    if (!guardianUser?.email) {
+      console.log(
+        `[email:invoiceIssued] no guardian for ${invoice.student.firstName} ${invoice.student.lastName} (invoice ${invoice.number})`,
+      );
+      return;
+    }
+    console.log(
+      `[email:invoiceIssued] → ${guardianUser.email} (primary=${link!.isPrimary}) for invoice ${invoice.number}`,
+    );
+    const result = await sendInvoiceIssuedEmail({
       to: { email: guardianUser.email, name: guardianUser.name },
       tenantName: tenant.name,
       invoiceNumber: invoice.number,
@@ -324,7 +347,5 @@ async function notifyParentOfInvoiceIssued(tenantId: string, invoiceId: string) 
       dueAt: invoice.dueAt,
       invoiceId,
     });
-  } finally {
-    await u.$disconnect();
-  }
+    console.log(`[email:invoiceIssued] result:`, result);
 }

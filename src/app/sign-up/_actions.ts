@@ -45,8 +45,7 @@ export async function signUpParent(
   }
 
   const db = unscopedDb();
-  try {
-    const tenant = await db.tenant.findUnique({
+      const tenant = await db.tenant.findUnique({
       where: { slug: parsed.data.tenantSlug },
       select: { id: true, defaultLocale: true },
     });
@@ -73,10 +72,6 @@ export async function signUpParent(
         emailVerified: new Date(),
       },
     });
-  } finally {
-    await db.$disconnect();
-  }
-
   // Sign the new parent in straight away.
   await signIn("credentials", {
     email: parsed.data.email,

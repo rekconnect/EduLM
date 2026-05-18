@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { AppHeader } from "@/components/shell/app-header";
+import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody } from "@/components/ui/card";
 import { LinkButton } from "@/components/ui/button";
@@ -45,8 +45,7 @@ export default async function ParentApplicationsPage() {
     });
 
     return (
-      <div className="min-h-screen">
-        <AppHeader role={user.role} userLabel={user.name ?? user.email} />
+      <AppShell role={user.role} userLabel={user.name ?? user.email} >
         <main className="mx-auto max-w-4xl space-y-6 px-6 py-10">
           <PageHeader
             title={t("myApplicationsTitle")}
@@ -109,7 +108,7 @@ export default async function ParentApplicationsPage() {
             </div>
           )}
         </main>
-      </div>
+      </AppShell>
     );
   });
 }

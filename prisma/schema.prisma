@@ -178,15 +178,28 @@ enum StudentStatus {
 }
 
 model Student {
-  id        String        @id @default(cuid())
-  tenantId  String
-  firstName String
-  lastName  String
-  dob       DateTime?
-  photoUrl  String?
-  status    StudentStatus @default(PROSPECT)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  id            String        @id @default(cuid())
+  tenantId      String
+  firstName     String
+  lastName      String
+  dob           DateTime?
+  gender        ChildGender?
+  nationality   String?
+  placeOfBirth  String?
+  // Contact / address (the family address; mirrored on Student for now —
+  // could be moved to a Family entity later if needed)
+  address       String?
+  city          String?
+  postalCode    String?
+  country       String?
+  // Misc
+  previousSchool   String?
+  emergencyContact String?
+  internalNotes    String?   // admin-only notes, not shown to parents
+  photoUrl         String?
+  status           StudentStatus @default(PROSPECT)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   tenant                   Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   guardianLinks            StudentGuardian[]

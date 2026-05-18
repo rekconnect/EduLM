@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { AppHeader } from "@/components/shell/app-header";
+import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Select, Input } from "@/components/ui/input";
@@ -83,8 +83,7 @@ export default async function AttendancePage({
     }
 
     return (
-      <div className="min-h-screen">
-        <AppHeader role={user.role} userLabel={user.name ?? user.email} />
+      <AppShell role={user.role} userLabel={user.name ?? user.email} >
         <main className="mx-auto max-w-5xl space-y-6 px-6 py-10">
           <PageHeader title={t("title")} description={activeYear ? `${t("subtitle")} — ${activeYear.label}` : t("subtitle")} />
 
@@ -136,7 +135,7 @@ export default async function AttendancePage({
             </Card>
           )}
         </main>
-      </div>
+      </AppShell>
     );
   });
 }

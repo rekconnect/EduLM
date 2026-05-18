@@ -112,80 +112,105 @@ export async function decideApplication(
     if (parsed.data.decision === "ACCEPTED") {
       if (!parsed.data.classId) return { error: "class-required" };
 
-      // Renewals (existingStudentId set) skip Student/Guardian creation —
-      // we just enroll the existing student in the new class for next year.
-      const isRenewal = !!app.existingStudentId;
-      let studentId: string;
-
-      if (isRenewal) {
-        studentId = app.existingStudentId!;
-      } else {
-        // New family: ensure Guardian row exists (parents created via sign-up
-        // don't have one yet), create Student, link, enroll.
-        let guardian = await db.guardian.findUnique({
-          where: { userId: app.submittedByUserId },
-          select: { id: true },
-        });
-        if (!guardian) {
-          guardian = await db.guardian.create({
-            data: { tenantId, userId: app.submittedByUserId, relation: "parent" },
-            select: { id: true },
-          });
-        }
-        const student = await db.student.create({
-          data: {
-            tenantId,
-            firstName: app.childFirstName,
-            lastName: app.childLastName,
-            dob: app.childDob,
-            status: "ENROLLED",
-          },
-          select: { id: true },
-        });
-        await db.studentGuardian.create({
-          data: { studentId: student.id, guardianId: guardian.id, isPrimary: true },
-        });
-        studentId = student.id;
-      }
-
+      // VALIDATE FIRST — no writes until everything passes. This prevents
+      // orphan Student/Guardian rows when something fails mid-way.
       const klass = await db.class.findUnique({
         where: { id: parsed.data.classId },
-        select: { academicYearId: true },
-      });
-      if (klass) {
-        // For renewals, enroll into the new year's class. Prisma's unique
-        // constraint on (studentId, academicYearId) prevents double-enrollment
-        // if the admin clicks accept twice.
-        await db.enrollment.upsert({
-          where: {
-            studentId_academicYearId: {
-              studentId,
-              academicYearId: klass.academicYearId,
-            },
-          },
-          update: { classId: parsed.data.classId },
-          create: {
-            tenantId,
-            studentId,
-            classId: parsed.data.classId,
-            academicYearId: klass.academicYearId,
-          },
-        });
-      }
-
-      await db.application.update({
-        where: { id: applicationId },
-        data: {
-          status: "ACCEPTED",
-          decisionAt: now,
-          decisionNote: parsed.data.decisionNote ?? null,
-          reviewedAt: app.reviewedAt ?? now,
-          reviewedByUserId: user.id,
-          // Don't overwrite resultingStudentId on renewal — leave it null and
-          // rely on existingStudentId for the link.
-          resultingStudentId: isRenewal ? null : studentId,
+        select: {
+          id: true,
+          academicYearId: true,
+          academicYear: { select: { label: true } },
         },
       });
+      if (!klass) return { error: "class-not-found" };
+      if (klass.academicYear.label !== app.cycle.targetYearLabel) {
+        return { error: "class-wrong-year" };
+      }
+
+      const isRenewal = !!app.existingStudentId;
+
+      // Look up existing guardian (if any) BEFORE writes, so we can decide
+      // inside the transaction whether to create one.
+      const existingGuardian = await db.guardian.findUnique({
+        where: { userId: app.submittedByUserId },
+        select: { id: true },
+      });
+
+      // Now do all the writes in a single transaction. If anything throws,
+      // Prisma rolls back — no orphan Student rows, no half-accepted apps.
+      try {
+        await db.$transaction(async (tx) => {
+          let studentId: string;
+
+          if (isRenewal) {
+            studentId = app.existingStudentId!;
+          } else {
+            const guardianId =
+              existingGuardian?.id ??
+              (
+                await tx.guardian.create({
+                  data: { tenantId, userId: app.submittedByUserId, relation: "parent" },
+                  select: { id: true },
+                })
+              ).id;
+
+            const student = await tx.student.create({
+              data: {
+                tenantId,
+                firstName: app.childFirstName,
+                lastName: app.childLastName,
+                dob: app.childDob,
+                gender: app.childGender,
+                nationality: app.childNationality,
+                placeOfBirth: app.childPlaceOfBirth,
+                address: app.address,
+                city: app.city,
+                postalCode: app.postalCode,
+                country: app.country,
+                previousSchool: app.currentSchool,
+                internalNotes: app.internalNotes,
+                status: "ENROLLED",
+              },
+              select: { id: true },
+            });
+            await tx.studentGuardian.create({
+              data: { studentId: student.id, guardianId, isPrimary: true },
+            });
+            studentId = student.id;
+          }
+
+          await tx.enrollment.upsert({
+            where: {
+              studentId_academicYearId: {
+                studentId,
+                academicYearId: klass.academicYearId,
+              },
+            },
+            update: { classId: klass.id },
+            create: {
+              tenantId,
+              studentId,
+              classId: klass.id,
+              academicYearId: klass.academicYearId,
+            },
+          });
+
+          await tx.application.update({
+            where: { id: applicationId },
+            data: {
+              status: "ACCEPTED",
+              decisionAt: now,
+              decisionNote: parsed.data.decisionNote ?? null,
+              reviewedAt: app.reviewedAt ?? now,
+              reviewedByUserId: user.id,
+              resultingStudentId: isRenewal ? null : studentId,
+            },
+          });
+        });
+      } catch (e) {
+        console.error("[admissions:accept] transaction failed:", e);
+        return { error: "transaction-failed" };
+      }
     } else {
       await db.application.update({
         where: { id: applicationId },
@@ -221,29 +246,25 @@ async function notifyParentOfDecision(
   decisionNote: string | null,
 ) {
   const u = unscopedDb();
-  try {
-    const [tenant, app] = await Promise.all([
-      u.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
-      u.application.findUnique({
-        where: { id: applicationId },
-        select: {
-          childFirstName: true,
-          childLastName: true,
-          submittedBy: { select: { email: true, name: true } },
-        },
-      }),
-    ]);
-    if (!tenant || !app) return;
-    await sendApplicationDecidedEmail({
-      to: { email: app.submittedBy.email, name: app.submittedBy.name },
-      tenantName: tenant.name,
-      decision,
-      childFirstName: app.childFirstName,
-      childLastName: app.childLastName,
-      decisionNote,
-      applicationId,
-    });
-  } finally {
-    await u.$disconnect();
-  }
+  const [tenant, app] = await Promise.all([
+    u.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
+    u.application.findUnique({
+      where: { id: applicationId },
+      select: {
+        childFirstName: true,
+        childLastName: true,
+        submittedBy: { select: { email: true, name: true } },
+      },
+    }),
+  ]);
+  if (!tenant || !app) return;
+  await sendApplicationDecidedEmail({
+    to: { email: app.submittedBy.email, name: app.submittedBy.name },
+    tenantName: tenant.name,
+    decision,
+    childFirstName: app.childFirstName,
+    childLastName: app.childLastName,
+    decisionNote,
+    applicationId,
+  });
 }

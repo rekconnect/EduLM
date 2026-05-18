@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { AppHeader } from "@/components/shell/app-header";
+import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, Stat } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { db } from "@/lib/db";
 import { withTenantSession } from "@/lib/session";
 import { deleteStudent, updateStudent } from "../_actions";
 import { StudentForm } from "../_form";
+import { GuardianManager, type ParentOption } from "./_guardian-link";
 
 const SEVERITY_LABEL: Record<string, string> = {
   NOTE: "severityNote",
@@ -42,7 +43,13 @@ export default async function StudentDetailPage({
       include: {
         guardianLinks: {
           include: {
-            guardian: { include: { user: { select: { email: true, name: true } } } },
+            guardian: {
+              select: {
+                id: true,
+                userId: true,
+                user: { select: { email: true, name: true } },
+              },
+            },
           },
         },
         enrollments: {
@@ -56,6 +63,18 @@ export default async function StudentDetailPage({
     });
 
     if (!student) notFound();
+
+    // Parents available to link (anyone with role=PARENT in this tenant who isn't
+    // already linked to this student).
+    const linkedParentUserIds = new Set(student.guardianLinks.map((l) => l.guardian.userId));
+    const availableParentsRaw = await db.user.findMany({
+      where: { role: "PARENT", status: { in: ["ACTIVE", "INVITED"] } },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, email: true },
+    });
+    const availableParents: ParentOption[] = availableParentsRaw.filter(
+      (p) => !linkedParentUserIds.has(p.id),
+    );
 
     // 30-day attendance window for the summary stats.
     const since = new Date();
@@ -81,8 +100,7 @@ export default async function StudentDetailPage({
     const boundDelete = deleteStudent.bind(null, id);
 
     return (
-      <div className="min-h-screen">
-        <AppHeader role={user.role} userLabel={user.name ?? user.email} />
+      <AppShell role={user.role} userLabel={user.name ?? user.email} >
         <main className="mx-auto max-w-4xl space-y-6 px-6 py-10">
           <PageHeader
             title={`${student.lastName} ${student.firstName}`}
@@ -112,6 +130,16 @@ export default async function StudentDetailPage({
                   lastName: student.lastName,
                   dob: student.dob ? student.dob.toISOString().slice(0, 10) : "",
                   status: student.status,
+                  gender: student.gender ?? "",
+                  nationality: student.nationality,
+                  placeOfBirth: student.placeOfBirth,
+                  address: student.address,
+                  city: student.city,
+                  postalCode: student.postalCode,
+                  country: student.country,
+                  previousSchool: student.previousSchool,
+                  emergencyContact: student.emergencyContact,
+                  internalNotes: student.internalNotes,
                 }}
                 submitLabel={tCommon("save")}
               />
@@ -121,29 +149,18 @@ export default async function StudentDetailPage({
           <Card>
             <CardHeader title={t("guardiansTitle")} />
             <CardBody>
-              {student.guardianLinks.length === 0 ? (
-                <p className="text-sm text-[color:var(--muted-fg)]">{t("noGuardians")}</p>
-              ) : (
-                <ul className="space-y-2 text-sm">
-                  {student.guardianLinks.map((link) => (
-                    <li key={link.guardianId} className="flex items-center justify-between">
-                      <span>
-                        <span className="font-medium">
-                          {link.guardian.user.name ?? link.guardian.user.email}
-                        </span>{" "}
-                        <span className="text-[color:var(--muted-fg)]">
-                          {link.guardian.user.email}
-                        </span>
-                      </span>
-                      {link.isPrimary ? (
-                        <span className="rounded-full bg-[color:var(--primary)]/10 px-2 py-0.5 text-xs text-[color:var(--primary)]">
-                          Primary
-                        </span>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <GuardianManager
+                studentId={id}
+                guardians={student.guardianLinks.map((l) => ({
+                  guardianId: l.guardianId,
+                  parentUserId: l.guardian.userId,
+                  name: l.guardian.user.name,
+                  email: l.guardian.user.email,
+                  isPrimary: l.isPrimary,
+                }))}
+                availableParents={availableParents}
+                canEdit={user.role === "SCHOOL_ADMIN"}
+              />
             </CardBody>
           </Card>
 
@@ -222,7 +239,7 @@ export default async function StudentDetailPage({
             </form>
           ) : null}
         </main>
-      </div>
+      </AppShell>
     );
   });
 }

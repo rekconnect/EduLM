@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { AppHeader } from "@/components/shell/app-header";
+import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
 import { db } from "@/lib/db";
@@ -35,8 +35,7 @@ export default async function AdminMessagesPage() {
     });
 
     return (
-      <div className="min-h-screen">
-        <AppHeader role={user.role} userLabel={user.name ?? user.email} />
+      <AppShell role={user.role} userLabel={user.name ?? user.email} >
         <main className="mx-auto max-w-5xl space-y-4 px-6 py-10">
           <PageHeader title={t("messagesTitle")} description={t("messagesAdminLead")} />
 
@@ -86,7 +85,7 @@ export default async function AdminMessagesPage() {
             </tbody>
           </Table>
         </main>
-      </div>
+      </AppShell>
     );
   });
 }

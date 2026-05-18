@@ -68,8 +68,7 @@ export async function createTenant(
   }
 
   const db = unscopedDb();
-  try {
-    const slugTaken = await db.tenant.findUnique({
+      const slugTaken = await db.tenant.findUnique({
       where: { slug: data.slug },
       select: { id: true },
     });
@@ -96,10 +95,6 @@ export async function createTenant(
         },
       },
     });
-  } finally {
-    await db.$disconnect();
-  }
-
   revalidatePath("/super-admin");
   redirect("/super-admin");
 }

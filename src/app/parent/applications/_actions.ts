@@ -278,8 +278,7 @@ async function notifyAdminsOfSubmission(
   // Use the unscoped client — we're sending email AFTER the runWithTenant block
   // has exited, so the AsyncLocalStorage context is no longer set.
   const u = unscopedDb();
-  try {
-    const tenant = await u.tenant.findUnique({
+      const tenant = await u.tenant.findUnique({
       where: { id: tenantId },
       select: { name: true },
     });
@@ -297,9 +296,6 @@ async function notifyAdminsOfSubmission(
       submittedByName,
       applicationId: ctx.applicationId,
     });
-  } finally {
-    await u.$disconnect();
-  }
 }
 
 /**

@@ -153,9 +153,13 @@ export function FamilyStepForm({
 
 export function AcademicStepForm({
   applicationId,
+  availableLevels,
+  targetYearLabel,
   initial,
 }: {
   applicationId: string;
+  availableLevels: string[];
+  targetYearLabel: string;
   initial: {
     currentSchool: string;
     currentLevel: string;
@@ -167,6 +171,13 @@ export function AcademicStepForm({
   const action: StepAction = saveAcademicStep.bind(null, applicationId);
   const [state, formAction, pending] = useActionState<StepFormState, FormData>(action, {});
 
+  // If the requested level was set before to a value not in availableLevels,
+  // keep it in the option list so the parent's earlier choice doesn't vanish.
+  const optionLevels =
+    initial.requestedLevel && !availableLevels.includes(initial.requestedLevel)
+      ? [initial.requestedLevel, ...availableLevels]
+      : availableLevels;
+
   return (
     <form action={formAction} className="space-y-5">
       <FormRow>
@@ -177,9 +188,49 @@ export function AcademicStepForm({
           <Input id="currentLevel" name="currentLevel" defaultValue={initial.currentLevel} placeholder="CM2, 6ème…" />
         </Field>
       </FormRow>
-      <Field label={t("fieldRequestedLevel")} htmlFor="requestedLevel" required error={state.errors?.requestedLevel}>
-        <Input id="requestedLevel" name="requestedLevel" defaultValue={initial.requestedLevel} required placeholder="6ème, Seconde…" />
-      </Field>
+
+      {optionLevels.length > 0 ? (
+        <Field
+          label={t("fieldRequestedLevel")}
+          htmlFor="requestedLevel"
+          required
+          hint={`Niveaux ouverts pour ${targetYearLabel}`}
+          error={state.errors?.requestedLevel}
+        >
+          <Select
+            id="requestedLevel"
+            name="requestedLevel"
+            required
+            defaultValue={initial.requestedLevel || ""}
+          >
+            <option value="" disabled>
+              —
+            </option>
+            {optionLevels.map((lv) => (
+              <option key={lv} value={lv}>
+                {lv}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      ) : (
+        <Field
+          label={t("fieldRequestedLevel")}
+          htmlFor="requestedLevel"
+          required
+          hint={`Aucun niveau encore ouvert pour ${targetYearLabel}. Contactez l'établissement.`}
+          error={state.errors?.requestedLevel}
+        >
+          <Input
+            id="requestedLevel"
+            name="requestedLevel"
+            defaultValue={initial.requestedLevel}
+            required
+            placeholder="6ème, Seconde…"
+          />
+        </Field>
+      )}
+
       <Field label={t("fieldMotivation")} htmlFor="motivationNote" error={state.errors?.motivationNote}>
         <Textarea id="motivationNote" name="motivationNote" defaultValue={initial.motivationNote} rows={4} />
       </Field>

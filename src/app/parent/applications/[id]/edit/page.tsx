@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { AppHeader } from "@/components/shell/app-header";
+import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,26 @@ const GENDER_KEY: Record<string, string> = {
   OTHER: "genderOther",
 };
 
+// Canonical French school-level ordering for the level dropdown.
+const LEVEL_ORDER = [
+  "PS", "MS", "GS",
+  "CP", "CE1", "CE2", "CM1", "CM2",
+  "6ème", "5ème", "4ème", "3ème",
+  "Seconde", "Première", "Terminale",
+];
+
+function sortLevels(levels: string[]): string[] {
+  return [...new Set(levels)].sort((a, b) => {
+    const ai = LEVEL_ORDER.indexOf(a);
+    const bi = LEVEL_ORDER.indexOf(b);
+    // Unknown levels go to the bottom, alphabetical among themselves.
+    if (ai === -1 && bi === -1) return a.localeCompare(b);
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+}
+
 export default async function EditApplicationPage({
   params,
   searchParams,
@@ -56,11 +76,25 @@ export default async function EditApplicationPage({
     if (app.submittedByUserId !== user.id) notFound();
     if (app.status !== "DRAFT") redirect(`/parent/applications/${id}`);
 
+    // Build the available-levels list for the requested-level dropdown,
+    // sourced from real classes in the cycle's target year.
+    const targetYear = await db.academicYear.findUnique({
+      where: { tenantId_label: { tenantId, label: app.cycle.targetYearLabel } },
+      select: { id: true },
+    });
+    const targetClasses = targetYear
+      ? await db.class.findMany({
+          where: { academicYearId: targetYear.id },
+          select: { level: true },
+          distinct: ["level"],
+        })
+      : [];
+    const availableLevels = sortLevels(targetClasses.map((c) => c.level));
+
     const stepLabels = ["stepIdentity", "stepFamily", "stepAcademic", "stepReview"] as const;
 
     return (
-      <div className="min-h-screen">
-        <AppHeader role={user.role} userLabel={user.name ?? user.email} />
+      <AppShell role={user.role} userLabel={user.name ?? user.email} >
         <main className="mx-auto max-w-3xl space-y-6 px-6 py-10">
           <PageHeader
             title={`${app.childFirstName || "—"} ${app.childLastName || ""}`.trim() || t("newCta")}
@@ -134,6 +168,8 @@ export default async function EditApplicationPage({
               {step === 3 ? (
                 <AcademicStepForm
                   applicationId={id}
+                  availableLevels={availableLevels}
+                  targetYearLabel={app.cycle.targetYearLabel}
                   initial={{
                     currentSchool: app.currentSchool ?? "",
                     currentLevel: app.currentLevel ?? "",
@@ -175,7 +211,7 @@ export default async function EditApplicationPage({
             </CardBody>
           </Card>
         </main>
-      </div>
+      </AppShell>
     );
   });
 }

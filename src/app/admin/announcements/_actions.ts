@@ -90,8 +90,7 @@ async function notifyAudienceOfAnnouncement(
   academicYearId: string | undefined,
 ) {
   const u = unscopedDb();
-  try {
-    const tenant = await u.tenant.findUnique({
+      const tenant = await u.tenant.findUnique({
       where: { id: tenantId },
       select: { name: true },
     });
@@ -149,9 +148,6 @@ async function notifyAudienceOfAnnouncement(
         body,
       });
     }
-  } finally {
-    await u.$disconnect();
-  }
 }
 
 export async function markAnnouncementRead(announcementId: string) {

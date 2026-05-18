@@ -8,6 +8,14 @@ import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
 
 const STATUSES = ["PROSPECT", "ENROLLED", "WITHDRAWN", "GRADUATED"] as const;
+const GENDERS = ["MALE", "FEMALE", "OTHER"] as const;
+
+const optionalTrimmed = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .optional()
+    .transform((v) => (v && v.trim() !== "" ? v.trim() : null));
 
 const studentSchema = z.object({
   firstName: z.string().trim().min(1).max(80),
@@ -19,6 +27,20 @@ const studentSchema = z.object({
     .transform((v) => (v && v !== "" ? new Date(v) : null))
     .refine((v) => v === null || !Number.isNaN(v.getTime()), { message: "Invalid date" }),
   status: z.enum(STATUSES),
+  gender: z
+    .string()
+    .optional()
+    .transform((v) => (v && (GENDERS as readonly string[]).includes(v) ? v : null))
+    .pipe(z.enum(GENDERS).nullable()),
+  nationality: optionalTrimmed(80),
+  placeOfBirth: optionalTrimmed(120),
+  address: optionalTrimmed(200),
+  city: optionalTrimmed(80),
+  postalCode: optionalTrimmed(20),
+  country: optionalTrimmed(80),
+  previousSchool: optionalTrimmed(160),
+  emergencyContact: optionalTrimmed(200),
+  internalNotes: optionalTrimmed(4000),
 });
 
 type StudentInput = z.input<typeof studentSchema>;
@@ -28,13 +50,28 @@ export type StudentFormState = {
   formError?: string;
 };
 
+const FIELDS = [
+  "firstName",
+  "lastName",
+  "dob",
+  "status",
+  "gender",
+  "nationality",
+  "placeOfBirth",
+  "address",
+  "city",
+  "postalCode",
+  "country",
+  "previousSchool",
+  "emergencyContact",
+  "internalNotes",
+] as const;
+
 function parseForm(formData: FormData) {
-  const raw = {
-    firstName: String(formData.get("firstName") ?? ""),
-    lastName: String(formData.get("lastName") ?? ""),
-    dob: String(formData.get("dob") ?? ""),
-    status: String(formData.get("status") ?? ""),
-  };
+  const raw: Record<string, string> = {};
+  for (const f of FIELDS) {
+    raw[f] = String(formData.get(f) ?? "");
+  }
   return studentSchema.safeParse(raw);
 }
 
@@ -62,13 +99,7 @@ export async function createStudent(
   let newId: string | undefined;
   await runWithTenant({ tenantId, slug: null }, async () => {
     const created = await db.student.create({
-      data: {
-        tenantId,
-        firstName: parsed.data.firstName,
-        lastName: parsed.data.lastName,
-        dob: parsed.data.dob,
-        status: parsed.data.status,
-      },
+      data: { tenantId, ...parsed.data },
       select: { id: true },
     });
     newId = created.id;
@@ -92,12 +123,7 @@ export async function updateStudent(
   await runWithTenant({ tenantId, slug: null }, async () => {
     await db.student.update({
       where: { id },
-      data: {
-        firstName: parsed.data.firstName,
-        lastName: parsed.data.lastName,
-        dob: parsed.data.dob,
-        status: parsed.data.status,
-      },
+      data: parsed.data,
     });
   });
 

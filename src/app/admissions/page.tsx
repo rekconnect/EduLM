@@ -15,8 +15,7 @@ export default async function AdmissionsLandingPage() {
   const t = await getTranslations("admissions");
 
   const db = unscopedDb();
-  try {
-    const tenant = await db.tenant.findUnique({
+      const tenant = await db.tenant.findUnique({
       where: { slug },
       select: { id: true, name: true },
     });
@@ -109,7 +108,4 @@ export default async function AdmissionsLandingPage() {
         </div>
       </main>
     );
-  } finally {
-    await db.$disconnect();
-  }
 }

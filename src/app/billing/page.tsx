@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { AppHeader } from "@/components/shell/app-header";
+import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
@@ -75,8 +75,7 @@ export default async function BillingPage({
     })) as InvoiceRow[];
 
     return (
-      <div className="min-h-screen">
-        <AppHeader role={user.role} userLabel={user.name ?? user.email} />
+      <AppShell role={user.role} userLabel={user.name ?? user.email} >
         <main className="mx-auto max-w-6xl space-y-4 px-6 py-10">
           <PageHeader
             title={t("title")}
@@ -175,7 +174,7 @@ export default async function BillingPage({
             </tbody>
           </Table>
         </main>
-      </div>
+      </AppShell>
     );
   });
 }

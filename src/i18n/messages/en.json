@@ -3,6 +3,12 @@
     "name": "EduLM",
     "tagline": "Modern multi-tenant school management."
   },
+  "theme": {
+    "toggle": "Toggle theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
   "nav": {
     "signIn": "Sign in",
     "signOut": "Sign out",

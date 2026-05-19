@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import type { Role } from "@prisma/client";
 import { SignOutButton } from "@/components/sign-out-button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type NavItem = { label: string; href: string };
 
@@ -95,6 +96,7 @@ export async function AppHeader({
           <span className="hidden text-sm text-[color:var(--muted-fg)] sm:inline">
             {userLabel}
           </span>
+          <ThemeToggle />
           <SignOutButton label={t("signOut")} />
         </div>
       </div>

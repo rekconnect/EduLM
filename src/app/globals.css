@@ -1,86 +1,204 @@
 @import "tailwindcss";
 
-:root {
-  /* Surfaces */
-  --background: #f8fafc;
-  --surface: #ffffff;
-  --foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-fg: #64748b;
-  --border: #e2e8f0;
-  --border-strong: #cbd5e1;
+/* Map Tailwind's `dark:` modifier to next-themes' [data-theme="dark"] selector. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-  /* Brand */
-  --primary: #1e40af;
-  --primary-hover: #1d3a9a;
-  --primary-foreground: #ffffff;
-  --primary-soft: #dbeafe;
-  --primary-soft-fg: #1e3a8a;
+@theme {
+  /* Type, spacing, radii — theme-independent, declared once */
+  --font-sans:   "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-arabic: "IBM Plex Sans Arabic", "Cairo", "Segoe UI", sans-serif;
+  --font-mono:   "JetBrains Mono", ui-monospace, monospace;
 
-  /* Semantic */
-  --success: #16a34a;
-  --success-soft: #dcfce7;
-  --success-soft-fg: #14532d;
-  --warning: #d97706;
-  --warning-soft: #fef3c7;
-  --warning-soft-fg: #78350f;
-  --danger: #dc2626;
-  --danger-soft: #fee2e2;
-  --danger-soft-fg: #7f1d1d;
+  --radius-input: 0.5rem;
+  --radius-card:  0.75rem;
+  --radius-pill:  9999px;
 
-  /* Sidebar */
-  --sidebar-bg: #0f172a;
-  --sidebar-fg: #e2e8f0;
-  --sidebar-muted: #94a3b8;
-  --sidebar-active-bg: #1e40af;
-  --sidebar-active-fg: #ffffff;
-  --sidebar-hover-bg: #1e293b;
-  --sidebar-border: #1e293b;
+  --shadow-card:        0 1px 2px oklch(0 0 0 / 0.04), 0 1px 3px oklch(0 0 0 / 0.04);
+  --shadow-card-hover:  0 4px 6px oklch(0 0 0 / 0.05), 0 2px 4px oklch(0 0 0 / 0.04);
+  --shadow-popover:     0 4px 6px oklch(0 0 0 / 0.05), 0 10px 15px oklch(0 0 0 / 0.06);
+  --shadow-modal:       0 10px 25px oklch(0 0 0 / 0.10), 0 20px 50px oklch(0 0 0 / 0.10);
+
+  /* Module accents — same in both themes */
+  --color-module-admin:         oklch(0.55 0.180 250);
+  --color-module-education:     oklch(0.62 0.150 155);
+  --color-module-campus:        oklch(0.72 0.150 70);
+  --color-module-communication: oklch(0.55 0.180 310);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #020617;
-    --surface: #0f172a;
-    --foreground: #f8fafc;
-    --muted: #1e293b;
-    --muted-fg: #94a3b8;
-    --border: #1e293b;
-    --border-strong: #334155;
+/* ───────── Light theme — default ───────── */
+:root,
+[data-theme="light"] {
+  --color-background:         oklch(0.99 0.005 240);
+  --color-surface-base:       oklch(0.98 0.005 240);
+  --color-surface-raised:     oklch(1.00 0.000 0);
+  --color-surface-sunken:     oklch(0.96 0.008 240);
+  --color-surface-hover:      oklch(0.96 0.008 240);
+  --color-surface-active:     oklch(0.93 0.012 240);
+  --color-surface-overlay:    oklch(0 0 0 / 0.40);
 
-    --primary: #3b82f6;
-    --primary-hover: #2563eb;
-    --primary-foreground: #ffffff;
-    --primary-soft: #1e3a8a;
-    --primary-soft-fg: #dbeafe;
+  --color-foreground:         oklch(0.18 0.015 240);
+  --color-foreground-muted:   oklch(0.46 0.020 240);
+  --color-foreground-subtle:  oklch(0.58 0.018 240);
+  --color-foreground-onbrand: oklch(1.00 0.000 0);
 
-    --success-soft: #14532d;
-    --success-soft-fg: #bbf7d0;
-    --warning-soft: #78350f;
-    --warning-soft-fg: #fde68a;
-    --danger-soft: #7f1d1d;
-    --danger-soft-fg: #fecaca;
+  --color-border-subtle:      oklch(0.92 0.010 240);
+  --color-border-strong:      oklch(0.86 0.012 240);
+  --color-border-focus:       oklch(0.55 0.180 250);
 
-    --sidebar-bg: #020617;
-    --sidebar-fg: #cbd5e1;
-    --sidebar-muted: #64748b;
-    --sidebar-active-bg: #1e40af;
-    --sidebar-active-fg: #ffffff;
-    --sidebar-hover-bg: #0f172a;
-    --sidebar-border: #1e293b;
-  }
+  --color-brand-50:           oklch(0.97 0.020 250);
+  --color-brand-100:          oklch(0.93 0.040 250);
+  --color-brand-200:          oklch(0.86 0.080 250);
+  --color-brand-500:          oklch(0.55 0.180 250);
+  --color-brand-600:          oklch(0.46 0.180 250);
+  --color-brand-700:          oklch(0.38 0.160 250);
+
+  --color-success:            oklch(0.62 0.150 145);
+  --color-success-soft:       oklch(0.93 0.060 145);
+  --color-success-soft-fg:    oklch(0.32 0.080 145);
+  --color-warning:            oklch(0.72 0.150 70);
+  --color-warning-soft:       oklch(0.94 0.080 70);
+  --color-warning-soft-fg:    oklch(0.38 0.090 70);
+  --color-danger:             oklch(0.58 0.200 25);
+  --color-danger-soft:        oklch(0.94 0.060 25);
+  --color-danger-soft-fg:     oklch(0.38 0.100 25);
+  --color-info:               oklch(0.65 0.140 230);
+
+  /* ─── Legacy aliases — keep existing components working ─── */
+  --background:         var(--color-background);
+  --surface:            var(--color-surface-raised);
+  --foreground:         var(--color-foreground);
+  --muted:              var(--color-surface-sunken);
+  --muted-fg:           var(--color-foreground-muted);
+  --border:             var(--color-border-subtle);
+  --border-strong:      var(--color-border-strong);
+  --primary:            var(--color-brand-500);
+  --primary-hover:      var(--color-brand-600);
+  --primary-foreground: var(--color-foreground-onbrand);
+  --primary-soft:       var(--color-brand-100);
+  --primary-soft-fg:    var(--color-brand-700);
+  --success:            var(--color-success);
+  --success-soft:       var(--color-success-soft);
+  --success-soft-fg:    var(--color-success-soft-fg);
+  --warning:            var(--color-warning);
+  --warning-soft:       var(--color-warning-soft);
+  --warning-soft-fg:    var(--color-warning-soft-fg);
+  --danger:             var(--color-danger);
+  --danger-soft:        var(--color-danger-soft);
+  --danger-soft-fg:     var(--color-danger-soft-fg);
+
+  /* Sidebar — keep its own palette (deliberately dark in light theme too,
+     matching Linear's permanent-dark-sidebar pattern) */
+  --sidebar-bg:         oklch(0.18 0.015 240);
+  --sidebar-fg:         oklch(0.88 0.010 240);
+  --sidebar-muted:      oklch(0.60 0.012 240);
+  --sidebar-active-bg:  var(--color-brand-500);
+  --sidebar-active-fg:  oklch(1.00 0.000 0);
+  --sidebar-hover-bg:   oklch(0.24 0.014 240);
+  --sidebar-border:     oklch(0.24 0.014 240);
 }
 
+/* ───────── Dark theme ───────── */
+[data-theme="dark"] {
+  --color-background:         oklch(0.14 0.010 240);
+  --color-surface-base:       oklch(0.17 0.010 240);
+  --color-surface-raised:     oklch(0.20 0.012 240);
+  --color-surface-sunken:     oklch(0.14 0.010 240);
+  --color-surface-hover:      oklch(0.24 0.014 240);
+  --color-surface-active:     oklch(0.28 0.016 240);
+  --color-surface-overlay:    oklch(0 0 0 / 0.60);
+
+  --color-foreground:         oklch(0.96 0.005 240);
+  --color-foreground-muted:   oklch(0.70 0.010 240);
+  --color-foreground-subtle:  oklch(0.55 0.012 240);
+  --color-foreground-onbrand: oklch(1.00 0.000 0);
+
+  --color-border-subtle:      oklch(0.26 0.014 240);
+  --color-border-strong:      oklch(0.34 0.016 240);
+  --color-border-focus:       oklch(0.66 0.160 250);
+
+  --color-brand-50:           oklch(0.22 0.060 250);
+  --color-brand-100:          oklch(0.28 0.080 250);
+  --color-brand-200:          oklch(0.34 0.110 250);
+  --color-brand-500:          oklch(0.66 0.160 250);
+  --color-brand-600:          oklch(0.74 0.140 250);
+  --color-brand-700:          oklch(0.82 0.110 250);
+
+  --color-success:            oklch(0.70 0.140 145);
+  --color-success-soft:       oklch(0.30 0.080 145);
+  --color-success-soft-fg:    oklch(0.85 0.100 145);
+  --color-warning:            oklch(0.78 0.140 70);
+  --color-warning-soft:       oklch(0.32 0.090 70);
+  --color-warning-soft-fg:    oklch(0.88 0.120 70);
+  --color-danger:             oklch(0.68 0.180 25);
+  --color-danger-soft:        oklch(0.30 0.100 25);
+  --color-danger-soft-fg:     oklch(0.88 0.120 25);
+  --color-info:               oklch(0.72 0.130 230);
+
+  /* Legacy aliases — re-bind to new tokens for dark mode */
+  --background:         var(--color-background);
+  --surface:            var(--color-surface-raised);
+  --foreground:         var(--color-foreground);
+  --muted:              var(--color-surface-hover);
+  --muted-fg:           var(--color-foreground-muted);
+  --border:             var(--color-border-subtle);
+  --border-strong:      var(--color-border-strong);
+  --primary:            var(--color-brand-500);
+  --primary-hover:      var(--color-brand-600);
+  --primary-foreground: var(--color-foreground-onbrand);
+  --primary-soft:       var(--color-brand-100);
+  --primary-soft-fg:    var(--color-brand-700);
+  --success:            var(--color-success);
+  --success-soft:       var(--color-success-soft);
+  --success-soft-fg:    var(--color-success-soft-fg);
+  --warning:            var(--color-warning);
+  --warning-soft:       var(--color-warning-soft);
+  --warning-soft-fg:    var(--color-warning-soft-fg);
+  --danger:             var(--color-danger);
+  --danger-soft:        var(--color-danger-soft);
+  --danger-soft-fg:     var(--color-danger-soft-fg);
+
+  --sidebar-bg:         oklch(0.11 0.010 240);
+  --sidebar-fg:         oklch(0.84 0.008 240);
+  --sidebar-muted:      oklch(0.55 0.012 240);
+  --sidebar-active-bg:  var(--color-brand-500);
+  --sidebar-active-fg:  oklch(1.00 0.000 0);
+  --sidebar-hover-bg:   oklch(0.17 0.010 240);
+  --sidebar-border:     oklch(0.20 0.012 240);
+}
+
+/* Bridge our CSS variables to Tailwind's @theme so utilities (bg-surface,
+   text-foreground, border-subtle, etc.) compile correctly. */
 @theme inline {
-  --color-background: var(--background);
-  --color-surface: var(--surface);
-  --color-foreground: var(--foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-fg);
-  --color-border: var(--border);
-  --color-primary: var(--primary);
+  --color-background:        var(--color-background);
+  --color-surface-base:      var(--color-surface-base);
+  --color-surface-raised:    var(--color-surface-raised);
+  --color-surface-sunken:    var(--color-surface-sunken);
+  --color-surface-hover:     var(--color-surface-hover);
+  --color-surface-active:    var(--color-surface-active);
+  --color-foreground:        var(--color-foreground);
+  --color-foreground-muted:  var(--color-foreground-muted);
+  --color-foreground-subtle: var(--color-foreground-subtle);
+  --color-foreground-onbrand: var(--color-foreground-onbrand);
+  --color-border-subtle:     var(--color-border-subtle);
+  --color-border-strong:     var(--color-border-strong);
+  --color-border-focus:      var(--color-border-focus);
+  --color-brand-50:          var(--color-brand-50);
+  --color-brand-100:         var(--color-brand-100);
+  --color-brand-200:         var(--color-brand-200);
+  --color-brand-500:         var(--color-brand-500);
+  --color-brand-600:         var(--color-brand-600);
+  --color-brand-700:         var(--color-brand-700);
+
+  /* Legacy alias utilities — preserve existing class names like
+     bg-[color:var(--muted)] and also expose `text-muted-fg` etc. */
+  --color-muted:             var(--muted);
+  --color-muted-foreground:  var(--muted-fg);
+  --color-border:            var(--border);
+  --color-primary:           var(--primary);
   --color-primary-foreground: var(--primary-foreground);
-  --font-sans: var(--font-sans, "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+  --color-surface:           var(--surface);
+
+  --font-sans: var(--font-sans);
 }
 
 html,
@@ -89,29 +207,45 @@ body {
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-background);
+  color: var(--color-foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
+/* Smooth color crossfade on theme change — colors only, never layout */
+:where(body, body *) {
+  transition:
+    background-color 300ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color     300ms cubic-bezier(0.4, 0, 0.2, 1),
+    color            300ms cubic-bezier(0.4, 0, 0.2, 1),
+    fill             300ms cubic-bezier(0.4, 0, 0.2, 1),
+    stroke           300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(body, body *) {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
 /* Cards / tables get a slightly elevated surface */
 .surface {
-  background: var(--surface);
+  background: var(--color-surface-raised);
 }
 
-/* <option> uses OS-default popup colors that don't pick up our CSS vars —
-   explicitly style so dropdowns stay readable in both light and dark mode. */
+/* <option> uses OS-default popup colors that don't pick up CSS vars —
+   explicitly style so dropdowns stay readable in both themes. */
 option,
 optgroup {
-  background-color: var(--surface);
-  color: var(--foreground);
+  background-color: var(--color-surface-raised);
+  color: var(--color-foreground);
 }
 
-/* Explicit foreground on form controls so native widgets (date pickers,
-   selects in closed state) inherit the theme color reliably. */
+/* Native form controls inherit the theme color reliably. */
 select,
 input,
 textarea {
-  color: var(--foreground);
+  color: var(--color-foreground);
 }

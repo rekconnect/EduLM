@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
+import { ArrowLeft, Plus, Sliders } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { LinkButton } from "@/components/ui/button";
@@ -23,17 +24,26 @@ export default async function AdmissionCyclesPage() {
     });
 
     return (
-      <AppShell role={user.role} userLabel={user.name ?? user.email} >
-        <main className="mx-auto max-w-5xl space-y-4 px-6 py-10">
+      <AppShell role={user.role} userLabel={user.name ?? user.email}>
+        <main className="mx-auto max-w-5xl space-y-6 px-6 py-10">
           <PageHeader
             title={t("cyclesTitle")}
             action={
-              <div className="flex items-center gap-2">
-                <Link href="/admissions-admin" className="text-sm text-[color:var(--muted-fg)] hover:underline">
-                  ← {t("adminTitle")}
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/admissions-admin"
+                  className="inline-flex items-center gap-1.5 text-sm text-[color:var(--color-foreground-muted)] transition-colors hover:text-[color:var(--color-foreground)] hover:underline"
+                >
+                  <ArrowLeft className="size-3.5" aria-hidden />
+                  {t("adminTitle")}
                 </Link>
-                <LinkButton href="/admissions-admin/cycles/new" size="sm">
-                  + {t("cyclesNewCta")}
+                <LinkButton
+                  href="/admissions-admin/cycles/new"
+                  size="sm"
+                  className="gap-1.5"
+                >
+                  <Plus className="size-4" aria-hidden />
+                  {t("cyclesNewCta")}
                 </LinkButton>
               </div>
             }
@@ -46,41 +56,70 @@ export default async function AdmissionCyclesPage() {
                 <TH>{t("cycleFieldTargetYear")}</TH>
                 <TH>{t("cycleFieldOpenAt")}</TH>
                 <TH>{t("cycleFieldCloseAt")}</TH>
-                <TH className="text-right">{t("cycleFieldFee")}</TH>
-                <TH className="text-right">{t("colChild")}</TH>
+                <TH className="text-end">{t("cycleFieldFee")}</TH>
+                <TH className="text-end">{t("colChild")}</TH>
                 <TH>{t("cycleFieldActive")}</TH>
+                <TH className="text-end" />
               </tr>
             </THead>
             <tbody>
               {cycles.length === 0 ? (
-                <EmptyRow colSpan={7}>—</EmptyRow>
+                <EmptyRow colSpan={8}>—</EmptyRow>
               ) : (
                 cycles.map((c) => (
                   <TR key={c.id}>
-                    <TD className="font-medium">{c.label}</TD>
-                    <TD>{c.targetYearLabel}</TD>
-                    <TD className="text-[color:var(--muted-fg)] tabular-nums">
+                    <TD>
+                      <Link
+                        href={`/admissions-admin/cycles/${c.id}`}
+                        className="font-medium text-[color:var(--color-foreground)] transition-colors hover:text-[color:var(--color-brand-600)] hover:underline"
+                      >
+                        {c.label}
+                      </Link>
+                    </TD>
+                    <TD className="text-[color:var(--color-foreground)]">
+                      {c.targetYearLabel}
+                    </TD>
+                    <TD className="tabular-nums text-[color:var(--color-foreground-muted)]">
                       {c.openAt.toISOString().slice(0, 10)}
                     </TD>
-                    <TD className="text-[color:var(--muted-fg)] tabular-nums">
+                    <TD className="tabular-nums text-[color:var(--color-foreground-muted)]">
                       {c.closeAt ? c.closeAt.toISOString().slice(0, 10) : "—"}
                     </TD>
-                    <TD className="text-right tabular-nums">
+                    <TD className="text-end tabular-nums">
                       {c.inscriptionFeeCents && c.inscriptionFeeCents > 0
                         ? formatMoney(c.inscriptionFeeCents, c.currency)
                         : "—"}
                     </TD>
-                    <TD className="text-right tabular-nums">{c._count.applications}</TD>
+                    <TD className="text-end tabular-nums">
+                      {c._count.applications > 0 ? (
+                        <span className="inline-flex min-w-[24px] items-center justify-center rounded-full bg-[color:var(--color-brand-50)] px-2 py-0.5 text-xs font-semibold text-[color:var(--color-brand-700)]">
+                          {c._count.applications}
+                        </span>
+                      ) : (
+                        <span className="text-[color:var(--color-foreground-subtle)]">
+                          0
+                        </span>
+                      )}
+                    </TD>
                     <TD>
                       {c.isActive ? (
-                        <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">
+                        <span className="inline-flex rounded-full bg-[color:var(--color-success-soft)] px-2 py-0.5 text-xs font-medium text-[color:var(--color-success-soft-fg)]">
                           ✓
                         </span>
                       ) : (
-                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                        <span className="inline-flex rounded-full bg-[color:var(--color-surface-sunken)] px-2 py-0.5 text-xs text-[color:var(--color-foreground-muted)]">
                           —
                         </span>
                       )}
+                    </TD>
+                    <TD className="text-end">
+                      <Link
+                        href={`/admissions-admin/cycles/${c.id}`}
+                        className="inline-flex items-center gap-1 text-sm font-medium text-[color:var(--color-brand-600)] transition-colors hover:text-[color:var(--color-brand-700)] hover:underline"
+                      >
+                        <Sliders className="size-3.5" aria-hidden />
+                        {t("configureCycle")}
+                      </Link>
                     </TD>
                   </TR>
                 ))

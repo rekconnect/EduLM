@@ -255,6 +255,20 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ─── Per-tenant brand override ─────────────────────────────
+   AppShell injects `--brand-override-light` and `--brand-override-dark`
+   as inline CSS vars on the .tenant-scope wrapper when the tenant has
+   a custom brand color in the DB. We remap --color-brand-500 to the
+   override here so every component that reads `bg-brand-500`, the
+   sidebar active-pill, focus rings, etc. recolors automatically.
+   Falls back to the platform defaults (palette B) when unset. */
+.tenant-scope {
+  --color-brand-500: var(--brand-override-light, #2C7DB3);
+}
+[data-theme="dark"] .tenant-scope {
+  --color-brand-500: var(--brand-override-dark, #4FA6D8);
+}
+
 /* Smooth color crossfade on theme change — colors only, never layout */
 :where(body, body *) {
   transition:

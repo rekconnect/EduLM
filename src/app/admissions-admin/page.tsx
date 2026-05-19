@@ -1,16 +1,22 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { ApplicationStatus } from "@prisma/client";
+import { ApplicationStatus, Prisma } from "@prisma/client";
+import { ArrowRight, RefreshCw, Sparkles, Users } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { LinkButton } from "@/components/ui/button";
-import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Select } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
+import { Card } from "@/components/ui/card";
 import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
+import { SortableTH, type SortDir } from "@/components/ui/sortable-th";
+import { FilterPill } from "@/components/ui/filter-pill";
+import { UrlSelect } from "@/components/shell/year-picker";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
+import { AppStatusBadge } from "@/app/parent/applications/_status-badge";
+
+const BASE = "/admissions-admin";
 
 const STATUS_KEY: Record<string, string> = {
   DRAFT: "statusDraft",
@@ -23,17 +29,6 @@ const STATUS_KEY: Record<string, string> = {
   WITHDRAWN: "statusWithdrawn",
 };
 
-const STATUS_TONE: Record<string, string> = {
-  DRAFT: "bg-slate-100 text-slate-700",
-  SUBMITTED: "bg-blue-100 text-blue-800",
-  UNDER_REVIEW: "bg-indigo-100 text-indigo-800",
-  INTERVIEW_SCHEDULED: "bg-purple-100 text-purple-800",
-  ACCEPTED: "bg-emerald-100 text-emerald-800",
-  WAITLISTED: "bg-amber-100 text-amber-800",
-  DECLINED: "bg-red-100 text-red-800",
-  WITHDRAWN: "bg-zinc-200 text-zinc-700",
-};
-
 const ALL_STATUSES: ApplicationStatus[] = [
   "DRAFT",
   "SUBMITTED",
@@ -44,6 +39,26 @@ const ALL_STATUSES: ApplicationStatus[] = [
   "DECLINED",
   "WITHDRAWN",
 ];
+
+const SORTABLE_COLUMNS = ["child", "cycle", "submitted", "status"] as const;
+type SortKey = (typeof SORTABLE_COLUMNS)[number];
+
+function orderByFor(
+  sort: SortKey,
+  dir: SortDir,
+): Prisma.ApplicationOrderByWithRelationInput[] {
+  switch (sort) {
+    case "cycle":
+      return [{ cycle: { openAt: dir } }];
+    case "submitted":
+      return [{ submittedAt: { sort: dir, nulls: "last" } }, { createdAt: dir }];
+    case "status":
+      return [{ status: dir }, { submittedAt: "desc" }];
+    case "child":
+    default:
+      return [{ childLastName: dir }, { childFirstName: dir }];
+  }
+}
 
 type AdminApp = {
   id: string;
@@ -61,27 +76,43 @@ type AdminApp = {
 export default async function AdmissionsAdminListPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; cycleId?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    cycleId?: string;
+    sort?: string;
+    dir?: string;
+  }>;
 }) {
-  const { status, cycleId } = await searchParams;
+  const { status, cycleId, sort, dir } = await searchParams;
   const user = await requireRole("SCHOOL_ADMIN");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 
   return runWithTenant({ tenantId, slug: null }, async () => {
     const t = await getTranslations("admissions");
-    const tCommon = await getTranslations("common");
+
+    const statusFilter: ApplicationStatus | undefined = (
+      ALL_STATUSES as string[]
+    ).includes(status ?? "")
+      ? (status as ApplicationStatus)
+      : undefined;
+    const cycleFilter = cycleId || undefined;
+
+    const sortKey: SortKey = (SORTABLE_COLUMNS as readonly string[]).includes(
+      sort ?? "",
+    )
+      ? (sort as SortKey)
+      : "submitted";
+    const sortDir: SortDir = dir === "asc" ? "asc" : "desc";
 
     const where: { status?: ApplicationStatus; cycleId?: string } = {};
-    if (status && (ALL_STATUSES as string[]).includes(status)) {
-      where.status = status as ApplicationStatus;
-    }
-    if (cycleId) where.cycleId = cycleId;
+    if (statusFilter) where.status = statusFilter;
+    if (cycleFilter) where.cycleId = cycleFilter;
 
     const [apps, cycles] = await Promise.all([
       db.application.findMany({
         where,
-        orderBy: [{ submittedAt: "desc" }, { createdAt: "desc" }],
+        orderBy: orderByFor(sortKey, sortDir),
         include: {
           cycle: { select: { id: true, label: true } },
           submittedBy: {
@@ -102,8 +133,6 @@ export default async function AdmissionsAdminListPage({
       }),
     ]);
 
-    // Classify by family status: a new family = submitter has no guardian row
-    // yet, OR has a guardian with zero linked students. Existing = at least 1.
     const newFamilyApps: AdminApp[] = [];
     const existingFamilyApps: AdminApp[] = [];
 
@@ -129,8 +158,20 @@ export default async function AdmissionsAdminListPage({
       else newFamilyApps.push(row);
     }
 
+    const preserve = {
+      status: statusFilter,
+      cycleId: cycleFilter,
+      sort: sortKey,
+      dir: sortDir,
+    };
+    const filterPreserve = {
+      cycleId: preserve.cycleId,
+      sort: preserve.sort,
+      dir: preserve.dir,
+    };
+
     return (
-      <AppShell role={user.role} userLabel={user.name ?? user.email} >
+      <AppShell role={user.role} userLabel={user.name ?? user.email}>
         <main className="mx-auto max-w-6xl space-y-6 px-6 py-10">
           <PageHeader
             title={t("adminTitle")}
@@ -142,49 +183,61 @@ export default async function AdmissionsAdminListPage({
             }
           />
 
-          <Card>
-            <CardBody>
-              <form method="get" className="grid gap-3 sm:grid-cols-2">
-                <Field label={t("colCycle")} htmlFor="cycleId">
-                  <Select id="cycleId" name="cycleId" defaultValue={cycleId ?? ""}>
-                    <option value="">{t("adminAllCycles")}</option>
-                    {cycles.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label={tCommon("save")} htmlFor="status">
-                  <Select id="status" name="status" defaultValue={status ?? ""}>
-                    <option value="">{t("adminAllStatuses")}</option>
-                    {ALL_STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {t(STATUS_KEY[s] ?? "statusDraft")}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-              </form>
-            </CardBody>
-          </Card>
+          {/* Cycle filter — auto-submits on change via UrlSelect */}
+          <div className="max-w-xs">
+            <Field label={t("colCycle")} htmlFor="cycleId">
+              <UrlSelect
+                name="cycleId"
+                value={cycleFilter ?? ""}
+                options={[
+                  { value: "", label: t("adminAllCycles") },
+                  ...cycles.map((c) => ({ value: c.id, label: c.label })),
+                ]}
+              />
+            </Field>
+          </div>
+
+          {/* Status filter pills */}
+          <div className="flex flex-wrap items-center gap-2">
+            <FilterPill
+              href={hrefWith(BASE, { ...filterPreserve, status: undefined })}
+              label={t("adminAllStatuses")}
+              active={!statusFilter}
+            />
+            {ALL_STATUSES.map((s) => (
+              <FilterPill
+                key={s}
+                href={hrefWith(BASE, { ...filterPreserve, status: s })}
+                label={t(STATUS_KEY[s] ?? "statusDraft")}
+                active={statusFilter === s}
+              />
+            ))}
+          </div>
 
           <ApplicationGroup
-            title={`${t("groupNewFamily")} (${newFamilyApps.length})`}
+            title={t("groupNewFamily")}
             description={t("groupNewFamilyHint")}
-            tone="bg-blue-50 dark:bg-blue-950/30"
+            icon={Sparkles}
+            iconTone="bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-600)]"
             apps={newFamilyApps}
             emptyLabel={t("groupEmpty")}
             t={t}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            preserve={preserve}
           />
 
           <ApplicationGroup
-            title={`${t("groupExistingFamily")} (${existingFamilyApps.length})`}
+            title={t("groupExistingFamily")}
             description={t("groupExistingFamilyHint")}
-            tone="bg-emerald-50 dark:bg-emerald-950/30"
+            icon={Users}
+            iconTone="bg-[color:var(--color-success-soft)] text-[color:var(--color-success-soft-fg)]"
             apps={existingFamilyApps}
             emptyLabel={t("groupEmpty")}
             t={t}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            preserve={preserve}
             showChildCount
           />
         </main>
@@ -196,77 +249,140 @@ export default async function AdmissionsAdminListPage({
 function ApplicationGroup({
   title,
   description,
-  tone,
+  icon: Icon,
+  iconTone,
   apps,
   emptyLabel,
   t,
   showChildCount,
+  sortKey,
+  sortDir,
+  preserve,
 }: {
   title: string;
   description: string;
-  tone: string;
+  icon: typeof Sparkles;
+  iconTone: string;
   apps: AdminApp[];
   emptyLabel: string;
   t: (key: string, opts?: Record<string, string | number | Date>) => string;
   showChildCount?: boolean;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  preserve: Record<string, string | undefined>;
 }) {
   return (
     <Card>
-      <div className={`border-b border-[color:var(--border)] px-6 py-4 ${tone}`}>
-        <h2 className="text-base font-semibold">{title}</h2>
-        <p className="mt-0.5 text-xs text-[color:var(--muted-fg)]">{description}</p>
+      <div className="flex items-center gap-3 border-b border-[color:var(--color-border-subtle)] px-6 py-4">
+        <div className={`flex size-9 shrink-0 items-center justify-center rounded-md ${iconTone}`}>
+          <Icon className="size-4" aria-hidden />
+        </div>
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-semibold text-[color:var(--color-foreground)]">
+            {title}
+            <span className="inline-flex min-w-[24px] items-center justify-center rounded-full bg-[color:var(--color-surface-sunken)] px-2 py-0.5 text-xs font-medium tabular-nums text-[color:var(--color-foreground-muted)]">
+              {apps.length}
+            </span>
+          </h2>
+          <p className="mt-0.5 text-xs text-[color:var(--color-foreground-muted)]">
+            {description}
+          </p>
+        </div>
       </div>
       <Table>
         <THead>
           <tr>
-            <TH>{t("colChild")}</TH>
-            <TH>{t("colCycle")}</TH>
+            <SortableTH
+              label={t("colChild")}
+              column="child"
+              currentSort={sortKey}
+              currentDir={sortDir}
+              baseUrl={BASE}
+              preserve={preserve}
+            />
+            <SortableTH
+              label={t("colCycle")}
+              column="cycle"
+              currentSort={sortKey}
+              currentDir={sortDir}
+              baseUrl={BASE}
+              preserve={preserve}
+            />
             <TH>{t("colRequestedLevel")}</TH>
             <TH>{t("colSubmittedBy")}</TH>
-            <TH>{t("colSubmitted")}</TH>
-            <TH>{t("statusDraft")}</TH>
+            <SortableTH
+              label={t("colSubmitted")}
+              column="submitted"
+              currentSort={sortKey}
+              currentDir={sortDir}
+              baseUrl={BASE}
+              preserve={preserve}
+            />
+            <SortableTH
+              label={t("colStatus")}
+              column="status"
+              currentSort={sortKey}
+              currentDir={sortDir}
+              baseUrl={BASE}
+              preserve={preserve}
+            />
+            <TH className="text-end" />
           </tr>
         </THead>
         <tbody>
           {apps.length === 0 ? (
-            <EmptyRow colSpan={6}>{emptyLabel}</EmptyRow>
+            <EmptyRow colSpan={7}>{emptyLabel}</EmptyRow>
           ) : (
             apps.map((a) => (
               <TR key={a.id}>
                 <TD>
                   <Link
                     href={`/admissions-admin/${a.id}`}
-                    className="font-medium hover:underline"
+                    className="group flex items-center gap-2"
                   >
-                    {a.childLastName} {a.childFirstName}
-                  </Link>
-                  {a.isRenewal ? (
-                    <span className="ms-2 inline-flex rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-violet-800 dark:bg-violet-900/40 dark:text-violet-100">
-                      {t("renewalBadge")}
+                    <span className="font-medium text-[color:var(--color-foreground)] transition-colors group-hover:text-[color:var(--color-brand-600)]">
+                      {a.childLastName} {a.childFirstName}
                     </span>
-                  ) : null}
+                    {a.isRenewal ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--color-brand-50)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[color:var(--color-brand-700)]">
+                        <RefreshCw className="size-2.5" aria-hidden />
+                        {t("renewalBadge")}
+                      </span>
+                    ) : null}
+                  </Link>
                 </TD>
-                <TD className="text-xs text-[color:var(--muted-fg)]">{a.cycle.label}</TD>
-                <TD>{a.requestedLevel ?? "—"}</TD>
-                <TD className="text-[color:var(--muted-fg)]">
-                  <div>{a.submittedBy.name ?? a.submittedBy.email}</div>
+                <TD className="text-xs text-[color:var(--color-foreground-muted)]">
+                  {a.cycle.label}
+                </TD>
+                <TD className="text-[color:var(--color-foreground)]">
+                  {a.requestedLevel ?? "—"}
+                </TD>
+                <TD className="text-[color:var(--color-foreground-muted)]">
+                  <div className="text-[color:var(--color-foreground)]">
+                    {a.submittedBy.name ?? a.submittedBy.email}
+                  </div>
                   {showChildCount ? (
                     <div className="mt-0.5 text-xs">
                       {t("existingChildrenCount", { n: a.existingChildren })}
                     </div>
                   ) : null}
                 </TD>
-                <TD className="text-[color:var(--muted-fg)] tabular-nums">
+                <TD className="tabular-nums text-[color:var(--color-foreground-muted)]">
                   {a.submittedAt ? a.submittedAt.toISOString().slice(0, 10) : "—"}
                 </TD>
                 <TD>
-                  <span
-                    className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                      STATUS_TONE[a.status]
-                    }`}
+                  <AppStatusBadge
+                    status={a.status}
+                    label={t(STATUS_KEY[a.status] ?? "statusDraft")}
+                  />
+                </TD>
+                <TD className="text-end">
+                  <Link
+                    href={`/admissions-admin/${a.id}`}
+                    className="inline-flex items-center gap-1 text-sm font-medium text-[color:var(--color-brand-600)] transition-colors hover:text-[color:var(--color-brand-700)] hover:underline"
                   >
-                    {t(STATUS_KEY[a.status] ?? "statusDraft")}
-                  </span>
+                    <ArrowRight className="size-3.5" aria-hidden />
+                  </Link>
                 </TD>
               </TR>
             ))
@@ -275,4 +391,16 @@ function ApplicationGroup({
       </Table>
     </Card>
   );
+}
+
+function hrefWith(
+  base: string,
+  params: Record<string, string | undefined>,
+): string {
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v != null && v !== "") sp.set(k, v);
+  }
+  const qs = sp.toString();
+  return qs ? `${base}?${qs}` : base;
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { ArrowLeft, CalendarClock } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody, CardHeader, Stat } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
 import { db } from "@/lib/db";
 import { withParentSession } from "@/lib/session";
 import { formatMoney } from "@/lib/money";
+import { cn } from "@/lib/utils";
 
 const SEVERITY_LABEL: Record<string, string> = {
   NOTE: "severityNote",
@@ -17,19 +19,28 @@ const SEVERITY_LABEL: Record<string, string> = {
 };
 
 const SEVERITY_TONE: Record<string, string> = {
-  NOTE: "bg-slate-100 text-slate-700",
-  WARNING: "bg-amber-100 text-amber-800",
-  DETENTION: "bg-orange-100 text-orange-800",
-  SUSPENSION: "bg-red-100 text-red-800",
+  NOTE: "bg-[color:var(--color-surface-sunken)] text-[color:var(--color-foreground-muted)]",
+  WARNING:
+    "bg-[color:var(--color-warning-soft)] text-[color:var(--color-warning-soft-fg)]",
+  DETENTION:
+    "bg-[color:var(--color-warning-soft)] text-[color:var(--color-warning-soft-fg)]",
+  SUSPENSION:
+    "bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger-soft-fg)]",
 };
 
 const STATUS_TONE: Record<string, string> = {
-  DRAFT: "bg-slate-100 text-slate-700",
-  ISSUED: "bg-blue-100 text-blue-800",
-  PARTIALLY_PAID: "bg-amber-100 text-amber-800",
-  PAID: "bg-emerald-100 text-emerald-800",
-  CANCELLED: "bg-zinc-200 text-zinc-700",
-  OVERDUE: "bg-red-100 text-red-800",
+  DRAFT:
+    "bg-[color:var(--color-surface-sunken)] text-[color:var(--color-foreground-muted)]",
+  ISSUED:
+    "bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-700)]",
+  PARTIALLY_PAID:
+    "bg-[color:var(--color-warning-soft)] text-[color:var(--color-warning-soft-fg)]",
+  PAID:
+    "bg-[color:var(--color-success-soft)] text-[color:var(--color-success-soft-fg)]",
+  CANCELLED:
+    "bg-[color:var(--color-surface-sunken)] text-[color:var(--color-foreground-subtle)]",
+  OVERDUE:
+    "bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger-soft-fg)]",
 };
 
 const STATUS_KEY: Record<string, string> = {
@@ -67,10 +78,19 @@ export default async function ParentChildPage({
           id: true,
           firstName: true,
           lastName: true,
+          status: true,
+          // Pull both the active-year enrollment AND the upcoming one so a
+          // newly-accepted student (enrolled in next year but no current year)
+          // still shows their class on the dashboard.
           enrollments: {
-            where: { academicYear: { isActive: true } },
-            select: { class: { select: { name: true } }, academicYear: { select: { label: true } } },
-            take: 1,
+            orderBy: { academicYear: { startDate: "desc" } },
+            select: {
+              class: { select: { name: true } },
+              academicYear: {
+                select: { label: true, isActive: true, startDate: true },
+              },
+            },
+            take: 3,
           },
         },
       }),
@@ -94,28 +114,66 @@ export default async function ParentChildPage({
 
     if (!child) notFound();
 
-    const counts: Record<string, number> = { PRESENT: 0, ABSENT: 0, LATE: 0, EXCUSED: 0 };
+    const counts: Record<string, number> = {
+      PRESENT: 0,
+      ABSENT: 0,
+      LATE: 0,
+      EXCUSED: 0,
+    };
     for (const r of attendance) {
       counts[r.status] = (counts[r.status] ?? 0) + 1;
     }
-    const klass = child.enrollments[0]?.class.name ?? "—";
-    const year = child.enrollments[0]?.academicYear.label ?? "";
+
+    // Prefer the active year, fall back to the most recent upcoming year.
+    const activeEnrollment = child.enrollments.find(
+      (e) => e.academicYear.isActive,
+    );
+    const upcomingEnrollment = child.enrollments.find(
+      (e) => !e.academicYear.isActive && e.academicYear.startDate > new Date(),
+    );
+    const enrollment = activeEnrollment ?? upcomingEnrollment;
+    const isUpcoming = !activeEnrollment && !!upcomingEnrollment;
+
+    const description = enrollment
+      ? `${enrollment.class.name} · ${enrollment.academicYear.label}`
+      : "—";
 
     return (
-      <AppShell role={user.role} userLabel={user.name ?? user.email} >
+      <AppShell role={user.role} userLabel={user.name ?? user.email}>
         <main className="mx-auto max-w-5xl space-y-6 px-6 py-10">
           <PageHeader
             title={`${child.firstName} ${child.lastName}`}
-            description={`${klass} · ${year}`}
+            description={description}
             action={
               <Link
                 href="/parent/dashboard"
-                className="text-sm text-[color:var(--muted-fg)] hover:underline"
+                className="inline-flex items-center gap-1.5 text-sm text-[color:var(--color-foreground-muted)] transition-colors hover:text-[color:var(--color-foreground)] hover:underline"
               >
-                ← {tParent("dashboardTitle")}
+                <ArrowLeft className="size-3.5" aria-hidden />
+                {tParent("dashboardTitle")}
               </Link>
             }
           />
+
+          {isUpcoming ? (
+            <div className="flex items-start gap-3 rounded-lg border border-[color:var(--color-brand-200)] bg-[color:var(--color-brand-50)] px-4 py-3 text-sm text-[color:var(--color-brand-700)]">
+              <CalendarClock
+                className="mt-0.5 size-4 shrink-0"
+                aria-hidden
+              />
+              <p>
+                <span className="font-medium">
+                  {child.firstName} {child.lastName}
+                </span>{" "}
+                est inscrit·e en{" "}
+                <span className="font-semibold">
+                  {enrollment!.class.name}
+                </span>{" "}
+                pour {enrollment!.academicYear.label} — les présences,
+                disciplines et factures apparaîtront ici dès la rentrée.
+              </p>
+            </div>
+          ) : null}
 
           <div className="grid gap-4 sm:grid-cols-3">
             <Stat label={tAtt("presentCount")} value={counts.PRESENT!} />
@@ -138,18 +196,20 @@ export default async function ParentChildPage({
                 ) : (
                   attendance.slice(0, 15).map((r, i) => (
                     <TR key={i}>
-                      <TD className="tabular-nums text-[color:var(--muted-fg)]">
+                      <TD className="tabular-nums text-[color:var(--color-foreground-muted)]">
                         {r.date.toISOString().slice(0, 10)}
                       </TD>
                       <TD>
-                        <span className="text-sm">{r.status}</span>
+                        <span className="text-sm text-[color:var(--color-foreground)]">
+                          {r.status}
+                        </span>
                         {r.lateMinutes ? (
-                          <span className="ms-2 text-xs text-[color:var(--muted-fg)]">
+                          <span className="ms-2 text-xs text-[color:var(--color-foreground-muted)]">
                             ({r.lateMinutes} min)
                           </span>
                         ) : null}
                         {r.note ? (
-                          <span className="ms-2 text-xs text-[color:var(--muted-fg)]">
+                          <span className="ms-2 text-xs text-[color:var(--color-foreground-muted)]">
                             — {r.note}
                           </span>
                         ) : null}
@@ -165,30 +225,37 @@ export default async function ParentChildPage({
             <CardHeader title={tParent("tabDiscipline")} />
             <CardBody>
               {discipline.length === 0 ? (
-                <p className="text-sm text-[color:var(--muted-fg)]">{tDisc("empty")}</p>
+                <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                  {tDisc("empty")}
+                </p>
               ) : (
                 <ul className="space-y-3 text-sm">
                   {discipline.map((d) => (
                     <li
                       key={d.id}
-                      className="border-b border-[color:var(--border)] pb-2 last:border-0"
+                      className="border-b border-[color:var(--color-border-subtle)] pb-2 last:border-0"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-medium">{d.type}</span>
+                        <span className="font-medium text-[color:var(--color-foreground)]">
+                          {d.type}
+                        </span>
                         <span className="flex items-center gap-2">
                           <span
-                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                              SEVERITY_TONE[d.severity]
-                            }`}
+                            className={cn(
+                              "rounded-full px-2 py-0.5 text-xs font-medium",
+                              SEVERITY_TONE[d.severity],
+                            )}
                           >
                             {tDisc(SEVERITY_LABEL[d.severity] ?? "severityNote")}
                           </span>
-                          <span className="text-xs text-[color:var(--muted-fg)] tabular-nums">
+                          <span className="text-xs tabular-nums text-[color:var(--color-foreground-muted)]">
                             {d.date.toISOString().slice(0, 10)}
                           </span>
                         </span>
                       </div>
-                      <p className="mt-1 text-[color:var(--muted-fg)]">{d.description}</p>
+                      <p className="mt-1 text-[color:var(--color-foreground-muted)]">
+                        {d.description}
+                      </p>
                     </li>
                   ))}
                 </ul>
@@ -203,8 +270,8 @@ export default async function ParentChildPage({
                 <tr>
                   <TH>{tBill("colNumber")}</TH>
                   <TH>{tBill("colIssued")}</TH>
-                  <TH className="text-right">{tBill("colTotal")}</TH>
-                  <TH className="text-right">{tBill("colBalance")}</TH>
+                  <TH className="text-end">{tBill("colTotal")}</TH>
+                  <TH className="text-end">{tBill("colBalance")}</TH>
                   <TH>{tBill("colStatus")}</TH>
                 </tr>
               </THead>
@@ -213,31 +280,39 @@ export default async function ParentChildPage({
                   <EmptyRow colSpan={5}>{tBill("empty")}</EmptyRow>
                 ) : (
                   invoices.map((inv) => {
-                    const paid = inv.payments.reduce((a, p) => a + p.amountCents, 0);
+                    const paid = inv.payments.reduce(
+                      (a, p) => a + p.amountCents,
+                      0,
+                    );
                     const balance = inv.totalCents - paid;
                     return (
                       <TR key={inv.id}>
-                        <TD className="font-mono text-xs">{inv.number}</TD>
-                        <TD className="text-[color:var(--muted-fg)] tabular-nums">
+                        <TD className="font-mono text-xs text-[color:var(--color-foreground)]">
+                          {inv.number}
+                        </TD>
+                        <TD className="tabular-nums text-[color:var(--color-foreground-muted)]">
                           {inv.issuedAt.toISOString().slice(0, 10)}
                         </TD>
-                        <TD className="text-right tabular-nums">
+                        <TD className="text-end tabular-nums text-[color:var(--color-foreground)]">
                           {formatMoney(inv.totalCents, inv.currency)}
                         </TD>
-                        <TD className="text-right tabular-nums">
+                        <TD className="text-end tabular-nums">
                           {balance > 0 ? (
-                            <span className="font-medium">
+                            <span className="font-medium text-[color:var(--color-foreground)]">
                               {formatMoney(balance, inv.currency)}
                             </span>
                           ) : (
-                            <span className="text-emerald-600">—</span>
+                            <span className="text-[color:var(--color-success)]">
+                              ✓
+                            </span>
                           )}
                         </TD>
                         <TD>
                           <span
-                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                              STATUS_TONE[inv.status]
-                            }`}
+                            className={cn(
+                              "inline-flex rounded-full px-2 py-0.5 text-xs font-medium",
+                              STATUS_TONE[inv.status],
+                            )}
                           >
                             {tBill(STATUS_KEY[inv.status] ?? "statusDraft")}
                           </span>

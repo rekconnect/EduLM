@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
+import { ArrowRight, Plus, RefreshCw, FileText } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody } from "@/components/ui/card";
 import { LinkButton } from "@/components/ui/button";
+import { StaggerGrid } from "@/components/ui/stagger-grid";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
+import { AppStatusBadge } from "./_status-badge";
 
 const STATUS_KEY: Record<string, string> = {
   DRAFT: "statusDraft",
@@ -17,17 +20,6 @@ const STATUS_KEY: Record<string, string> = {
   WAITLISTED: "statusWaitlisted",
   DECLINED: "statusDeclined",
   WITHDRAWN: "statusWithdrawn",
-};
-
-const STATUS_TONE: Record<string, string> = {
-  DRAFT: "bg-slate-100 text-slate-700",
-  SUBMITTED: "bg-blue-100 text-blue-800",
-  UNDER_REVIEW: "bg-indigo-100 text-indigo-800",
-  INTERVIEW_SCHEDULED: "bg-purple-100 text-purple-800",
-  ACCEPTED: "bg-emerald-100 text-emerald-800",
-  WAITLISTED: "bg-amber-100 text-amber-800",
-  DECLINED: "bg-red-100 text-red-800",
-  WITHDRAWN: "bg-zinc-200 text-zinc-700",
 };
 
 export default async function ParentApplicationsPage() {
@@ -45,26 +37,36 @@ export default async function ParentApplicationsPage() {
     });
 
     return (
-      <AppShell role={user.role} userLabel={user.name ?? user.email} >
+      <AppShell role={user.role} userLabel={user.name ?? user.email}>
         <main className="mx-auto max-w-4xl space-y-6 px-6 py-10">
           <PageHeader
             title={t("myApplicationsTitle")}
             description={t("myApplicationsLead")}
             action={
-              <LinkButton href="/parent/applications/new" size="sm">
-                + {t("newCta")}
+              <LinkButton href="/parent/applications/new" size="sm" className="gap-1.5">
+                <Plus className="size-4" aria-hidden />
+                {t("newCta")}
               </LinkButton>
             }
           />
 
           {apps.length === 0 ? (
-            <Card>
-              <CardBody>
-                <p className="text-sm text-[color:var(--muted-fg)]">{t("noApplications")}</p>
-              </CardBody>
-            </Card>
+            <div className="flex flex-col items-center rounded-lg border border-dashed border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] py-12 text-center">
+              <div className="mb-3 flex size-12 items-center justify-center rounded-full bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-600)]">
+                <FileText className="size-6" aria-hidden />
+              </div>
+              <p className="max-w-xs text-sm text-[color:var(--color-foreground-muted)]">
+                {t("noApplications")}
+              </p>
+              <div className="mt-5">
+                <LinkButton href="/parent/applications/new" size="sm" className="gap-1.5">
+                  <Plus className="size-4" aria-hidden />
+                  {t("newCta")}
+                </LinkButton>
+              </div>
+            </div>
           ) : (
-            <div className="space-y-3">
+            <StaggerGrid className="space-y-3">
               {apps.map((a) => {
                 const href =
                   a.status === "DRAFT"
@@ -72,40 +74,44 @@ export default async function ParentApplicationsPage() {
                     : `/parent/applications/${a.id}`;
                 return (
                   <Link key={a.id} href={href} className="block">
-                    <Card className="transition hover:border-[color:var(--primary)]">
+                    <Card className="group transition-shadow duration-200 ease-out hover:border-[color:var(--color-border-strong)] hover:shadow-[var(--shadow-card-hover)]">
                       <CardBody>
                         <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <p className="text-xs uppercase tracking-wide text-[color:var(--muted-fg)]">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
                               {a.cycle.label}
                             </p>
-                            <h2 className="mt-1 text-lg font-semibold">
+                            <h2 className="mt-1 flex items-center gap-2 text-lg font-semibold text-[color:var(--color-foreground)] transition-colors group-hover:text-[color:var(--color-brand-600)]">
                               {a.childFirstName || "—"} {a.childLastName || ""}
                               {a.existingStudentId ? (
-                                <span className="ms-2 inline-flex rounded-full bg-violet-100 px-2 py-0.5 align-middle text-[10px] font-medium uppercase tracking-wide text-violet-800 dark:bg-violet-900/40 dark:text-violet-100">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--color-brand-50)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[color:var(--color-brand-700)]">
+                                  <RefreshCw className="size-2.5" aria-hidden />
                                   {t("renewalBadge")}
                                 </span>
                               ) : null}
                             </h2>
-                            <p className="mt-0.5 text-xs text-[color:var(--muted-fg)]">
+                            <p className="mt-1 text-xs text-[color:var(--color-foreground-muted)]">
                               {a.requestedLevel ? `${a.requestedLevel} · ` : ""}
                               {a.cycle.targetYearLabel}
                             </p>
                           </div>
-                          <span
-                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
-                              STATUS_TONE[a.status]
-                            }`}
-                          >
-                            {t(STATUS_KEY[a.status] ?? "statusDraft")}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <AppStatusBadge
+                              status={a.status}
+                              label={t(STATUS_KEY[a.status] ?? "statusDraft")}
+                            />
+                            <ArrowRight
+                              className="size-4 text-[color:var(--color-foreground-subtle)] transition-transform group-hover:translate-x-0.5 group-hover:text-[color:var(--color-brand-600)] rtl:group-hover:-translate-x-0.5 rtl:rotate-180"
+                              aria-hidden
+                            />
+                          </div>
                         </div>
                       </CardBody>
                     </Card>
                   </Link>
                 );
               })}
-            </div>
+            </StaggerGrid>
           )}
         </main>
       </AppShell>

@@ -14,6 +14,32 @@ const startSchema = z.object({
   cycleId: z.string().min(1),
 });
 
+/**
+ * Pull family / address fields from the parent's most-recent prior application,
+ * if any. Used to pre-fill step 2 so siblings (and re-enrollments) don't force
+ * the parent to re-type contact info they already gave us.
+ *
+ * Must be called INSIDE a `runWithTenant` block.
+ */
+async function getPriorFamilyInfo(userId: string) {
+  return db.application.findFirst({
+    where: { submittedByUserId: userId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      primaryParentName: true,
+      primaryParentPhone: true,
+      primaryParentEmail: true,
+      secondaryParentName: true,
+      secondaryParentPhone: true,
+      secondaryParentEmail: true,
+      address: true,
+      city: true,
+      postalCode: true,
+      country: true,
+    },
+  });
+}
+
 export async function startApplication(formData: FormData): Promise<void> {
   const user = await requireRole("PARENT");
   const tenantId = user.tenantId;
@@ -32,6 +58,30 @@ export async function startApplication(formData: FormData): Promise<void> {
     });
     if (!cycle || !cycle.isActive) return;
     if (cycle.closeAt && cycle.closeAt < new Date()) return;
+
+    // Anti-duplicate: if the parent already has an empty new-application draft
+    // for this cycle (no child name yet, not a renewal), resume it instead of
+    // creating yet another empty draft. Catches accidental double-clicks and
+    // parents who started but never filled in the form.
+    const emptyDraft = await db.application.findFirst({
+      where: {
+        submittedByUserId: user.id,
+        cycleId: cycle.id,
+        status: "DRAFT",
+        childFirstName: "",
+        existingStudentId: null,
+      },
+      select: { id: true },
+    });
+    if (emptyDraft) {
+      newId = emptyDraft.id;
+      return;
+    }
+
+    // If this parent has applied before (any child), pre-fill family info from
+    // the most recent application so siblings don't re-type the household data.
+    const prior = await getPriorFamilyInfo(user.id);
+
     const created = await db.application.create({
       data: {
         tenantId,
@@ -40,8 +90,16 @@ export async function startApplication(formData: FormData): Promise<void> {
         status: "DRAFT",
         childFirstName: "",
         childLastName: "",
-        primaryParentName: user.name ?? "",
-        primaryParentEmail: user.email,
+        primaryParentName: prior?.primaryParentName || user.name || "",
+        primaryParentEmail: prior?.primaryParentEmail || user.email,
+        primaryParentPhone: prior?.primaryParentPhone ?? null,
+        secondaryParentName: prior?.secondaryParentName ?? null,
+        secondaryParentPhone: prior?.secondaryParentPhone ?? null,
+        secondaryParentEmail: prior?.secondaryParentEmail ?? null,
+        address: prior?.address ?? null,
+        city: prior?.city ?? null,
+        postalCode: prior?.postalCode ?? null,
+        country: prior?.country ?? null,
       },
       select: { id: true },
     });
@@ -107,6 +165,13 @@ async function ensureMine(id: string, tenantId: string, userId: string) {
   });
 }
 
+function isEditable(status: string) {
+  // Parents can edit while the application is still with them (DRAFT) or
+  // SUBMITTED but no admin has started reviewing yet. Once it moves to
+  // UNDER_REVIEW / INTERVIEW_SCHEDULED / final states, edits are locked.
+  return status === "DRAFT" || status === "SUBMITTED";
+}
+
 export async function saveIdentityStep(
   id: string,
   _prev: StepFormState,
@@ -117,7 +182,7 @@ export async function saveIdentityStep(
   if (!tenantId) return { formError: "no-tenant" };
   const owned = await ensureMine(id, tenantId, user.id);
   if (!owned) return { formError: "not-found" };
-  if (owned.status !== "DRAFT") return { formError: "locked" };
+  if (!isEditable(owned.status)) return { formError: "locked" };
 
   const raw = normalize(formData, [
     "childFirstName",
@@ -152,7 +217,7 @@ export async function saveFamilyStep(
   if (!tenantId) return { formError: "no-tenant" };
   const owned = await ensureMine(id, tenantId, user.id);
   if (!owned) return { formError: "not-found" };
-  if (owned.status !== "DRAFT") return { formError: "locked" };
+  if (!isEditable(owned.status)) return { formError: "locked" };
 
   const raw = normalize(formData, [
     "primaryParentName",
@@ -191,7 +256,7 @@ export async function saveAcademicStep(
   if (!tenantId) return { formError: "no-tenant" };
   const owned = await ensureMine(id, tenantId, user.id);
   if (!owned) return { formError: "not-found" };
-  if (owned.status !== "DRAFT") return { formError: "locked" };
+  if (!isEditable(owned.status)) return { formError: "locked" };
 
   const raw = normalize(formData, [
     "currentSchool",
@@ -212,6 +277,41 @@ export async function saveAcademicStep(
   });
   revalidatePath(`/parent/applications/${id}/edit`);
   redirect(`/parent/applications/${id}/edit?step=4`);
+}
+
+export type CancelResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Cancel (delete) a DRAFT application owned by the current user. Only drafts —
+ * applications that have been submitted use the WITHDRAWN status for audit and
+ * are handled by the admin tooling.
+ *
+ * Returns a result instead of redirecting so the client can show a toast and
+ * navigate itself. This pattern works around server actions that redirect not
+ * being able to surface success state to the caller.
+ */
+export async function cancelDraftApplication(
+  id: string,
+): Promise<CancelResult> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "unauthenticated" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id },
+      select: { id: true, submittedByUserId: true, status: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    if (app.submittedByUserId !== user.id)
+      return { ok: false, error: "forbidden" };
+    if (app.status !== "DRAFT") return { ok: false, error: "not-draft" };
+    await db.application.delete({ where: { id } });
+
+    revalidatePath("/parent/applications");
+    revalidatePath("/parent/dashboard");
+    return { ok: true };
+  });
 }
 
 export async function submitApplication(id: string) {
@@ -366,6 +466,11 @@ export async function startRenewal(formData: FormData): Promise<void> {
     if (!student) return;
 
     const primaryGuardian = student.guardianLinks[0]?.guardian.user;
+
+    // Pre-fill family contact info from the most-recent prior application —
+    // the parent has given us this already; don't make them retype it.
+    const prior = await getPriorFamilyInfo(user.id);
+
     const created = await db.application.create({
       data: {
         tenantId,
@@ -376,8 +481,21 @@ export async function startRenewal(formData: FormData): Promise<void> {
         childFirstName: student.firstName,
         childLastName: student.lastName,
         childDob: student.dob,
-        primaryParentName: primaryGuardian?.name ?? user.name ?? "",
-        primaryParentEmail: primaryGuardian?.email ?? user.email,
+        primaryParentName:
+          prior?.primaryParentName ||
+          primaryGuardian?.name ||
+          user.name ||
+          "",
+        primaryParentEmail:
+          prior?.primaryParentEmail || primaryGuardian?.email || user.email,
+        primaryParentPhone: prior?.primaryParentPhone ?? null,
+        secondaryParentName: prior?.secondaryParentName ?? null,
+        secondaryParentPhone: prior?.secondaryParentPhone ?? null,
+        secondaryParentEmail: prior?.secondaryParentEmail ?? null,
+        address: prior?.address ?? null,
+        city: prior?.city ?? null,
+        postalCode: prior?.postalCode ?? null,
+        country: prior?.country ?? null,
         currentLevel: student.enrollments[0]?.class.level ?? null,
       },
       select: { id: true },

@@ -2,7 +2,7 @@ import * as React from "react";
 
 export function Table({ children }: { children: React.ReactNode }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-[color:var(--border)]">
+    <div className="overflow-x-auto rounded-lg border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] shadow-card">
       <table className="w-full text-sm">{children}</table>
     </div>
   );
@@ -10,7 +10,7 @@ export function Table({ children }: { children: React.ReactNode }) {
 
 export function THead({ children }: { children: React.ReactNode }) {
   return (
-    <thead className="bg-[color:var(--muted)] text-left text-xs uppercase tracking-wide text-[color:var(--muted-fg)]">
+    <thead className="bg-[color:var(--color-surface-sunken)] text-start text-xs font-semibold uppercase tracking-wider text-[color:var(--color-foreground-muted)]">
       {children}
     </thead>
   );
@@ -18,7 +18,7 @@ export function THead({ children }: { children: React.ReactNode }) {
 
 export function TR({ children }: { children: React.ReactNode }) {
   return (
-    <tr className="border-t border-[color:var(--border)] hover:bg-[color:var(--muted)]/50">
+    <tr className="border-t border-[color:var(--color-border-subtle)] transition-colors duration-150 ease-out hover:bg-[color:var(--color-surface-hover)]">
       {children}
     </tr>
   );

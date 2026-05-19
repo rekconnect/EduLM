@@ -72,6 +72,64 @@ export async function createCycle(
   redirect("/admissions-admin/cycles");
 }
 
+// ── Cycle field-config (per-cycle wizard customization) ────
+
+import { ADMISSION_FIELDS, type FieldVisibility } from "@/lib/admission-fields";
+
+const visibilityValues = ["required", "optional", "hidden"] as const;
+
+const fieldConfigSchema = z.object({
+  fields: z.record(z.string(), z.enum(visibilityValues)).optional(),
+});
+
+export async function updateCycleFieldConfig(
+  cycleId: string,
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { error: "no-tenant" };
+
+  // Collect `field:<key>` form entries into a Record<string, FieldVisibility>.
+  const fields: Record<string, FieldVisibility> = {};
+  for (const [k, v] of formData.entries()) {
+    if (!k.startsWith("field:")) continue;
+    const key = k.slice("field:".length);
+    const def = ADMISSION_FIELDS.find((f) => f.key === key);
+    if (!def || def.locked) continue; // ignore unknown or locked fields
+    const value = String(v);
+    if (!(visibilityValues as readonly string[]).includes(value)) continue;
+    // Only persist non-default values; default cleans up the JSON blob.
+    if (value !== def.default) {
+      fields[key] = value as FieldVisibility;
+    }
+  }
+
+  const parsed = fieldConfigSchema.safeParse({ fields });
+  if (!parsed.success) return { error: "validation" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const cycle = await db.admissionCycle.findUnique({
+      where: { id: cycleId },
+      select: { id: true, fieldConfig: true },
+    });
+    if (!cycle) return { error: "not-found" };
+
+    const next = {
+      ...((cycle.fieldConfig ?? {}) as Record<string, unknown>),
+      fields: parsed.data.fields ?? {},
+    };
+
+    await db.admissionCycle.update({
+      where: { id: cycleId },
+      data: { fieldConfig: next },
+    });
+    revalidatePath("/admissions-admin/cycles");
+    revalidatePath(`/admissions-admin/cycles/${cycleId}`);
+    return {};
+  });
+}
+
 // ── Application decisions ────────────────────────────────────
 
 const decisionSchema = z.object({

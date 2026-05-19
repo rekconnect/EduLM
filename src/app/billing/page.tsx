@@ -1,17 +1,16 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
+import { Plus, Receipt } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { LinkButton } from "@/components/ui/button";
-import { Card, CardBody } from "@/components/ui/card";
-import { Select } from "@/components/ui/input";
-import { Field } from "@/components/ui/field";
-import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
+import { Table, THead, TR, TH, TD } from "@/components/ui/table";
 import { Prisma, InvoiceStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
 import { formatMoney } from "@/lib/money";
+import { cn } from "@/lib/utils";
 
 type InvoiceRow = Prisma.InvoiceGetPayload<{
   include: {
@@ -30,12 +29,18 @@ const STATUS_KEY: Record<string, string> = {
 };
 
 const STATUS_TONE: Record<string, string> = {
-  DRAFT: "bg-slate-100 text-slate-700",
-  ISSUED: "bg-blue-100 text-blue-800",
-  PARTIALLY_PAID: "bg-amber-100 text-amber-800",
-  PAID: "bg-emerald-100 text-emerald-800",
-  CANCELLED: "bg-zinc-200 text-zinc-700",
-  OVERDUE: "bg-red-100 text-red-800",
+  DRAFT:
+    "bg-[color:var(--color-surface-sunken)] text-[color:var(--color-foreground-muted)]",
+  ISSUED:
+    "bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-700)]",
+  PARTIALLY_PAID:
+    "bg-[color:var(--color-warning-soft)] text-[color:var(--color-warning-soft-fg)]",
+  PAID:
+    "bg-[color:var(--color-success-soft)] text-[color:var(--color-success-soft-fg)]",
+  CANCELLED:
+    "bg-[color:var(--color-surface-sunken)] text-[color:var(--color-foreground-subtle)]",
+  OVERDUE:
+    "bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger-soft-fg)]",
 };
 
 export default async function BillingPage({
@@ -75,106 +80,167 @@ export default async function BillingPage({
     })) as InvoiceRow[];
 
     return (
-      <AppShell role={user.role} userLabel={user.name ?? user.email} >
-        <main className="mx-auto max-w-6xl space-y-4 px-6 py-10">
+      <AppShell role={user.role} userLabel={user.name ?? user.email}>
+        <main className="mx-auto max-w-6xl space-y-6 px-6 py-10">
           <PageHeader
             title={t("title")}
             description={t("subtitle")}
             action={
               user.role === "SCHOOL_ADMIN" ? (
-                <LinkButton href="/billing/new" size="sm">
+                <LinkButton href="/billing/new" size="sm" className="gap-1.5">
+                  <Plus className="size-4" aria-hidden />
                   {t("createCta")}
                 </LinkButton>
               ) : undefined
             }
           />
 
-          <Card>
-            <CardBody>
-              <form method="get" className="max-w-xs">
-                <Field label={t("colStatus")} htmlFor="status">
-                  <Select id="status" name="status" defaultValue={status ?? ""}>
-                    <option value="">{t("filterAll")}</option>
-                    {allowedStatuses.map((s) => (
-                      <option key={s} value={s}>
-                        {t(STATUS_KEY[s] ?? "statusDraft")}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-              </form>
-            </CardBody>
-          </Card>
+          {/* Status filter pills */}
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusPill
+              active={!status}
+              href="/billing"
+              label={t("filterAll")}
+            />
+            {allowedStatuses.map((s) => (
+              <StatusPill
+                key={s}
+                active={status === s}
+                href={`/billing?status=${s}`}
+                label={t(STATUS_KEY[s] ?? "statusDraft")}
+                tone={STATUS_TONE[s]}
+              />
+            ))}
+          </div>
 
-          <Table>
-            <THead>
-              <tr>
-                <TH>{t("colNumber")}</TH>
-                <TH>{t("colStudent")}</TH>
-                <TH>{t("colIssued")}</TH>
-                <TH>{t("colDue")}</TH>
-                <TH className="text-right">{t("colTotal")}</TH>
-                <TH className="text-right">{t("colBalance")}</TH>
-                <TH>{t("colStatus")}</TH>
-              </tr>
-            </THead>
-            <tbody>
-              {invoices.length === 0 ? (
-                <EmptyRow colSpan={7}>{t("empty")}</EmptyRow>
-              ) : (
-                invoices.map((inv) => {
-                  const paid = inv.payments.reduce((a, p) => a + p.amountCents, 0);
+          {invoices.length === 0 ? (
+            <div className="flex flex-col items-center rounded-lg border border-dashed border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] py-12 text-center">
+              <div className="mb-3 flex size-12 items-center justify-center rounded-full bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-600)]">
+                <Receipt className="size-6" aria-hidden />
+              </div>
+              <p className="max-w-xs text-sm text-[color:var(--color-foreground-muted)]">
+                {t("empty")}
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <THead>
+                <tr>
+                  <TH>{t("colNumber")}</TH>
+                  <TH>{t("colStudent")}</TH>
+                  <TH>{t("colIssued")}</TH>
+                  <TH>{t("colDue")}</TH>
+                  <TH className="text-end">{t("colTotal")}</TH>
+                  <TH className="text-end">{t("colBalance")}</TH>
+                  <TH>{t("colStatus")}</TH>
+                </tr>
+              </THead>
+              <tbody>
+                {invoices.map((inv) => {
+                  const paid = inv.payments.reduce(
+                    (a, p) => a + p.amountCents,
+                    0,
+                  );
                   const balance = inv.totalCents - paid;
+                  const isOverdue = inv.status === "OVERDUE";
                   return (
                     <TR key={inv.id}>
                       <TD className="font-mono text-xs">
-                        <Link href={`/billing/${inv.id}`} className="hover:underline">
+                        <Link
+                          href={`/billing/${inv.id}`}
+                          className="text-[color:var(--color-foreground)] transition-colors hover:text-[color:var(--color-brand-600)] hover:underline"
+                        >
                           {inv.number}
                         </Link>
                       </TD>
                       <TD>
                         <Link
                           href={`/students/${inv.student.id}`}
-                          className="hover:underline"
+                          className="text-[color:var(--color-foreground)] transition-colors hover:text-[color:var(--color-brand-600)] hover:underline"
                         >
                           {inv.student.lastName} {inv.student.firstName}
                         </Link>
                       </TD>
-                      <TD className="text-[color:var(--muted-fg)] tabular-nums">
+                      <TD className="tabular-nums text-[color:var(--color-foreground-muted)]">
                         {inv.issuedAt.toISOString().slice(0, 10)}
                       </TD>
-                      <TD className="text-[color:var(--muted-fg)] tabular-nums">
+                      <TD
+                        className={cn(
+                          "tabular-nums",
+                          isOverdue
+                            ? "font-medium text-[color:var(--color-danger)]"
+                            : "text-[color:var(--color-foreground-muted)]",
+                        )}
+                      >
                         {inv.dueAt ? inv.dueAt.toISOString().slice(0, 10) : "—"}
                       </TD>
-                      <TD className="text-right tabular-nums">
+                      <TD className="text-end tabular-nums text-[color:var(--color-foreground)]">
                         {formatMoney(inv.totalCents, inv.currency)}
                       </TD>
-                      <TD className="text-right tabular-nums">
+                      <TD className="text-end tabular-nums">
                         {balance > 0 ? (
-                          <span className="font-medium">
+                          <span
+                            className={cn(
+                              "font-semibold",
+                              isOverdue
+                                ? "text-[color:var(--color-danger)]"
+                                : "text-[color:var(--color-foreground)]",
+                            )}
+                          >
                             {formatMoney(balance, inv.currency)}
                           </span>
                         ) : (
-                          <span className="text-emerald-600">—</span>
+                          <span className="text-[color:var(--color-success)]">
+                            ✓
+                          </span>
                         )}
                       </TD>
                       <TD>
                         <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                            STATUS_TONE[inv.status]
-                          }`}
+                          className={cn(
+                            "inline-flex rounded-full px-2 py-0.5 text-xs font-medium",
+                            STATUS_TONE[inv.status],
+                          )}
                         >
                           {t(STATUS_KEY[inv.status] ?? "statusDraft")}
                         </span>
                       </TD>
                     </TR>
                   );
-                })
-              )}
-            </tbody>
-          </Table>
+                })}
+              </tbody>
+            </Table>
+          )}
         </main>
       </AppShell>
     );
   });
+}
+
+function StatusPill({
+  active,
+  href,
+  label,
+  tone,
+}: {
+  active: boolean;
+  href: string;
+  label: string;
+  tone?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150 ease-out",
+        active
+          ? "bg-[color:var(--color-brand-500)] text-[color:var(--color-foreground-onbrand)] shadow-card"
+          : tone ??
+              "bg-[color:var(--color-surface-sunken)] text-[color:var(--color-foreground-muted)] hover:bg-[color:var(--color-surface-hover)] hover:text-[color:var(--color-foreground)]",
+      )}
+    >
+      {label}
+    </Link>
+  );
 }

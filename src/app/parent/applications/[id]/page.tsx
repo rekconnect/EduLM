@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { ArrowLeft, Clock, Pencil } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
+import { AppStatusBadge } from "../_status-badge";
 
 const STATUS_KEY: Record<string, string> = {
   DRAFT: "statusDraft",
@@ -19,17 +21,6 @@ const STATUS_KEY: Record<string, string> = {
   WITHDRAWN: "statusWithdrawn",
 };
 
-const STATUS_TONE: Record<string, string> = {
-  DRAFT: "bg-slate-100 text-slate-700",
-  SUBMITTED: "bg-blue-100 text-blue-800",
-  UNDER_REVIEW: "bg-indigo-100 text-indigo-800",
-  INTERVIEW_SCHEDULED: "bg-purple-100 text-purple-800",
-  ACCEPTED: "bg-emerald-100 text-emerald-800",
-  WAITLISTED: "bg-amber-100 text-amber-800",
-  DECLINED: "bg-red-100 text-red-800",
-  WITHDRAWN: "bg-zinc-200 text-zinc-700",
-};
-
 const GENDER_KEY: Record<string, string> = {
   MALE: "genderMale",
   FEMALE: "genderFemale",
@@ -38,9 +29,11 @@ const GENDER_KEY: Record<string, string> = {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-3 gap-3 border-b border-[color:var(--border)] py-2 last:border-0">
-      <dt className="text-sm text-[color:var(--muted-fg)]">{label}</dt>
-      <dd className="col-span-2 text-sm">{value || "—"}</dd>
+    <div className="grid grid-cols-3 gap-3 border-b border-[color:var(--color-border-subtle)] py-2.5 last:border-0">
+      <dt className="text-sm text-[color:var(--color-foreground-muted)]">{label}</dt>
+      <dd className="col-span-2 text-sm text-[color:var(--color-foreground)]">
+        {value || "—"}
+      </dd>
     </div>
   );
 }
@@ -64,11 +57,10 @@ export default async function ParentApplicationViewPage({
     });
     if (!app) notFound();
     if (app.submittedByUserId !== user.id) notFound();
-    // Drafts go back to the editor.
     if (app.status === "DRAFT") redirect(`/parent/applications/${id}/edit`);
 
     return (
-      <AppShell role={user.role} userLabel={user.name ?? user.email} >
+      <AppShell role={user.role} userLabel={user.name ?? user.email}>
         <main className="mx-auto max-w-3xl space-y-6 px-6 py-10">
           <PageHeader
             title={`${app.childFirstName} ${app.childLastName}`}
@@ -76,33 +68,44 @@ export default async function ParentApplicationViewPage({
             action={
               <Link
                 href="/parent/applications"
-                className="text-sm text-[color:var(--muted-fg)] hover:underline"
+                className="inline-flex items-center gap-1.5 text-sm text-[color:var(--color-foreground-muted)] transition-colors hover:text-[color:var(--color-foreground)] hover:underline"
               >
-                ← {t("myApplicationsTitle")}
+                <ArrowLeft className="size-3.5" aria-hidden />
+                {t("myApplicationsTitle")}
               </Link>
             }
           />
 
-          <div className="flex items-center gap-3">
-            <span
-              className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${
-                STATUS_TONE[app.status]
-              }`}
-            >
-              {t(STATUS_KEY[app.status] ?? "statusSubmitted")}
-            </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <AppStatusBadge
+              status={app.status}
+              size="md"
+              label={t(STATUS_KEY[app.status] ?? "statusSubmitted")}
+            />
             {app.submittedAt ? (
-              <span className="text-xs text-[color:var(--muted-fg)]">
+              <span className="inline-flex items-center gap-1 text-xs text-[color:var(--color-foreground-muted)]">
+                <Clock className="size-3" aria-hidden />
                 {app.submittedAt.toISOString().slice(0, 10)}
               </span>
+            ) : null}
+            {app.status === "SUBMITTED" ? (
+              <Link
+                href={`/parent/applications/${id}/edit`}
+                className="ms-auto inline-flex items-center gap-1.5 rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] px-3 py-1.5 text-sm font-medium text-[color:var(--color-foreground)] transition-colors hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--color-surface-hover)]"
+              >
+                <Pencil className="size-3.5" aria-hidden />
+                {t("editFromView")}
+              </Link>
             ) : null}
           </div>
 
           {app.status === "SUBMITTED" || app.status === "UNDER_REVIEW" ? (
             <Card>
               <CardBody>
-                <h2 className="text-base font-semibold">{t("submittedTitle")}</h2>
-                <p className="mt-1 text-sm text-[color:var(--muted-fg)]">
+                <h2 className="text-base font-semibold text-[color:var(--color-foreground)]">
+                  {t("submittedTitle")}
+                </h2>
+                <p className="mt-1 text-sm text-[color:var(--color-foreground-muted)]">
                   {t("submittedLead")}
                 </p>
               </CardBody>
@@ -113,7 +116,9 @@ export default async function ParentApplicationViewPage({
             <Card>
               <CardHeader title={t("adminDecisionNote")} />
               <CardBody>
-                <p className="whitespace-pre-line text-sm">{app.decisionNote}</p>
+                <p className="whitespace-pre-line text-sm text-[color:var(--color-foreground)]">
+                  {app.decisionNote}
+                </p>
               </CardBody>
             </Card>
           ) : null}
@@ -130,7 +135,9 @@ export default async function ParentApplicationViewPage({
                 />
                 <Row
                   label={t("fieldChildGender")}
-                  value={app.childGender ? t(GENDER_KEY[app.childGender] ?? "genderOther") : ""}
+                  value={
+                    app.childGender ? t(GENDER_KEY[app.childGender] ?? "genderOther") : ""
+                  }
                 />
                 <Row label={t("fieldChildNationality")} value={app.childNationality ?? ""} />
                 <Row label={t("fieldChildPlaceOfBirth")} value={app.childPlaceOfBirth ?? ""} />
@@ -145,8 +152,14 @@ export default async function ParentApplicationViewPage({
                 <Row label={t("fieldPrimaryParentName")} value={app.primaryParentName} />
                 <Row label={t("fieldPrimaryParentPhone")} value={app.primaryParentPhone ?? ""} />
                 <Row label={t("fieldPrimaryParentEmail")} value={app.primaryParentEmail ?? ""} />
-                <Row label={t("fieldSecondaryParentName")} value={app.secondaryParentName ?? ""} />
-                <Row label={t("fieldSecondaryParentPhone")} value={app.secondaryParentPhone ?? ""} />
+                <Row
+                  label={t("fieldSecondaryParentName")}
+                  value={app.secondaryParentName ?? ""}
+                />
+                <Row
+                  label={t("fieldSecondaryParentPhone")}
+                  value={app.secondaryParentPhone ?? ""}
+                />
                 <Row label={t("fieldAddress")} value={app.address ?? ""} />
                 <Row label={t("fieldCity")} value={app.city ?? ""} />
                 <Row label={t("fieldPostalCode")} value={app.postalCode ?? ""} />

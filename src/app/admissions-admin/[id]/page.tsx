@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { ArrowLeft, ArrowRight, Clock, RefreshCw, Sparkles, Users, AlertTriangle } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
+import { cn } from "@/lib/utils";
+import { AppStatusBadge } from "@/app/parent/applications/_status-badge";
 import { DecideForm } from "./_decide";
 
 const STATUS_KEY: Record<string, string> = {
@@ -20,17 +23,6 @@ const STATUS_KEY: Record<string, string> = {
   WITHDRAWN: "statusWithdrawn",
 };
 
-const STATUS_TONE: Record<string, string> = {
-  DRAFT: "bg-slate-100 text-slate-700",
-  SUBMITTED: "bg-blue-100 text-blue-800",
-  UNDER_REVIEW: "bg-indigo-100 text-indigo-800",
-  INTERVIEW_SCHEDULED: "bg-purple-100 text-purple-800",
-  ACCEPTED: "bg-emerald-100 text-emerald-800",
-  WAITLISTED: "bg-amber-100 text-amber-800",
-  DECLINED: "bg-red-100 text-red-800",
-  WITHDRAWN: "bg-zinc-200 text-zinc-700",
-};
-
 const GENDER_KEY: Record<string, string> = {
   MALE: "genderMale",
   FEMALE: "genderFemale",
@@ -39,9 +31,20 @@ const GENDER_KEY: Record<string, string> = {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-3 gap-3 border-b border-[color:var(--border)] py-2 last:border-0">
-      <dt className="text-sm text-[color:var(--muted-fg)]">{label}</dt>
-      <dd className="col-span-2 text-sm">{value || "—"}</dd>
+    <div className="grid grid-cols-3 gap-3 border-b border-[color:var(--color-border-subtle)] py-2.5 last:border-0">
+      <dt className="text-sm text-[color:var(--color-foreground-muted)]">{label}</dt>
+      <dd className="col-span-2 text-sm text-[color:var(--color-foreground)]">
+        {value || "—"}
+      </dd>
+    </div>
+  );
+}
+
+function WarningBanner({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 rounded-md border border-[color:var(--color-warning)]/30 bg-[color:var(--color-warning-soft)] px-3 py-2.5 text-sm text-[color:var(--color-warning-soft-fg)]">
+      <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <div>{children}</div>
     </div>
   );
 }
@@ -71,7 +74,9 @@ export default async function AdmissionsAdminDetailPage({
               select: {
                 childLinks: {
                   select: {
-                    student: { select: { id: true, firstName: true, lastName: true } },
+                    student: {
+                      select: { id: true, firstName: true, lastName: true },
+                    },
                   },
                 },
               },
@@ -86,8 +91,6 @@ export default async function AdmissionsAdminDetailPage({
     const existingChildren = app.submittedBy.guardianProfile?.childLinks ?? [];
     const isExistingFamily = existingChildren.length > 0;
 
-    // Load classes from the cycle's TARGET year — not the currently active one.
-    // Otherwise the admin can accidentally enrol an applicant into the wrong year.
     const targetYear = await db.academicYear.findUnique({
       where: { tenantId_label: { tenantId, label: app.cycle.targetYearLabel } },
       select: { id: true, label: true },
@@ -104,7 +107,7 @@ export default async function AdmissionsAdminDetailPage({
     const finalized = ["ACCEPTED", "DECLINED", "WAITLISTED"].includes(app.status);
 
     return (
-      <AppShell role={user.role} userLabel={user.name ?? user.email} >
+      <AppShell role={user.role} userLabel={user.name ?? user.email}>
         <main className="mx-auto max-w-4xl space-y-6 px-6 py-10">
           <PageHeader
             title={`${app.childLastName} ${app.childFirstName}`}
@@ -112,56 +115,85 @@ export default async function AdmissionsAdminDetailPage({
             action={
               <Link
                 href="/admissions-admin"
-                className="text-sm text-[color:var(--muted-fg)] hover:underline"
+                className="inline-flex items-center gap-1.5 text-sm text-[color:var(--color-foreground-muted)] transition-colors hover:text-[color:var(--color-foreground)] hover:underline"
               >
-                ← {t("adminTitle")}
+                <ArrowLeft className="size-3.5" aria-hidden />
+                {t("adminTitle")}
               </Link>
             }
           />
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <AppStatusBadge
+              status={app.status}
+              size="md"
+              label={t(STATUS_KEY[app.status] ?? "statusSubmitted")}
+            />
             <span
-              className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${
-                STATUS_TONE[app.status]
-              }`}
-            >
-              {t(STATUS_KEY[app.status] ?? "statusSubmitted")}
-            </span>
-            <span
-              className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium",
                 isExistingFamily
-                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-100"
-                  : "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-100"
-              }`}
+                  ? "bg-[color:var(--color-success-soft)] text-[color:var(--color-success-soft-fg)]"
+                  : "bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-700)]",
+              )}
             >
-              {isExistingFamily ? t("badgeExistingFamily") : t("badgeNewFamily")}
+              {isExistingFamily ? (
+                <>
+                  <Users className="size-3" aria-hidden />
+                  {t("badgeExistingFamily")}
+                </>
+              ) : (
+                <>
+                  <Sparkles className="size-3" aria-hidden />
+                  {t("badgeNewFamily")}
+                </>
+              )}
             </span>
             {app.existingStudentId ? (
-              <span className="inline-flex rounded-full bg-violet-100 px-3 py-1 text-sm font-medium text-violet-800 dark:bg-violet-900/40 dark:text-violet-100">
+              <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--color-brand-100)] px-3 py-1 text-xs font-medium uppercase tracking-wider text-[color:var(--color-brand-700)]">
+                <RefreshCw className="size-3" aria-hidden />
                 {t("renewalBadge")}
               </span>
             ) : null}
-            <span className="text-xs text-[color:var(--muted-fg)]">
-              {app.submittedAt ? `${t("colSubmitted")}: ${app.submittedAt.toISOString().slice(0, 10)}` : "—"}
-              {app.reviewedBy ? ` · ${app.reviewedBy.name ?? app.reviewedBy.email}` : ""}
+            <span className="ms-auto inline-flex items-center gap-1 text-xs text-[color:var(--color-foreground-muted)]">
+              {app.submittedAt ? (
+                <>
+                  <Clock className="size-3" aria-hidden />
+                  {t("colSubmitted")}: {app.submittedAt.toISOString().slice(0, 10)}
+                </>
+              ) : (
+                "—"
+              )}
+              {app.reviewedBy
+                ? ` · ${app.reviewedBy.name ?? app.reviewedBy.email}`
+                : ""}
             </span>
           </div>
 
           {isExistingFamily ? (
             <Card>
-              <CardHeader title={t("groupExistingFamily")} description={t("existingChildrenCount", { n: existingChildren.length })} />
+              <CardHeader
+                title={t("groupExistingFamily")}
+                description={t("existingChildrenCount", {
+                  n: existingChildren.length,
+                })}
+              />
               <CardBody>
-                <ul className="space-y-1 text-sm">
+                <ul className="space-y-1.5 text-sm">
                   {existingChildren.map((link) => (
-                    <li key={link.student.id} className="flex items-center justify-between">
-                      <span className="font-medium">
+                    <li
+                      key={link.student.id}
+                      className="flex items-center justify-between rounded-md px-2 py-1.5 transition-colors hover:bg-[color:var(--color-surface-hover)]"
+                    >
+                      <span className="font-medium text-[color:var(--color-foreground)]">
                         {link.student.lastName} {link.student.firstName}
                       </span>
                       <Link
                         href={`/students/${link.student.id}`}
-                        className="text-xs text-[color:var(--primary)] hover:underline"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-[color:var(--color-brand-600)] transition-colors hover:text-[color:var(--color-brand-700)] hover:underline"
                       >
-                        Voir l&apos;élève →
+                        Voir l&apos;élève
+                        <ArrowRight className="size-3" aria-hidden />
                       </Link>
                     </li>
                   ))}
@@ -178,21 +210,30 @@ export default async function AdmissionsAdminDetailPage({
               />
               <CardBody className="space-y-3">
                 {!targetYear ? (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
-                    L&apos;année scolaire <strong>{app.cycle.targetYearLabel}</strong> n&apos;existe pas encore. Créez-la dans{" "}
-                    <Link href="/admin/years/new" className="underline">
+                  <WarningBanner>
+                    L&apos;année scolaire{" "}
+                    <strong>{app.cycle.targetYearLabel}</strong> n&apos;existe pas
+                    encore. Créez-la dans{" "}
+                    <Link
+                      href="/admin/years/new"
+                      className="underline underline-offset-2"
+                    >
                       Configuration → Années
                     </Link>{" "}
                     avant d&apos;accepter ce dossier.
-                  </div>
+                  </WarningBanner>
                 ) : classes.length === 0 ? (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
-                    Aucune classe pour <strong>{targetYear.label}</strong>. Créez les classes dans{" "}
-                    <Link href={`/classes/new?yearId=${targetYear.id}`} className="underline">
+                  <WarningBanner>
+                    Aucune classe pour <strong>{targetYear.label}</strong>. Créez
+                    les classes dans{" "}
+                    <Link
+                      href={`/classes/new?yearId=${targetYear.id}`}
+                      className="underline underline-offset-2"
+                    >
                       Classes → Nouvelle classe
                     </Link>{" "}
                     pour pouvoir affecter cet élève.
-                  </div>
+                  </WarningBanner>
                 ) : null}
                 <DecideForm applicationId={app.id} classes={classes} />
               </CardBody>
@@ -200,9 +241,19 @@ export default async function AdmissionsAdminDetailPage({
           ) : (
             <Card>
               <CardBody>
-                <p className="text-sm text-[color:var(--muted-fg)]">
-                  {t(STATUS_KEY[app.status] ?? "statusSubmitted")}
-                  {app.decisionNote ? ` — ${app.decisionNote}` : ""}
+                <p className="text-sm text-[color:var(--color-foreground)]">
+                  <span className="font-semibold">
+                    {t(STATUS_KEY[app.status] ?? "statusSubmitted")}
+                  </span>
+                  {app.decisionNote ? (
+                    <>
+                      <span className="text-[color:var(--color-foreground-muted)]">
+                        {" "}
+                        —{" "}
+                      </span>
+                      {app.decisionNote}
+                    </>
+                  ) : null}
                 </p>
               </CardBody>
             </Card>
@@ -220,7 +271,9 @@ export default async function AdmissionsAdminDetailPage({
                 />
                 <Row
                   label={t("fieldChildGender")}
-                  value={app.childGender ? t(GENDER_KEY[app.childGender] ?? "genderOther") : ""}
+                  value={
+                    app.childGender ? t(GENDER_KEY[app.childGender] ?? "genderOther") : ""
+                  }
                 />
                 <Row label={t("fieldChildNationality")} value={app.childNationality ?? ""} />
                 <Row label={t("fieldChildPlaceOfBirth")} value={app.childPlaceOfBirth ?? ""} />

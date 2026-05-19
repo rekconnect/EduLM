@@ -17,7 +17,8 @@ export type IconName =
   | "discipline"
   | "billing"
   | "contact"
-  | "tenants";
+  | "tenants"
+  | "settings";
 
 export type NavItem = {
   label: string;
@@ -46,6 +47,7 @@ type Labels = {
   discipline: string;
   billing: string;
   contact: string;
+  settings: string;
   myApplications: string;
   myAnnouncements: string;
   myDocuments: string;
@@ -66,6 +68,10 @@ export function navSectionsForRole(role: Role, l: Labels): NavSection[] {
         {
           title: l.sectionSuperAdmin,
           items: [{ label: l.tenants, href: "/super-admin", icon: "tenants" }],
+        },
+        {
+          title: l.sectionAccount,
+          items: [{ label: l.settings, href: "/settings", icon: "settings" }],
         },
       ];
 
@@ -101,7 +107,10 @@ export function navSectionsForRole(role: Role, l: Labels): NavSection[] {
         },
         {
           title: l.sectionConfig,
-          items: [{ label: l.years, href: "/admin/years", icon: "years" }],
+          items: [
+            { label: l.years, href: "/admin/years", icon: "years" },
+            { label: l.settings, href: "/settings", icon: "settings" },
+          ],
         },
       ];
 
@@ -118,6 +127,10 @@ export function navSectionsForRole(role: Role, l: Labels): NavSection[] {
             { label: l.discipline, href: "/discipline", icon: "discipline" },
           ],
         },
+        {
+          title: l.sectionAccount,
+          items: [{ label: l.settings, href: "/settings", icon: "settings" }],
+        },
       ];
 
     case "PARENT":
@@ -130,6 +143,7 @@ export function navSectionsForRole(role: Role, l: Labels): NavSection[] {
           items: [
             { label: l.myApplications, href: "/parent/applications", icon: "admissions" },
             { label: l.myInvoices, href: "/parent/invoices", icon: "billing" },
+            { label: l.settings, href: "/settings", icon: "settings" },
           ],
         },
         {

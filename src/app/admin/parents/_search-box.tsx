@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { Search, X, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 /**
@@ -16,9 +17,8 @@ export function ParentsSearchBox() {
   const params = useSearchParams();
   const initial = params.get("q") ?? "";
   const [value, setValue] = useState(initial);
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
 
-  // Push to URL after a short debounce so we don't spam navigations on every keystroke.
   useEffect(() => {
     const handle = setTimeout(() => {
       const sp = new URLSearchParams(params.toString());
@@ -34,12 +34,36 @@ export function ParentsSearchBox() {
   }, [value]);
 
   return (
-    <Input
-      type="search"
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      placeholder={t("search")}
-      autoComplete="off"
-    />
+    <div className="relative">
+      <Search
+        className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-[color:var(--color-foreground-subtle)]"
+        aria-hidden
+      />
+      <Input
+        type="search"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder={t("search")}
+        autoComplete="off"
+        className="ps-9 pe-9"
+      />
+      <div className="absolute end-2 top-1/2 -translate-y-1/2">
+        {pending ? (
+          <Loader2
+            className="size-4 animate-spin text-[color:var(--color-foreground-subtle)]"
+            aria-hidden
+          />
+        ) : value ? (
+          <button
+            type="button"
+            onClick={() => setValue("")}
+            aria-label={t("clearSearch")}
+            className="inline-flex size-5 items-center justify-center rounded-sm text-[color:var(--color-foreground-subtle)] transition-colors hover:bg-[color:var(--color-surface-hover)] hover:text-[color:var(--color-foreground)]"
+          >
+            <X className="size-3.5" />
+          </button>
+        ) : null}
+      </div>
+    </div>
   );
 }

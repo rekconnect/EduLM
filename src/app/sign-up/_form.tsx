@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { useTranslations } from "next-intl";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
@@ -48,13 +49,28 @@ export function SignUpForm({ tenantSlug }: { tenantSlug: string }) {
       </Field>
 
       {state.formError ? (
-        <p className="text-sm text-red-600" role="alert">
+        <div
+          role="alert"
+          className="rounded-md border border-[color:var(--color-danger)]/30 bg-[color:var(--color-danger-soft)] px-3 py-2 text-sm text-[color:var(--color-danger-soft-fg)]"
+        >
           {state.formError}
-        </p>
+        </div>
       ) : null}
 
-      <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? tCommon("loading") : t("signUpSubmit")}
+      <Button
+        type="submit"
+        className="w-full gap-2"
+        disabled={pending}
+        aria-busy={pending}
+      >
+        {pending ? (
+          <>
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+            {tCommon("loading")}
+          </>
+        ) : (
+          t("signUpSubmit")
+        )}
       </Button>
     </form>
   );

@@ -1,13 +1,20 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
+import type { Role } from "@prisma/client";
+import { ArrowRight, GraduationCap, Plus, RefreshCw } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
-import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Card, CardBody } from "@/components/ui/card";
 import { Button, LinkButton } from "@/components/ui/button";
+import { StaggerGrid } from "@/components/ui/stagger-grid";
 import { db } from "@/lib/db";
 import { withParentSession } from "@/lib/session";
 import { formatMoney } from "@/lib/money";
+import { cn } from "@/lib/utils";
 import { startRenewal } from "../applications/_actions";
+
+const CARD_HOVER =
+  "transition-shadow duration-200 ease-out hover:shadow-[var(--shadow-card-hover)] hover:border-[color:var(--color-border-strong)]";
 
 export default async function ParentDashboardPage() {
   return withParentSession(async (user, childIds) => {
@@ -16,80 +23,7 @@ export default async function ParentDashboardPage() {
     const tAdm = await getTranslations("admissions");
 
     if (childIds.length === 0) {
-      // New parents (signed up for admissions but no accepted application yet)
-      // see a friendly welcome with their applications + a CTA to start one.
-      const apps = await db.application.findMany({
-        where: { submittedByUserId: user.id },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-        include: { cycle: { select: { label: true } } },
-      });
-
-      return (
-        <AppShell role={user.role} userLabel={user.name ?? user.email} >
-          <main className="mx-auto max-w-3xl space-y-6 px-6 py-10">
-            <PageHeader
-              title={t("dashboardTitle")}
-              description={t("welcome", { name: user.name ?? user.email })}
-            />
-            <Card>
-              <CardBody>
-                {apps.length === 0 ? (
-                  <>
-                    <p className="text-sm text-[color:var(--muted-fg)]">{t("noChildren")}</p>
-                    <div className="mt-4">
-                      <Link
-                        href="/parent/applications/new"
-                        className="inline-flex items-center rounded-md bg-[color:var(--primary)] px-4 py-2 text-sm font-medium text-[color:var(--primary-foreground)] transition hover:opacity-90"
-                      >
-                        + Nouvelle inscription
-                      </Link>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <h2 className="text-base font-semibold">Mes dossiers</h2>
-                    <ul className="mt-3 space-y-2 text-sm">
-                      {apps.map((a) => (
-                        <li key={a.id}>
-                          <Link
-                            href={
-                              a.status === "DRAFT"
-                                ? `/parent/applications/${a.id}/edit`
-                                : `/parent/applications/${a.id}`
-                            }
-                            className="flex items-center justify-between rounded-md border border-[color:var(--border)] px-3 py-2 transition hover:bg-[color:var(--muted)]"
-                          >
-                            <span>
-                              <span className="font-medium">
-                                {a.childFirstName || "—"} {a.childLastName || ""}
-                              </span>
-                              <span className="ms-2 text-xs text-[color:var(--muted-fg)]">
-                                {a.cycle.label}
-                              </span>
-                            </span>
-                            <span className="text-xs text-[color:var(--muted-fg)]">
-                              {a.status}
-                            </span>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="mt-4">
-                      <Link
-                        href="/parent/applications"
-                        className="text-sm text-[color:var(--primary)] hover:underline"
-                      >
-                        Voir tous mes dossiers →
-                      </Link>
-                    </div>
-                  </>
-                )}
-              </CardBody>
-            </Card>
-          </main>
-        </AppShell>
-      );
+      return <NoChildrenState user={user} />;
     }
 
     const since = new Date();
@@ -105,17 +39,28 @@ export default async function ParentDashboardPage() {
           id: true,
           firstName: true,
           lastName: true,
+          // Pull a few enrollments so we can fall back to upcoming-year if no
+          // current-year enrollment exists (newly-accepted children).
           enrollments: {
-            where: { academicYear: { isActive: true } },
-            select: { class: { select: { name: true } } },
-            take: 1,
+            orderBy: { academicYear: { startDate: "desc" } },
+            take: 3,
+            select: {
+              class: { select: { name: true } },
+              academicYear: {
+                select: { label: true, isActive: true, startDate: true },
+              },
+            },
           },
           attendance: {
             where: { date: { gte: since } },
             select: { status: true },
           },
           invoices: {
-            select: { totalCents: true, currency: true, payments: { select: { amountCents: true } } },
+            select: {
+              totalCents: true,
+              currency: true,
+              payments: { select: { amountCents: true } },
+            },
           },
         },
       }),
@@ -130,151 +75,342 @@ export default async function ParentDashboardPage() {
       }),
       db.application.findMany({
         where: {
-          existingStudentId: { in: childIds },
+          OR: [
+            { existingStudentId: { in: childIds } },
+            { resultingStudentId: { in: childIds } },
+          ],
           status: { not: "WITHDRAWN" },
         },
-        select: { existingStudentId: true, cycleId: true, id: true, status: true },
+        select: {
+          existingStudentId: true,
+          resultingStudentId: true,
+          cycleId: true,
+          id: true,
+          status: true,
+        },
       }),
     ]);
 
+    // Map any application that already targets one of our kids — either as a
+    // renewal of an existing student or as a NEW application that resulted in
+    // that student (newly-accepted Carelle case). Either way, we shouldn't
+    // offer "+ Renewal" for that child × cycle again.
     const renewalMap = new Map<string, { id: string; status: string }>();
     for (const r of existingRenewals) {
-      if (r.existingStudentId) {
-        renewalMap.set(`${r.existingStudentId}::${r.cycleId}`, { id: r.id, status: r.status });
+      const studentId = r.existingStudentId ?? r.resultingStudentId;
+      if (studentId) {
+        renewalMap.set(`${studentId}::${r.cycleId}`, {
+          id: r.id,
+          status: r.status,
+        });
       }
     }
 
     return (
-      <AppShell role={user.role} userLabel={user.name ?? user.email} >
-        <main className="mx-auto max-w-5xl space-y-6 px-6 py-10">
+      <AppShell role={user.role} userLabel={user.name ?? user.email}>
+        <main className="mx-auto max-w-5xl space-y-8 px-6 py-10">
           <PageHeader
             title={t("dashboardTitle")}
             description={t("welcome", { name: user.name ?? user.email })}
           />
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            {children.map((c) => {
-              const counts: Record<string, number> = { PRESENT: 0, ABSENT: 0, LATE: 0, EXCUSED: 0 };
-              for (const r of c.attendance) {
-                counts[r.status] = (counts[r.status] ?? 0) + 1;
-              }
-              const klass = c.enrollments[0]?.class.name ?? "—";
-              const balanceByCurrency = new Map<string, number>();
-              for (const inv of c.invoices) {
-                const paid = inv.payments.reduce((a, p) => a + p.amountCents, 0);
-                const bal = inv.totalCents - paid;
-                if (bal > 0) {
-                  balanceByCurrency.set(
-                    inv.currency,
-                    (balanceByCurrency.get(inv.currency) ?? 0) + bal,
-                  );
+          <section>
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
+              {t("childrenTitle")}
+            </h2>
+            <StaggerGrid className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
+              {children.map((c) => {
+                const counts: Record<string, number> = {
+                  PRESENT: 0,
+                  ABSENT: 0,
+                  LATE: 0,
+                  EXCUSED: 0,
+                };
+                for (const r of c.attendance) {
+                  counts[r.status] = (counts[r.status] ?? 0) + 1;
                 }
-              }
+                // Prefer the active-year enrollment; fall back to an upcoming
+                // year (newly-accepted kids) before showing "—".
+                const nowTs = Date.now();
+                const activeEnrollment = c.enrollments.find(
+                  (e) => e.academicYear.isActive,
+                );
+                const upcomingEnrollment = c.enrollments.find(
+                  (e) =>
+                    !e.academicYear.isActive &&
+                    e.academicYear.startDate.getTime() > nowTs,
+                );
+                const enrollment = activeEnrollment ?? upcomingEnrollment;
+                const klass = enrollment?.class.name ?? "—";
+                const klassYearHint =
+                  enrollment && !enrollment.academicYear.isActive
+                    ? ` · ${enrollment.academicYear.label}`
+                    : "";
 
-              return (
-                <Card key={c.id}>
-                  <CardHeader
-                    title={`${c.firstName} ${c.lastName}`}
-                    description={`${t("currentClass")}: ${klass}`}
-                  />
-                  <CardBody className="space-y-4">
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="rounded-md border border-[color:var(--border)] py-3">
-                        <p className="text-2xl font-semibold tabular-nums">
-                          {counts.PRESENT}
-                        </p>
-                        <p className="text-xs text-[color:var(--muted-fg)]">
-                          {tAtt("presentCount")}
-                        </p>
-                      </div>
-                      <div className="rounded-md border border-[color:var(--border)] py-3">
-                        <p className="text-2xl font-semibold tabular-nums text-red-600">
-                          {counts.ABSENT}
-                        </p>
-                        <p className="text-xs text-[color:var(--muted-fg)]">
-                          {tAtt("absentCount")}
-                        </p>
-                      </div>
-                      <div className="rounded-md border border-[color:var(--border)] py-3">
-                        <p className="text-2xl font-semibold tabular-nums text-amber-600">
-                          {counts.LATE}
-                        </p>
-                        <p className="text-xs text-[color:var(--muted-fg)]">
-                          {tAtt("lateCount")}
+                const balanceByCurrency = new Map<string, number>();
+                for (const inv of c.invoices) {
+                  const paid = inv.payments.reduce((a, p) => a + p.amountCents, 0);
+                  const bal = inv.totalCents - paid;
+                  if (bal > 0) {
+                    balanceByCurrency.set(
+                      inv.currency,
+                      (balanceByCurrency.get(inv.currency) ?? 0) + bal,
+                    );
+                  }
+                }
+
+                return (
+                  <Card key={c.id} className={CARD_HOVER}>
+                    <div className="flex items-center gap-3 border-b border-[color:var(--color-border-subtle)] px-6 py-4">
+                      <ChildInitials firstName={c.firstName} lastName={c.lastName} />
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate text-base font-semibold text-[color:var(--color-foreground)]">
+                          {c.firstName} {c.lastName}
+                        </h3>
+                        <p className="truncate text-xs text-[color:var(--color-foreground-muted)]">
+                          {t("currentClass")}: {klass}
+                          {klassYearHint}
                         </p>
                       </div>
                     </div>
 
-                    {balanceByCurrency.size > 0 ? (
-                      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm dark:border-amber-900 dark:bg-amber-950/40">
-                        <span className="font-medium">{t("outstanding")}: </span>
-                        {Array.from(balanceByCurrency.entries()).map(([cur, bal]) => (
-                          <span key={cur} className="me-2 tabular-nums">
-                            {formatMoney(bal, cur)}
-                          </span>
-                        ))}
+                    <CardBody className="space-y-4">
+                      <div className="grid grid-cols-3 gap-2">
+                        <AttStat
+                          label={tAtt("presentCount")}
+                          value={counts.PRESENT}
+                          tone="neutral"
+                        />
+                        <AttStat
+                          label={tAtt("absentCount")}
+                          value={counts.ABSENT}
+                          tone="danger"
+                        />
+                        <AttStat
+                          label={tAtt("lateCount")}
+                          value={counts.LATE}
+                          tone="warning"
+                        />
                       </div>
-                    ) : null}
 
-                    {openCycles.length > 0 ? (
-                      <div className="space-y-1 border-t border-[color:var(--border)] pt-3">
-                        {openCycles.map((cycle) => {
-                          const existing = renewalMap.get(`${c.id}::${cycle.id}`);
-                          if (existing) {
-                            return (
-                              <Link
-                                key={cycle.id}
-                                href={
-                                  existing.status === "DRAFT"
-                                    ? `/parent/applications/${existing.id}/edit`
-                                    : `/parent/applications/${existing.id}`
-                                }
-                                className="flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm transition hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/40"
-                              >
-                                <span>
-                                  <span className="font-medium">
-                                    {tAdm("renewalBadge")}
-                                  </span>{" "}
-                                  <span className="text-[color:var(--muted-fg)]">
-                                    {cycle.targetYearLabel}
+                      {balanceByCurrency.size > 0 ? (
+                        <div className="flex flex-wrap items-center gap-2 rounded-md border border-[color:var(--color-warning)]/30 bg-[color:var(--color-warning-soft)] px-3 py-2 text-sm text-[color:var(--color-warning-soft-fg)]">
+                          <span className="font-medium">{t("outstanding")}:</span>
+                          {Array.from(balanceByCurrency.entries()).map(([cur, bal]) => (
+                            <span key={cur} className="tabular-nums">
+                              {formatMoney(bal, cur)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {openCycles.length > 0 ? (
+                        <div className="space-y-1.5 border-t border-[color:var(--color-border-subtle)] pt-3">
+                          {openCycles.map((cycle) => {
+                            const existing = renewalMap.get(`${c.id}::${cycle.id}`);
+                            if (existing) {
+                              return (
+                                <Link
+                                  key={cycle.id}
+                                  href={
+                                    existing.status === "DRAFT"
+                                      ? `/parent/applications/${existing.id}/edit`
+                                      : `/parent/applications/${existing.id}`
+                                  }
+                                  className="flex items-center justify-between gap-3 rounded-md border border-[color:var(--color-success)]/30 bg-[color:var(--color-success-soft)] px-3 py-2 text-sm text-[color:var(--color-success-soft-fg)] transition-colors hover:bg-[color:var(--color-success-soft)]/80"
+                                >
+                                  <span className="flex items-center gap-2">
+                                    <RefreshCw className="size-3.5" aria-hidden />
+                                    <span className="font-medium">{tAdm("renewalBadge")}</span>
+                                    <span className="opacity-80">
+                                      {cycle.targetYearLabel}
+                                    </span>
                                   </span>
+                                  <span className="text-xs font-medium uppercase tracking-wider">
+                                    {existing.status}
+                                  </span>
+                                </Link>
+                              );
+                            }
+                            return (
+                              <form
+                                key={cycle.id}
+                                action={startRenewal}
+                                className="flex items-center justify-between gap-2 rounded-md bg-[color:var(--color-surface-sunken)] px-3 py-2"
+                              >
+                                <input type="hidden" name="studentId" value={c.id} />
+                                <input type="hidden" name="cycleId" value={cycle.id} />
+                                <span className="min-w-0 truncate text-sm text-[color:var(--color-foreground-muted)]">
+                                  {tAdm("renewCta", { year: cycle.targetYearLabel })}
                                 </span>
-                                <span className="text-xs uppercase">{existing.status}</span>
-                              </Link>
+                                <Button type="submit" size="sm" className="shrink-0 gap-1">
+                                  <Plus className="size-3.5" aria-hidden />
+                                  {tAdm("renewalBadge")}
+                                </Button>
+                              </form>
                             );
-                          }
-                          return (
-                            <form
-                              key={cycle.id}
-                              action={startRenewal}
-                              className="flex items-center justify-between gap-2"
-                            >
-                              <input type="hidden" name="studentId" value={c.id} />
-                              <input type="hidden" name="cycleId" value={cycle.id} />
-                              <span className="text-sm text-[color:var(--muted-fg)]">
-                                {tAdm("renewCta", { year: cycle.targetYearLabel })}
-                              </span>
-                              <Button type="submit" size="sm">
-                                + {tAdm("renewalBadge")}
-                              </Button>
-                            </form>
-                          );
-                        })}
-                      </div>
-                    ) : null}
+                          })}
+                        </div>
+                      ) : null}
 
-                    <div className="flex justify-end">
-                      <LinkButton href={`/parent/children/${c.id}`} size="sm" variant="secondary">
-                        {t("viewChild")}
-                      </LinkButton>
-                    </div>
-                  </CardBody>
-                </Card>
-              );
-            })}
-          </div>
+                      <div className="flex justify-end">
+                        <LinkButton
+                          href={`/parent/children/${c.id}`}
+                          size="sm"
+                          variant="secondary"
+                          className="gap-1"
+                        >
+                          {t("viewChild")}
+                          <ArrowRight className="size-3.5" aria-hidden />
+                        </LinkButton>
+                      </div>
+                    </CardBody>
+                  </Card>
+                );
+              })}
+            </StaggerGrid>
+          </section>
         </main>
       </AppShell>
     );
   });
+}
+
+async function NoChildrenState({
+  user,
+}: {
+  user: {
+    id: string;
+    name: string | null;
+    email: string;
+    role: Role;
+    tenantId: string;
+  };
+}) {
+  const t = await getTranslations("parent");
+  const apps = await db.application.findMany({
+    where: { submittedByUserId: user.id },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+    include: { cycle: { select: { label: true } } },
+  });
+
+  return (
+    <AppShell role={user.role} userLabel={user.name ?? user.email}>
+      <main className="mx-auto max-w-3xl space-y-6 px-6 py-10">
+        <PageHeader
+          title={t("dashboardTitle")}
+          description={t("welcome", { name: user.name ?? user.email })}
+        />
+
+        <Card className={CARD_HOVER}>
+          <CardBody>
+            {apps.length === 0 ? (
+              <div className="flex flex-col items-center py-6 text-center">
+                <div className="mb-3 flex size-12 items-center justify-center rounded-full bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-600)]">
+                  <GraduationCap className="size-6" aria-hidden />
+                </div>
+                <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                  {t("noChildren")}
+                </p>
+                <div className="mt-5">
+                  <LinkButton href="/parent/applications/new" className="gap-1.5">
+                    <Plus className="size-4" aria-hidden />
+                    Nouvelle inscription
+                  </LinkButton>
+                </div>
+              </div>
+            ) : (
+              <>
+                <h2 className="text-base font-semibold text-[color:var(--color-foreground)]">
+                  Mes dossiers
+                </h2>
+                <ul className="mt-3 space-y-2 text-sm">
+                  {apps.map((a) => (
+                    <li key={a.id}>
+                      <Link
+                        href={
+                          a.status === "DRAFT"
+                            ? `/parent/applications/${a.id}/edit`
+                            : `/parent/applications/${a.id}`
+                        }
+                        className="flex items-center justify-between rounded-md border border-[color:var(--color-border-subtle)] px-3 py-2 transition-colors hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--color-surface-hover)]"
+                      >
+                        <span>
+                          <span className="font-medium text-[color:var(--color-foreground)]">
+                            {a.childFirstName || "—"} {a.childLastName || ""}
+                          </span>
+                          <span className="ms-2 text-xs text-[color:var(--color-foreground-muted)]">
+                            {a.cycle.label}
+                          </span>
+                        </span>
+                        <span className="text-xs uppercase tracking-wider text-[color:var(--color-foreground-muted)]">
+                          {a.status}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-4">
+                  <Link
+                    href="/parent/applications"
+                    className="inline-flex items-center gap-1 text-sm text-[color:var(--color-brand-600)] transition-colors hover:text-[color:var(--color-brand-700)] hover:underline"
+                  >
+                    Voir tous mes dossiers
+                    <ArrowRight className="size-3.5" aria-hidden />
+                  </Link>
+                </div>
+              </>
+            )}
+          </CardBody>
+        </Card>
+      </main>
+    </AppShell>
+  );
+}
+
+function ChildInitials({
+  firstName,
+  lastName,
+}: {
+  firstName: string;
+  lastName: string;
+}) {
+  const initials = `${firstName.charAt(0) || ""}${lastName.charAt(0) || ""}`
+    .toUpperCase()
+    .trim();
+  return (
+    <div
+      aria-hidden
+      className="flex size-10 shrink-0 items-center justify-center rounded-md bg-[color:var(--color-brand-50)] text-sm font-semibold text-[color:var(--color-brand-700)]"
+    >
+      {initials || "·"}
+    </div>
+  );
+}
+
+function AttStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "neutral" | "danger" | "warning";
+}) {
+  const isZero = value === 0;
+  const valueClass = isZero
+    ? "text-[color:var(--color-foreground-subtle)]"
+    : tone === "danger"
+      ? "text-[color:var(--color-danger)]"
+      : tone === "warning"
+        ? "text-[color:var(--color-warning)]"
+        : "text-[color:var(--color-foreground)]";
+
+  return (
+    <div className="rounded-md bg-[color:var(--color-surface-sunken)] py-3 text-center">
+      <p className={cn("text-2xl font-semibold tabular-nums", valueClass)}>{value}</p>
+      <p className="text-xs text-[color:var(--color-foreground-muted)]">{label}</p>
+    </div>
+  );
 }

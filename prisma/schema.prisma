@@ -40,6 +40,27 @@ model Tenant {
   defaultLocale  String     @default("fr")
   enabledLocales String[]   @default(["fr"])
   plan           TenantPlan @default(TRIAL)
+  // Per-tenant brand override. Stored as CSS color strings (hex or oklch()).
+  // Threaded into the live app via .tenant-scope in globals.css. Nullable —
+  // falls back to the platform's default sky-blue (palette B) when unset.
+  brandLight     String?
+  brandDark      String?
+  logoUrl        String?
+  // Contact / location info — shown on emails, invoice footers, public pages.
+  address        String?
+  phone          String?
+  contactEmail   String?
+  websiteUrl     String?
+  timeZone       String     @default("Europe/Paris")
+  // Billing defaults — pre-fill new invoices and admission cycle fees.
+  defaultCurrency             String  @default("EUR")
+  defaultInvoiceDueOffsetDays Int     @default(30)
+  invoiceFooterText           String?
+  invoiceNumberPrefix         String?
+  invoiceNumberPadding        Int     @default(0)
+  // Email notifications — override the platform default sender identity.
+  emailSenderName String?
+  emailSignature  String?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
@@ -385,6 +406,16 @@ model Payment {
 
 // ───────────────────────── Admissions / nouvelle inscription ─────────────────────────
 
+/// JSON blob shape (typed in code via `lib/admission-fields.ts`):
+/// {
+///   fields?: { [fieldKey: string]: "required" | "optional" | "hidden" },
+///   customQuestions?: [{ id, type, label, required, ... }],
+///   customLabels?: { [fieldKey: string]: string },
+///   stepIntros?: { identity?: string, family?: string, academic?: string },
+///   fieldOrder?: string[],
+/// }
+/// Stored as JSON because future rounds (custom questions, label overrides,
+/// reorder, templates) all just add new keys without another migration.
 model AdmissionCycle {
   id                  String   @id @default(cuid())
   tenantId            String
@@ -396,6 +427,7 @@ model AdmissionCycle {
   currency            String   @default("USD")
   isActive            Boolean  @default(true)
   description         String?
+  fieldConfig         Json     @default("{}")
   createdAt           DateTime @default(now())
 
   tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)

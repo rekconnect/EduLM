@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
+import { ArrowLeft, CalendarCheck, RefreshCw } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -20,7 +21,8 @@ export default async function AttendancePage({
   searchParams: Promise<{ classId?: string; date?: string }>;
 }) {
   const { classId, date: dateParam } = await searchParams;
-  const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayIso();
+  const date =
+    dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayIso();
 
   return withTenantSession(async (user) => {
     const t = await getTranslations("attendance");
@@ -75,7 +77,8 @@ export default async function AttendancePage({
             firstName: student.firstName,
             lastName: student.lastName,
             initialStatus: (r?.status ?? "PRESENT") as RosterStudent["initialStatus"],
-            initialLateMinutes: r?.lateMinutes != null ? String(r.lateMinutes) : "",
+            initialLateMinutes:
+              r?.lateMinutes != null ? String(r.lateMinutes) : "",
             initialNote: r?.note ?? "",
           };
         });
@@ -83,13 +86,18 @@ export default async function AttendancePage({
     }
 
     return (
-      <AppShell role={user.role} userLabel={user.name ?? user.email} >
+      <AppShell role={user.role} userLabel={user.name ?? user.email}>
         <main className="mx-auto max-w-5xl space-y-6 px-6 py-10">
-          <PageHeader title={t("title")} description={activeYear ? `${t("subtitle")} — ${activeYear.label}` : t("subtitle")} />
+          <PageHeader
+            title={t("title")}
+            description={
+              activeYear ? `${t("subtitle")} — ${activeYear.label}` : t("subtitle")
+            }
+          />
 
           <Card>
             <CardBody>
-              <form method="get" className="grid gap-4 sm:grid-cols-3">
+              <form method="get" className="grid gap-4 sm:grid-cols-[1fr_1fr_auto]">
                 <Field label={t("pickClass")} htmlFor="classId">
                   <Select id="classId" name="classId" defaultValue={classId ?? ""}>
                     <option value="">—</option>
@@ -104,18 +112,28 @@ export default async function AttendancePage({
                   <Input id="date" name="date" type="date" defaultValue={date} />
                 </Field>
                 <div className="flex items-end">
-                  <Button type="submit" variant="secondary">↻</Button>
+                  <Button
+                    type="submit"
+                    variant="secondary"
+                    className="gap-1.5"
+                    aria-label="Refresh"
+                  >
+                    <RefreshCw className="size-4" aria-hidden />
+                  </Button>
                 </div>
               </form>
             </CardBody>
           </Card>
 
           {!classId || !rosterStudents ? (
-            <Card>
-              <CardBody>
-                <p className="text-sm text-[color:var(--muted-fg)]">{t("noClass")}</p>
-              </CardBody>
-            </Card>
+            <div className="flex flex-col items-center rounded-lg border border-dashed border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] py-12 text-center">
+              <div className="mb-3 flex size-12 items-center justify-center rounded-full bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-600)]">
+                <CalendarCheck className="size-6" aria-hidden />
+              </div>
+              <p className="max-w-xs text-sm text-[color:var(--color-foreground-muted)]">
+                {t("noClass")}
+              </p>
+            </div>
           ) : (
             <Card>
               <CardHeader
@@ -123,14 +141,19 @@ export default async function AttendancePage({
                 action={
                   <Link
                     href="/classes"
-                    className="text-sm text-[color:var(--muted-fg)] hover:underline"
+                    className="inline-flex items-center gap-1.5 text-sm text-[color:var(--color-foreground-muted)] transition-colors hover:text-[color:var(--color-foreground)] hover:underline"
                   >
-                    ← /classes
+                    <ArrowLeft className="size-3.5" aria-hidden />
+                    /classes
                   </Link>
                 }
               />
               <CardBody>
-                <AttendanceRoster classId={classId} date={date} students={rosterStudents} />
+                <AttendanceRoster
+                  classId={classId}
+                  date={date}
+                  students={rosterStudents}
+                />
               </CardBody>
             </Card>
           )}

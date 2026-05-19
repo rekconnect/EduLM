@@ -1,7 +1,11 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { auth, signIn } from "@/lib/auth";
 import { postSignInPath } from "@/lib/post-signin-redirect";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { SignInSubmit } from "./_submit-button";
 
 export default async function SignInPage({
   searchParams,
@@ -15,6 +19,7 @@ export default async function SignInPage({
 
   const { tenant, error } = await searchParams;
   const t = await getTranslations("signIn");
+  const tCommon = await getTranslations("common");
   const tApp = await getTranslations("app");
 
   async function authenticate(formData: FormData) {
@@ -31,68 +36,67 @@ export default async function SignInPage({
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6 py-16">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
-          <p className="mt-1 text-sm text-[color:var(--muted-fg)]">
+    <main className="flex min-h-screen items-center justify-center bg-[color:var(--color-background)] px-6 py-16">
+      <div className="w-full max-w-sm animate-in fade-in slide-in-from-bottom-2 duration-500 motion-reduce:animate-none">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <div className="flex size-12 items-center justify-center rounded-[0.75rem] bg-[color:var(--color-brand-500)] text-lg font-semibold text-[color:var(--color-foreground-onbrand)] shadow-card">
+            E
+          </div>
+          <h1 className="mt-4 text-2xl font-semibold tracking-tight text-[color:var(--color-foreground)]">
+            {t("title")}
+          </h1>
+          <p className="mt-1 text-sm text-[color:var(--color-foreground-muted)]">
             {t("subtitle", { tenantName: tenant ?? tApp("name") })}
           </p>
         </div>
 
-        <form action={authenticate} className="space-y-4">
-          {tenant ? (
-            <input type="hidden" name="tenantSlug" value={tenant} />
-          ) : null}
+        <div className="rounded-[0.75rem] border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] p-6 shadow-card">
+          <form action={authenticate} className="space-y-4">
+            {tenant ? <input type="hidden" name="tenantSlug" value={tenant} /> : null}
 
-          <div>
-            <label htmlFor="email" className="mb-1 block text-sm font-medium">
-              {t("email")}
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              autoComplete="email"
-              className="w-full rounded-md border border-[color:var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[color:var(--primary)]"
-            />
-          </div>
+            <Field label={t("email")} htmlFor="email" required>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                required
+                autoComplete="email"
+                autoFocus
+              />
+            </Field>
 
-          <div>
-            <label htmlFor="password" className="mb-1 block text-sm font-medium">
-              {t("password")}
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              required
-              autoComplete="current-password"
-              minLength={8}
-              className="w-full rounded-md border border-[color:var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[color:var(--primary)]"
-            />
-          </div>
+            <Field label={t("password")} htmlFor="password" required>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                required
+                autoComplete="current-password"
+                minLength={8}
+              />
+            </Field>
 
-          {error ? (
-            <p className="text-sm text-red-600" role="alert">
-              {t("errorInvalid")}
-            </p>
-          ) : null}
+            {error ? (
+              <div
+                role="alert"
+                className="rounded-md border border-[color:var(--color-danger)]/30 bg-[color:var(--color-danger-soft)] px-3 py-2 text-sm text-[color:var(--color-danger-soft-fg)]"
+              >
+                {t("errorInvalid")}
+              </div>
+            ) : null}
 
-          <button
-            type="submit"
-            className="w-full rounded-md bg-[color:var(--primary)] px-4 py-2.5 text-sm font-medium text-[color:var(--primary-foreground)] transition hover:opacity-90"
-          >
-            {t("submit")}
-          </button>
-        </form>
-
-        <div className="mt-4 text-center text-sm">
-          <a href="/forgot-password" className="text-[color:var(--muted-fg)] hover:underline">
-            {t("forgot")}
-          </a>
+            <SignInSubmit label={t("submit")} pendingLabel={tCommon("loading")} />
+          </form>
         </div>
+
+        <p className="mt-4 text-center text-sm">
+          <Link
+            href="/forgot-password"
+            className="text-[color:var(--color-foreground-muted)] transition-colors hover:text-[color:var(--color-foreground)] hover:underline"
+          >
+            {t("forgot")}
+          </Link>
+        </p>
       </div>
     </main>
   );

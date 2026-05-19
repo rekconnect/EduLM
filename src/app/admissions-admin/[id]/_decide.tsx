@@ -2,12 +2,19 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
+import { CheckCircle2, Info, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea, Select } from "@/components/ui/input";
 import { Field, FormRow } from "@/components/ui/field";
 import { decideApplication } from "../_actions";
 
-type Decision = "ACCEPTED" | "DECLINED" | "WAITLISTED" | "UNDER_REVIEW" | "INTERVIEW_SCHEDULED";
+type Decision =
+  | "ACCEPTED"
+  | "DECLINED"
+  | "WAITLISTED"
+  | "UNDER_REVIEW"
+  | "INTERVIEW_SCHEDULED";
 
 export function DecideForm({
   applicationId,
@@ -27,8 +34,17 @@ export function DecideForm({
     const fd = new FormData(e.currentTarget);
     setError(null);
     startTransition(async () => {
-      const result = await decideApplication(applicationId, undefined, fd);
-      if (result?.error) setError(result.error);
+      try {
+        const result = await decideApplication(applicationId, undefined, fd);
+        if (result?.error) {
+          setError(result.error);
+          toast.error(t("decisionErrorToast"));
+        } else {
+          toast.success(t("decisionSuccessToast"));
+        }
+      } catch {
+        toast.error(t("decisionErrorToast"));
+      }
     });
   }
 
@@ -72,15 +88,33 @@ export function DecideForm({
       </Field>
 
       {decision === "ACCEPTED" ? (
-        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-          {t("adminAcceptHint")}
+        <div className="flex items-start gap-2 rounded-md border border-[color:var(--color-success)]/30 bg-[color:var(--color-success-soft)] px-3 py-2 text-xs text-[color:var(--color-success-soft-fg)]">
+          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <span>{t("adminAcceptHint")}</span>
+        </div>
+      ) : null}
+
+      {error ? (
+        <p
+          role="alert"
+          className="rounded-md border border-[color:var(--color-danger)]/30 bg-[color:var(--color-danger-soft)] px-3 py-2 text-sm text-[color:var(--color-danger-soft-fg)]"
+        >
+          {error}
         </p>
       ) : null}
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-
       <div className="flex items-center justify-end">
-        <Button type="submit" disabled={pending}>
+        <Button
+          type="submit"
+          disabled={pending}
+          aria-busy={pending}
+          className="gap-2"
+        >
+          {pending ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+          ) : (
+            <CheckCircle2 className="size-4" aria-hidden />
+          )}
           {pending ? tCommon("loading") : tCommon("save")}
         </Button>
       </div>

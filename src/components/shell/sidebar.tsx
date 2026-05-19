@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import type { Role } from "@prisma/client";
 import type { IconName, NavSection } from "./nav-sections";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const ICONS: Record<IconName, LucideIcon> = {
   dashboard: LayoutDashboard,
@@ -199,8 +200,11 @@ export function Sidebar({
         </nav>
 
         <div className="border-t border-[color:var(--sidebar-border)] px-3 py-3">
-          <div className="mb-2 px-2 text-xs text-[color:var(--sidebar-muted)] truncate" title={userLabel}>
-            {userLabel}
+          <div className="mb-2 flex items-center justify-between gap-2 px-2">
+            <span className="truncate text-xs text-[color:var(--sidebar-muted)]" title={userLabel}>
+              {userLabel}
+            </span>
+            <ThemeToggle />
           </div>
           <div className="px-2">{signOutForm}</div>
         </div>

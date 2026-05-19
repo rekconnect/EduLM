@@ -9,6 +9,17 @@
     "dark": "Sombre",
     "system": "Système"
   },
+  "settings": {
+    "title": "Paramètres",
+    "description": "Personnalisez votre expérience EduLM.",
+    "appearance": {
+      "title": "Apparence",
+      "description": "Choisissez le thème de l'interface. Le mode système suit les préférences de votre appareil.",
+      "lightHint": "Recommandé en journée et pour l'usage quotidien.",
+      "darkHint": "Plus reposant pour les yeux en faible luminosité.",
+      "systemHint": "Suit automatiquement votre système d'exploitation."
+    }
+  },
   "nav": {
     "signIn": "Se connecter",
     "signOut": "Se déconnecter",
@@ -58,6 +69,8 @@
   },
   "dashboard": {
     "welcome": "Bonjour, {name}",
+    "overviewLabel": "Aperçu",
+    "thisWeekLabel": "Cette semaine",
     "statStudents": "Élèves inscrits",
     "statClasses": "Classes actives",
     "statTeachers": "Enseignants",

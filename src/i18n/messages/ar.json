@@ -9,6 +9,17 @@
     "dark": "داكن",
     "system": "النظام"
   },
+  "settings": {
+    "title": "الإعدادات",
+    "description": "خصّص تجربتك في EduLM.",
+    "appearance": {
+      "title": "المظهر",
+      "description": "اختر سمة الواجهة. يتبع وضع النظام إعدادات جهازك.",
+      "lightHint": "موصى به نهاراً وللاستخدام اليومي.",
+      "darkHint": "أسهل على العينين في الإضاءة المنخفضة.",
+      "systemHint": "يتبع نظام التشغيل تلقائياً."
+    }
+  },
   "nav": {
     "signIn": "تسجيل الدخول",
     "signOut": "تسجيل الخروج",
@@ -58,6 +69,8 @@
   },
   "dashboard": {
     "welcome": "مرحباً، {name}",
+    "overviewLabel": "نظرة عامة",
+    "thisWeekLabel": "هذا الأسبوع",
     "statStudents": "الطلاب المسجلون",
     "statClasses": "الصفوف النشطة",
     "statTeachers": "المعلمون",

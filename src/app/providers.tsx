@@ -7,7 +7,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider
       attribute="data-theme"
-      defaultTheme="system"
+      defaultTheme="light"
       enableSystem
       disableTransitionOnChange={false}
     >

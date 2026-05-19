@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1280" />
+<title>EduLM — Comparaison de palettes</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    background: #f4f5f7;
+    color: #1a1a1a;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+  .intro h1 {
+    margin: 0 0 6px;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .intro p {
+    margin: 0 0 4px;
+    color: #5b6776;
+    font-size: 15px;
+  }
+  .intro code {
+    background: #e8ecf1;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+
+  .grid {
+    margin-top: 40px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+
+  .col {
+    background: #fff;
+    border: 1px solid #e6e9ee;
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.03), 0 1px 3px rgba(0,0,0,.03);
+  }
+  .col h2 {
+    margin: 0 0 4px;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .col .tagline {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: #6b7280;
+  }
+
+  .swatches {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .swatch {
+    flex: 1;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid rgba(0,0,0,.06);
+    font-size: 10px;
+    color: rgba(255,255,255,.9);
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 4px 6px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .swatch.light-text { color: rgba(0,0,0,.55); }
+
+  .mode-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 14px 0 8px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+    color: #8590a3;
+  }
+  .mode-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #e6e9ee;
+  }
+
+  /* ──────── Mini-dashboard mock ──────── */
+  .mock {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--m-border, #e6e9ee);
+    background: var(--m-bg);
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    min-height: 220px;
+    font-size: 11px;
+  }
+  .mock .sb {
+    background: var(--m-sb-bg);
+    color: var(--m-sb-fg);
+    border-right: 1px solid var(--m-sb-border);
+    padding: 12px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .mock .logo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--m-sb-fg-strong, var(--m-sb-fg));
+  }
+  .mock .logo .dot {
+    width: 16px; height: 16px;
+    background: var(--m-brand);
+    border-radius: 4px;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 700;
+  }
+  .mock .nav-item {
+    padding: 5px 8px;
+    border-radius: 5px;
+    color: var(--m-sb-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .mock .nav-item.active {
+    background: var(--m-brand);
+    color: var(--m-on-brand);
+  }
+  .mock .nav-item .ic {
+    width: 8px; height: 8px;
+    background: currentColor;
+    border-radius: 1px;
+    opacity: .6;
+  }
+  .mock .nav-item.active .ic { opacity: 1; }
+
+  .mock .main {
+    padding: 14px 14px 16px;
+    background: var(--m-bg);
+    color: var(--m-fg);
+  }
+  .mock .greet {
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    font-size: 13px;
+  }
+  .mock .sub {
+    color: var(--m-fg-muted);
+    font-size: 10px;
+    margin-top: 2px;
+  }
+  .mock .section-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--m-fg-subtle);
+    margin: 12px 0 6px;
+    font-weight: 700;
+  }
+  .mock .cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+  .mock .card {
+    background: var(--m-surface);
+    border: 1px solid var(--m-border);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+  .mock .card .lbl {
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--m-fg-muted);
+    font-weight: 600;
+  }
+  .mock .card .val {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--m-fg);
+    margin-top: 3px;
+  }
+  .mock .card .ic-sq {
+    width: 14px; height: 14px;
+    background: var(--m-icon-bg);
+    border-radius: 3px;
+    display: inline-block;
+    float: right;
+    margin-top: -1px;
+  }
+  .mock .btn-row {
+    margin-top: 10px;
+    display: flex;
+    gap: 6px;
+  }
+  .mock .btn {
+    background: var(--m-brand);
+    color: var(--m-on-brand);
+    border-radius: 5px;
+    padding: 5px 10px;
+    font-size: 10px;
+    font-weight: 600;
+    border: 0;
+  }
+  .mock .btn.ghost {
+    background: transparent;
+    color: var(--m-fg);
+    border: 1px solid var(--m-border-strong);
+  }
+
+  .col .notes {
+    margin-top: 14px;
+    padding: 10px 12px;
+    background: #f8fafc;
+    border: 1px solid #eef1f5;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #4b5563;
+  }
+  .col .notes strong { color: #1f2937; }
+
+  .pick {
+    margin-top: 36px;
+    padding: 18px 22px;
+    border: 1px solid #d8deea;
+    background: #f0f4fa;
+    border-radius: 12px;
+    font-size: 14px;
+    color: #1a2238;
+  }
+  .pick code {
+    background: #e0e8f4;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="intro">
+    <h1>Palette EduLM — comparez 3 directions</h1>
+    <p>Trois palettes pensées pour une école. Chaque colonne montre un mini-dashboard en clair puis en sombre.</p>
+    <p>Choisissez celle qui correspond le mieux à Lycée Montaigne, puis dites <code>A</code>, <code>B</code> ou <code>C</code> à Claude.</p>
+  </div>
+
+  <div class="grid">
+
+    <!-- ═══════════════════ Option A — Classique ═══════════════════ -->
+    <div class="col">
+      <h2>A — Classique</h2>
+      <p class="tagline">Bleu marine profond + crème chaude. Trustworthy, institutionnel.</p>
+
+      <div class="swatches">
+        <div class="swatch" style="background:#1E3A5F">#1E3A5F</div>
+        <div class="swatch light-text" style="background:#FAF7F2">#FAF7F2</div>
+        <div class="swatch light-text" style="background:#C9A86A">#C9A86A</div>
+        <div class="swatch" style="background:#1A2238">#1A2238</div>
+      </div>
+
+      <div class="mode-label">Mode clair</div>
+      <div class="mock" style="
+        --m-bg:#FAF7F2; --m-fg:#1A2238; --m-fg-muted:#6B7388; --m-fg-subtle:#8B93A8;
+        --m-surface:#FFFFFF; --m-border:#ECE6D9; --m-border-strong:#DBD2C0;
+        --m-brand:#1E3A5F; --m-on-brand:#FFFFFF;
+        --m-sb-bg:#FFFFFF; --m-sb-fg:#3E4A65; --m-sb-fg-strong:#1A2238; --m-sb-muted:#7B8497; --m-sb-border:#ECE6D9;
+        --m-icon-bg:#ECE6D9;
+      ">
+        <div class="sb">
+          <div class="logo"><span class="dot">E</span>EduLM</div>
+          <div class="nav-item active"><span class="ic"></span>Accueil</div>
+          <div class="nav-item"><span class="ic"></span>Élèves</div>
+          <div class="nav-item"><span class="ic"></span>Classes</div>
+          <div class="nav-item"><span class="ic"></span>Présences</div>
+        </div>
+        <div class="main">
+          <div class="greet">Bonjour, Raed</div>
+          <div class="sub">Année 2024–2025</div>
+          <div class="section-label">Aperçu</div>
+          <div class="cards">
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Élèves</div><div class="val">142</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Classes</div><div class="val">18</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Enseignants</div><div class="val">12</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Parents</div><div class="val">268</div></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn">Nouvelle inscription</button>
+            <button class="btn ghost">Exporter</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="mode-label">Mode sombre</div>
+      <div class="mock" style="
+        --m-bg:#161E2E; --m-fg:#ECECEC; --m-fg-muted:#9AA3B5; --m-fg-subtle:#6F7892;
+        --m-surface:#1F2940; --m-border:#2A3550; --m-border-strong:#3A476A;
+        --m-brand:#4E78B0; --m-on-brand:#FFFFFF;
+        --m-sb-bg:#0F1626; --m-sb-fg:#C8CFE0; --m-sb-fg-strong:#FFFFFF; --m-sb-muted:#7B85A1; --m-sb-border:#1F2940;
+        --m-icon-bg:#2A3550;
+      ">
+        <div class="sb">
+          <div class="logo"><span class="dot">E</span>EduLM</div>
+          <div class="nav-item active"><span class="ic"></span>Accueil</div>
+          <div class="nav-item"><span class="ic"></span>Élèves</div>
+          <div class="nav-item"><span class="ic"></span>Classes</div>
+          <div class="nav-item"><span class="ic"></span>Présences</div>
+        </div>
+        <div class="main">
+          <div class="greet">Bonjour, Raed</div>
+          <div class="sub">Année 2024–2025</div>
+          <div class="section-label">Aperçu</div>
+          <div class="cards">
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Élèves</div><div class="val">142</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Classes</div><div class="val">18</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Enseignants</div><div class="val">12</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Parents</div><div class="val">268</div></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn">Nouvelle inscription</button>
+            <button class="btn ghost">Exporter</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <strong>Vibe :</strong> Lycée Henri-IV / Oxford. Sérieux, durable. Sidebar claire qui fait corps avec la page — pas de bandeau noir qui domine.
+        <br /><strong>Pour :</strong> écoles avec une histoire, marque traditionnelle, parents âge moyen.
+      </div>
+    </div>
+
+    <!-- ═══════════════════ Option B — Académique ═══════════════════ -->
+    <div class="col">
+      <h2>B — Académique</h2>
+      <p class="tagline">Bleu ciel calme + blanc froid propre. Moderne et accessible.</p>
+
+      <div class="swatches">
+        <div class="swatch" style="background:#2C7DB3">#2C7DB3</div>
+        <div class="swatch light-text" style="background:#F5F8FC">#F5F8FC</div>
+        <div class="swatch" style="background:#6FAE7F">#6FAE7F</div>
+        <div class="swatch" style="background:#0F1E33">#0F1E33</div>
+      </div>
+
+      <div class="mode-label">Mode clair</div>
+      <div class="mock" style="
+        --m-bg:#F5F8FC; --m-fg:#0F1E33; --m-fg-muted:#5B6B82; --m-fg-subtle:#7E8DA4;
+        --m-surface:#FFFFFF; --m-border:#E3EAF4; --m-border-strong:#CFD9EA;
+        --m-brand:#2C7DB3; --m-on-brand:#FFFFFF;
+        --m-sb-bg:#FFFFFF; --m-sb-fg:#2F3F58; --m-sb-fg-strong:#0F1E33; --m-sb-muted:#6E7C95; --m-sb-border:#E3EAF4;
+        --m-icon-bg:#E3EAF4;
+      ">
+        <div class="sb">
+          <div class="logo"><span class="dot">E</span>EduLM</div>
+          <div class="nav-item active"><span class="ic"></span>Accueil</div>
+          <div class="nav-item"><span class="ic"></span>Élèves</div>
+          <div class="nav-item"><span class="ic"></span>Classes</div>
+          <div class="nav-item"><span class="ic"></span>Présences</div>
+        </div>
+        <div class="main">
+          <div class="greet">Bonjour, Raed</div>
+          <div class="sub">Année 2024–2025</div>
+          <div class="section-label">Aperçu</div>
+          <div class="cards">
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Élèves</div><div class="val">142</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Classes</div><div class="val">18</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Enseignants</div><div class="val">12</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Parents</div><div class="val">268</div></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn">Nouvelle inscription</button>
+            <button class="btn ghost">Exporter</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="mode-label">Mode sombre</div>
+      <div class="mock" style="
+        --m-bg:#0D1A2A; --m-fg:#E7EEF7; --m-fg-muted:#94A4BD; --m-fg-subtle:#6C7E99;
+        --m-surface:#18263C; --m-border:#243650; --m-border-strong:#33476A;
+        --m-brand:#4FA6D8; --m-on-brand:#0A1828;
+        --m-sb-bg:#0A1422; --m-sb-fg:#C5D2E5; --m-sb-fg-strong:#FFFFFF; --m-sb-muted:#7588A4; --m-sb-border:#18263C;
+        --m-icon-bg:#243650;
+      ">
+        <div class="sb">
+          <div class="logo"><span class="dot">E</span>EduLM</div>
+          <div class="nav-item active"><span class="ic"></span>Accueil</div>
+          <div class="nav-item"><span class="ic"></span>Élèves</div>
+          <div class="nav-item"><span class="ic"></span>Classes</div>
+          <div class="nav-item"><span class="ic"></span>Présences</div>
+        </div>
+        <div class="main">
+          <div class="greet">Bonjour, Raed</div>
+          <div class="sub">Année 2024–2025</div>
+          <div class="section-label">Aperçu</div>
+          <div class="cards">
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Élèves</div><div class="val">142</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Classes</div><div class="val">18</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Enseignants</div><div class="val">12</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Parents</div><div class="val">268</div></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn">Nouvelle inscription</button>
+            <button class="btn ghost">Exporter</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <strong>Vibe :</strong> Sciences Po / EdTech moderne. Propre, abordable. Bleu ciel plus chaleureux qu'un bleu tech.
+        <br /><strong>Pour :</strong> écoles modernes, parents jeunes, communication régulière par appli mobile.
+      </div>
+    </div>
+
+    <!-- ═══════════════════ Option C — Chaleureux ═══════════════════ -->
+    <div class="col">
+      <h2>C — Chaleureux</h2>
+      <p class="tagline">Vert forêt + sable doux. Humain, accueillant, presque familial.</p>
+
+      <div class="swatches">
+        <div class="swatch" style="background:#3E7A52">#3E7A52</div>
+        <div class="swatch light-text" style="background:#FBF8F1">#FBF8F1</div>
+        <div class="swatch" style="background:#D9883C">#D9883C</div>
+        <div class="swatch" style="background:#2A2E2A">#2A2E2A</div>
+      </div>
+
+      <div class="mode-label">Mode clair</div>
+      <div class="mock" style="
+        --m-bg:#FBF8F1; --m-fg:#2A2E2A; --m-fg-muted:#6F6E5E; --m-fg-subtle:#8E8D7D;
+        --m-surface:#FFFFFF; --m-border:#EBE4D2; --m-border-strong:#D7CDB5;
+        --m-brand:#3E7A52; --m-on-brand:#FFFFFF;
+        --m-sb-bg:#F2EDDF; --m-sb-fg:#4A4E48; --m-sb-fg-strong:#2A2E2A; --m-sb-muted:#7E7C6D; --m-sb-border:#E5DDC8;
+        --m-icon-bg:#EBE4D2;
+      ">
+        <div class="sb">
+          <div class="logo"><span class="dot">E</span>EduLM</div>
+          <div class="nav-item active"><span class="ic"></span>Accueil</div>
+          <div class="nav-item"><span class="ic"></span>Élèves</div>
+          <div class="nav-item"><span class="ic"></span>Classes</div>
+          <div class="nav-item"><span class="ic"></span>Présences</div>
+        </div>
+        <div class="main">
+          <div class="greet">Bonjour, Raed</div>
+          <div class="sub">Année 2024–2025</div>
+          <div class="section-label">Aperçu</div>
+          <div class="cards">
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Élèves</div><div class="val">142</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Classes</div><div class="val">18</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Enseignants</div><div class="val">12</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Parents</div><div class="val">268</div></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn">Nouvelle inscription</button>
+            <button class="btn ghost">Exporter</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="mode-label">Mode sombre</div>
+      <div class="mock" style="
+        --m-bg:#1B201C; --m-fg:#EFEBDF; --m-fg-muted:#A4A296; --m-fg-subtle:#797668;
+        --m-surface:#232A24; --m-border:#2E362F; --m-border-strong:#3E4940;
+        --m-brand:#5FA378; --m-on-brand:#0F1B14;
+        --m-sb-bg:#161A17; --m-sb-fg:#CBC8B9; --m-sb-fg-strong:#F5F2E6; --m-sb-muted:#828072; --m-sb-border:#232A24;
+        --m-icon-bg:#2E362F;
+      ">
+        <div class="sb">
+          <div class="logo"><span class="dot">E</span>EduLM</div>
+          <div class="nav-item active"><span class="ic"></span>Accueil</div>
+          <div class="nav-item"><span class="ic"></span>Élèves</div>
+          <div class="nav-item"><span class="ic"></span>Classes</div>
+          <div class="nav-item"><span class="ic"></span>Présences</div>
+        </div>
+        <div class="main">
+          <div class="greet">Bonjour, Raed</div>
+          <div class="sub">Année 2024–2025</div>
+          <div class="section-label">Aperçu</div>
+          <div class="cards">
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Élèves</div><div class="val">142</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Classes</div><div class="val">18</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Enseignants</div><div class="val">12</div></div>
+            <div class="card"><span class="ic-sq"></span><div class="lbl">Parents</div><div class="val">268</div></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn">Nouvelle inscription</button>
+            <button class="btn ghost">Exporter</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <strong>Vibe :</strong> École internationale bilingue / Montessori. Doux, premium-naturel. Le moins « SaaS » des trois.
+        <br /><strong>Pour :</strong> petites structures, écoles avec valeurs (écologie, bienveillance), portail parent surtout.
+      </div>
+    </div>
+
+  </div>
+
+  <div class="pick">
+    <strong>Comment choisir.</strong> Regardez d'abord en mode clair (c'est ce que voient 90 % des gens, 90 % du temps).
+    Puis le mode sombre. La sidebar change de comportement entre les trois — A et B la fondent dans la page, C garde un léger contraste crème.
+    Dites <code>A</code>, <code>B</code> ou <code>C</code> à Claude (avec d'éventuels ajustements : « B mais avec un vert plus doux ») et je remplace les tokens <code>globals.css</code> en place.
+  </div>
+</div>
+</body>
+</html>

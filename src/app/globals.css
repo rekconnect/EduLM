@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "tailwindcss-animate";
 
 /* Map Tailwind's `dark:` modifier to next-themes' [data-theme="dark"] selector. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
@@ -13,55 +14,62 @@
   --radius-card:  0.75rem;
   --radius-pill:  9999px;
 
-  --shadow-card:        0 1px 2px oklch(0 0 0 / 0.04), 0 1px 3px oklch(0 0 0 / 0.04);
-  --shadow-card-hover:  0 4px 6px oklch(0 0 0 / 0.05), 0 2px 4px oklch(0 0 0 / 0.04);
-  --shadow-popover:     0 4px 6px oklch(0 0 0 / 0.05), 0 10px 15px oklch(0 0 0 / 0.06);
-  --shadow-modal:       0 10px 25px oklch(0 0 0 / 0.10), 0 20px 50px oklch(0 0 0 / 0.10);
+  --shadow-card:        0 1px 2px rgba(15, 30, 51, 0.04), 0 1px 3px rgba(15, 30, 51, 0.04);
+  --shadow-card-hover:  0 4px 6px rgba(15, 30, 51, 0.05), 0 2px 4px rgba(15, 30, 51, 0.04);
+  --shadow-popover:     0 4px 6px rgba(15, 30, 51, 0.05), 0 10px 15px rgba(15, 30, 51, 0.06);
+  --shadow-modal:       0 10px 25px rgba(15, 30, 51, 0.10), 0 20px 50px rgba(15, 30, 51, 0.10);
 
-  /* Module accents — same in both themes */
-  --color-module-admin:         oklch(0.55 0.180 250);
-  --color-module-education:     oklch(0.62 0.150 155);
-  --color-module-campus:        oklch(0.72 0.150 70);
-  --color-module-communication: oklch(0.55 0.180 310);
+  /* Module accents */
+  --color-module-admin:         #2C7DB3;
+  --color-module-education:     #6FAE7F;
+  --color-module-campus:        #D9883C;
+  --color-module-communication: #8A6BB1;
 }
+
+/* ════════════════════════════════════════════════════════
+   Palette B — Académique
+   Brand: calm sky-blue (#2C7DB3)
+   Surfaces: cool light grey-blue (#F5F8FC) / deep navy in dark
+   Sidebar: light in light mode, deep navy in dark mode
+   ════════════════════════════════════════════════════════ */
 
 /* ───────── Light theme — default ───────── */
 :root,
 [data-theme="light"] {
-  --color-background:         oklch(0.99 0.005 240);
-  --color-surface-base:       oklch(0.98 0.005 240);
-  --color-surface-raised:     oklch(1.00 0.000 0);
-  --color-surface-sunken:     oklch(0.96 0.008 240);
-  --color-surface-hover:      oklch(0.96 0.008 240);
-  --color-surface-active:     oklch(0.93 0.012 240);
-  --color-surface-overlay:    oklch(0 0 0 / 0.40);
+  --color-background:         #F5F8FC;
+  --color-surface-base:       #F0F4FA;
+  --color-surface-raised:     #FFFFFF;
+  --color-surface-sunken:     #E9F0F9;
+  --color-surface-hover:      #EBF1F9;
+  --color-surface-active:     #DDE6F2;
+  --color-surface-overlay:    rgba(15, 30, 51, 0.45);
 
-  --color-foreground:         oklch(0.18 0.015 240);
-  --color-foreground-muted:   oklch(0.46 0.020 240);
-  --color-foreground-subtle:  oklch(0.58 0.018 240);
-  --color-foreground-onbrand: oklch(1.00 0.000 0);
+  --color-foreground:         #0F1E33;
+  --color-foreground-muted:   #5B6B82;
+  --color-foreground-subtle:  #7E8DA4;
+  --color-foreground-onbrand: #FFFFFF;
 
-  --color-border-subtle:      oklch(0.92 0.010 240);
-  --color-border-strong:      oklch(0.86 0.012 240);
-  --color-border-focus:       oklch(0.55 0.180 250);
+  --color-border-subtle:      #E3EAF4;
+  --color-border-strong:      #CFD9EA;
+  --color-border-focus:       #2C7DB3;
 
-  --color-brand-50:           oklch(0.97 0.020 250);
-  --color-brand-100:          oklch(0.93 0.040 250);
-  --color-brand-200:          oklch(0.86 0.080 250);
-  --color-brand-500:          oklch(0.55 0.180 250);
-  --color-brand-600:          oklch(0.46 0.180 250);
-  --color-brand-700:          oklch(0.38 0.160 250);
+  --color-brand-50:           #EAF3FA;
+  --color-brand-100:          #D3E5F3;
+  --color-brand-200:          #A6CCE7;
+  --color-brand-500:          #2C7DB3;
+  --color-brand-600:          #1F6498;
+  --color-brand-700:          #164E7B;
 
-  --color-success:            oklch(0.62 0.150 145);
-  --color-success-soft:       oklch(0.93 0.060 145);
-  --color-success-soft-fg:    oklch(0.32 0.080 145);
-  --color-warning:            oklch(0.72 0.150 70);
-  --color-warning-soft:       oklch(0.94 0.080 70);
-  --color-warning-soft-fg:    oklch(0.38 0.090 70);
-  --color-danger:             oklch(0.58 0.200 25);
-  --color-danger-soft:        oklch(0.94 0.060 25);
-  --color-danger-soft-fg:     oklch(0.38 0.100 25);
-  --color-info:               oklch(0.65 0.140 230);
+  --color-success:            #6FAE7F;
+  --color-success-soft:       #E2EFE5;
+  --color-success-soft-fg:    #3F7754;
+  --color-warning:            #D9883C;
+  --color-warning-soft:       #F8E8D6;
+  --color-warning-soft-fg:    #8C5A22;
+  --color-danger:             #C45151;
+  --color-danger-soft:        #F4D8D8;
+  --color-danger-soft-fg:     #8A3232;
+  --color-info:               #4FA6D8;
 
   /* ─── Legacy aliases — keep existing components working ─── */
   --background:         var(--color-background);
@@ -74,7 +82,7 @@
   --primary:            var(--color-brand-500);
   --primary-hover:      var(--color-brand-600);
   --primary-foreground: var(--color-foreground-onbrand);
-  --primary-soft:       var(--color-brand-100);
+  --primary-soft:       var(--color-brand-50);
   --primary-soft-fg:    var(--color-brand-700);
   --success:            var(--color-success);
   --success-soft:       var(--color-success-soft);
@@ -86,53 +94,70 @@
   --danger-soft:        var(--color-danger-soft);
   --danger-soft-fg:     var(--color-danger-soft-fg);
 
-  /* Sidebar — keep its own palette (deliberately dark in light theme too,
-     matching Linear's permanent-dark-sidebar pattern) */
-  --sidebar-bg:         oklch(0.18 0.015 240);
-  --sidebar-fg:         oklch(0.88 0.010 240);
-  --sidebar-muted:      oklch(0.60 0.012 240);
+  /* ─── shadcn primitive tokens — map to our palette ─── */
+  /* shadcn components reference these (without the --color- prefix). */
+  /* Resolved at use-time, so the dark-mode block doesn't re-declare them. */
+  --card:                   var(--color-surface-raised);
+  --card-foreground:        var(--color-foreground);
+  --popover:                var(--color-surface-raised);
+  --popover-foreground:     var(--color-foreground);
+  --secondary:              var(--color-surface-sunken);
+  --secondary-foreground:   var(--color-foreground);
+  --accent:                 var(--color-surface-hover);
+  --accent-foreground:      var(--color-foreground);
+  --destructive:            var(--color-danger);
+  --destructive-foreground: var(--color-foreground-onbrand);
+  --input:                  var(--color-border-subtle);
+  --ring:                   var(--color-brand-500);
+  --radius:                 0.5rem;
+
+  /* Sidebar — light in light mode so it sits with the page,
+     not against it. Active item uses the brand color. */
+  --sidebar-bg:         #FFFFFF;
+  --sidebar-fg:         #2F3F58;
+  --sidebar-muted:      #6E7C95;
   --sidebar-active-bg:  var(--color-brand-500);
-  --sidebar-active-fg:  oklch(1.00 0.000 0);
-  --sidebar-hover-bg:   oklch(0.24 0.014 240);
-  --sidebar-border:     oklch(0.24 0.014 240);
+  --sidebar-active-fg:  #FFFFFF;
+  --sidebar-hover-bg:   #EBF1F9;
+  --sidebar-border:     #E3EAF4;
 }
 
 /* ───────── Dark theme ───────── */
 [data-theme="dark"] {
-  --color-background:         oklch(0.14 0.010 240);
-  --color-surface-base:       oklch(0.17 0.010 240);
-  --color-surface-raised:     oklch(0.20 0.012 240);
-  --color-surface-sunken:     oklch(0.14 0.010 240);
-  --color-surface-hover:      oklch(0.24 0.014 240);
-  --color-surface-active:     oklch(0.28 0.016 240);
-  --color-surface-overlay:    oklch(0 0 0 / 0.60);
+  --color-background:         #0D1A2A;
+  --color-surface-base:       #11202F;
+  --color-surface-raised:     #18263C;
+  --color-surface-sunken:     #0F1B2D;
+  --color-surface-hover:      #1F2D44;
+  --color-surface-active:     #283952;
+  --color-surface-overlay:    rgba(0, 0, 0, 0.60);
 
-  --color-foreground:         oklch(0.96 0.005 240);
-  --color-foreground-muted:   oklch(0.70 0.010 240);
-  --color-foreground-subtle:  oklch(0.55 0.012 240);
-  --color-foreground-onbrand: oklch(1.00 0.000 0);
+  --color-foreground:         #E7EEF7;
+  --color-foreground-muted:   #94A4BD;
+  --color-foreground-subtle:  #6C7E99;
+  --color-foreground-onbrand: #FFFFFF;
 
-  --color-border-subtle:      oklch(0.26 0.014 240);
-  --color-border-strong:      oklch(0.34 0.016 240);
-  --color-border-focus:       oklch(0.66 0.160 250);
+  --color-border-subtle:      #243650;
+  --color-border-strong:      #33476A;
+  --color-border-focus:       #4FA6D8;
 
-  --color-brand-50:           oklch(0.22 0.060 250);
-  --color-brand-100:          oklch(0.28 0.080 250);
-  --color-brand-200:          oklch(0.34 0.110 250);
-  --color-brand-500:          oklch(0.66 0.160 250);
-  --color-brand-600:          oklch(0.74 0.140 250);
-  --color-brand-700:          oklch(0.82 0.110 250);
+  --color-brand-50:           #1A2B40;
+  --color-brand-100:          #1F3554;
+  --color-brand-200:          #2A4A70;
+  --color-brand-500:          #4FA6D8;
+  --color-brand-600:          #6BB9E3;
+  --color-brand-700:          #87CAEE;
 
-  --color-success:            oklch(0.70 0.140 145);
-  --color-success-soft:       oklch(0.30 0.080 145);
-  --color-success-soft-fg:    oklch(0.85 0.100 145);
-  --color-warning:            oklch(0.78 0.140 70);
-  --color-warning-soft:       oklch(0.32 0.090 70);
-  --color-warning-soft-fg:    oklch(0.88 0.120 70);
-  --color-danger:             oklch(0.68 0.180 25);
-  --color-danger-soft:        oklch(0.30 0.100 25);
-  --color-danger-soft-fg:     oklch(0.88 0.120 25);
-  --color-info:               oklch(0.72 0.130 230);
+  --color-success:            #7DBE8D;
+  --color-success-soft:       #1F3225;
+  --color-success-soft-fg:    #BFD9C8;
+  --color-warning:            #E3A05F;
+  --color-warning-soft:       #322516;
+  --color-warning-soft-fg:    #E6CFB0;
+  --color-danger:             #D67373;
+  --color-danger-soft:        #321E1E;
+  --color-danger-soft-fg:     #E9C0C0;
+  --color-info:               #6BB9E3;
 
   /* Legacy aliases — re-bind to new tokens for dark mode */
   --background:         var(--color-background);
@@ -145,7 +170,7 @@
   --primary:            var(--color-brand-500);
   --primary-hover:      var(--color-brand-600);
   --primary-foreground: var(--color-foreground-onbrand);
-  --primary-soft:       var(--color-brand-100);
+  --primary-soft:       var(--color-brand-50);
   --primary-soft-fg:    var(--color-brand-700);
   --success:            var(--color-success);
   --success-soft:       var(--color-success-soft);
@@ -157,13 +182,15 @@
   --danger-soft:        var(--color-danger-soft);
   --danger-soft-fg:     var(--color-danger-soft-fg);
 
-  --sidebar-bg:         oklch(0.11 0.010 240);
-  --sidebar-fg:         oklch(0.84 0.008 240);
-  --sidebar-muted:      oklch(0.55 0.012 240);
+  /* Sidebar — slightly deeper than the page background to read as
+     a panel but without harshness. Active uses the brand. */
+  --sidebar-bg:         #0A1422;
+  --sidebar-fg:         #C5D2E5;
+  --sidebar-muted:      #7588A4;
   --sidebar-active-bg:  var(--color-brand-500);
-  --sidebar-active-fg:  oklch(1.00 0.000 0);
-  --sidebar-hover-bg:   oklch(0.17 0.010 240);
-  --sidebar-border:     oklch(0.20 0.012 240);
+  --sidebar-active-fg:  #0A1422;
+  --sidebar-hover-bg:   #18263C;
+  --sidebar-border:     #18263C;
 }
 
 /* Bridge our CSS variables to Tailwind's @theme so utilities (bg-surface,
@@ -197,6 +224,21 @@
   --color-primary:           var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-surface:           var(--surface);
+
+  /* shadcn-style utilities — `bg-card`, `text-popover-foreground`, etc. */
+  --color-card:                   var(--card);
+  --color-card-foreground:        var(--card-foreground);
+  --color-popover:                var(--popover);
+  --color-popover-foreground:     var(--popover-foreground);
+  --color-secondary:              var(--secondary);
+  --color-secondary-foreground:   var(--secondary-foreground);
+  --color-accent:                 var(--accent);
+  --color-accent-foreground:      var(--accent-foreground);
+  --color-destructive:            var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-input:                  var(--input);
+  --color-ring:                   var(--ring);
+  --radius:                       var(--radius);
 
   --font-sans: var(--font-sans);
 }

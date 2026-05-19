@@ -12,7 +12,21 @@ export type TenantContext = {
   slug: string | null;
 };
 
-const storage = new AsyncLocalStorage<TenantContext>();
+// Cache on globalThis so HMR module reloads don't replace the instance.
+// The Prisma client (in db.ts) is cached globally too; if `storage` got a fresh
+// identity on every reload, the cached extension would read from a storage
+// the live request never wrote to, yielding spurious "no tenant in context" errors.
+const globalForTenant = globalThis as unknown as {
+  __edulmTenantStorage?: AsyncLocalStorage<TenantContext>;
+};
+
+const storage =
+  globalForTenant.__edulmTenantStorage ??
+  new AsyncLocalStorage<TenantContext>();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForTenant.__edulmTenantStorage = storage;
+}
 
 export function runWithTenant<T>(ctx: TenantContext, fn: () => T): T {
   return storage.run(ctx, fn);

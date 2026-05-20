@@ -61,6 +61,19 @@ model Tenant {
   // Email notifications — override the platform default sender identity.
   emailSenderName String?
   emailSignature  String?
+  // Family code config — auto-generated unique code per family in this tenant.
+  // Format: `{familyCodePrefix}{paddedSequence}`, e.g. "F-0001". Sequence is
+  // incremented atomically when a new family is created.
+  familyCodePrefix       String?
+  familyCodePadding      Int     @default(4)
+  familyCodeNextSequence Int     @default(1)
+  // Per-tenant custom field configs for the Parent and Student profiles.
+  // Same shape as CycleFieldConfig — built-in field visibility toggles plus
+  // admin-defined custom questions, label overrides, order, categories.
+  // Wired into the application wizard AND the parent/student admin forms,
+  // so answers captured during inscription land on the persistent profile.
+  parentFieldsConfig  Json @default("{}")
+  studentFieldsConfig Json @default("{}")
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
@@ -69,6 +82,8 @@ model Tenant {
   classes          Class[]
   students         Student[]
   guardians        Guardian[]
+  families         Family[]
+  establishments   Establishment[]
   enrollments      Enrollment[]
   attendance       AttendanceRecord[]
   disciplineEvents DisciplineEvent[]
@@ -90,7 +105,16 @@ model User {
   locale        String?
   status        UserStatus @default(INVITED)
   emailVerified DateTime?
+  // `name` is kept as the legacy/display fallback (used by NextAuth session
+  // and old code paths). firstName/lastName are the editable canonical fields
+  // going forward. UI components prefer firstName + lastName when both set.
   name          String?
+  firstName     String?
+  lastName      String?
+  // Per-tenant custom field answers — stored as { [fieldKey]: value }.
+  // Populated from application forms on accept, edited from the parent admin
+  // detail page. Field definitions live on Tenant.parentFieldsConfig.
+  customAnswers Json       @default("{}")
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
@@ -202,6 +226,7 @@ enum StudentStatus {
 model Student {
   id            String        @id @default(cuid())
   tenantId      String
+  familyId      String?
   firstName     String
   lastName      String
   dob           DateTime?
@@ -220,10 +245,15 @@ model Student {
   internalNotes    String?   // admin-only notes, not shown to parents
   photoUrl         String?
   status           StudentStatus @default(PROSPECT)
+  // Per-tenant custom field answers — populated from inscription forms on
+  // accept, edited from the student admin detail page. Schema lives on
+  // Tenant.studentFieldsConfig.
+  customAnswers    Json          @default("{}")
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
   tenant                   Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  family                   Family?            @relation(fields: [familyId], references: [id], onDelete: SetNull)
   guardianLinks            StudentGuardian[]
   enrollments              Enrollment[]
   attendance               AttendanceRecord[]
@@ -233,18 +263,68 @@ model Student {
   renewalApplications      Application[]      @relation("StudentRenewal")
 
   @@index([tenantId, lastName, firstName])
+  @@index([tenantId, familyId])
 }
 
 model Guardian {
   id       String  @id @default(cuid())
   tenantId String
   userId   String  @unique
+  familyId String?
   relation String?
 
   tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family     Family?           @relation(fields: [familyId], references: [id], onDelete: SetNull)
   childLinks StudentGuardian[]
 
+  @@index([tenantId])
+  @@index([familyId])
+}
+
+// ───────────────────────── Family ─────────────────────────
+
+/// A Family groups one or more Guardians (parents) and their Students so that
+/// shared concerns — billing, family-level documents, the "all my kids" parent
+/// portal view, sibling discounts — have a clear anchor. Each family carries a
+/// human-readable unique code per tenant (format configurable via
+/// Tenant.familyCodePrefix + familyCodePadding), e.g. "F-0042".
+model Family {
+  id        String   @id @default(cuid())
+  tenantId  String
+  code      String
+  name      String?   // optional admin-friendly label, e.g. "Famille El Kady"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  guardians Guardian[]
+  students  Student[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+// ───────────────────────── Establishment ─────────────────────────
+
+/// A school sub-division (Maternelle, Élémentaire, Collège, Lycée …) used to
+/// drive the cascading dropdown during inscription: parent picks Établissement,
+/// then Niveau options filter to the levels listed here. Admin-managed in
+/// /settings. `levels` is a JSON array of level strings (e.g. ["CP","CE1",…]).
+model Establishment {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  levels    Json     @default("[]")
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@unique([tenantId, name])
   @@index([tenantId])
 }
 
@@ -487,6 +567,21 @@ model Application {
   requestedLevel  String?
   motivationNote  String?
 
+  // Scolarité souhaitée (Round 7) — replaces requestedLevel as the canonical
+  // routing info once admin has configured Establishments in /settings.
+  // `requestedLevel` is kept for legacy applications and a fallback when no
+  // establishments are set up yet.
+  establishmentId  String?
+  niveau           String?
+
+  // Tenant-level custom field answers (Round 7).
+  //   parentAnswers  → captures Tenant.parentFieldsConfig fields filled by parent
+  //   studentAnswers → captures Tenant.studentFieldsConfig fields for the child
+  // On accept, these are propagated to User.customAnswers / Student.customAnswers
+  // so the answers survive on the persistent profile.
+  parentAnswers   Json @default("{}")
+  studentAnswers  Json @default("{}")
+
   // Internal notes (admin-only)
   internalNotes   String?
 
@@ -512,12 +607,52 @@ model Application {
   reviewedBy       User?          @relation("ApplicationReviewer", fields: [reviewedByUserId], references: [id])
   resultingStudent Student?       @relation(fields: [resultingStudentId], references: [id])
   existingStudent  Student?       @relation("StudentRenewal", fields: [existingStudentId], references: [id])
+  establishment    Establishment? @relation(fields: [establishmentId], references: [id], onDelete: SetNull)
+  answers          ApplicationAnswer[]
+  documents        ApplicationDocument[]
 
   @@unique([cycleId, existingStudentId])
   @@index([tenantId, cycleId, status])
   @@index([tenantId, submittedByUserId])
   @@index([tenantId, status, submittedAt])
   @@index([tenantId, existingStudentId])
+}
+
+/// Per-application answers to the cycle's custom questions. The list of
+/// questions themselves lives on `AdmissionCycle.fieldConfig.customQuestions`
+/// (typed in `lib/admission-fields.ts`). Stored as String — UI coerces by type.
+model ApplicationAnswer {
+  id            String   @id @default(cuid())
+  applicationId String
+  questionId    String
+  value         String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, questionId])
+  @@index([applicationId])
+}
+
+/// Per-application uploaded files for the cycle's required-document list.
+/// The requirement metadata (label, accepted types, required-ness) lives on
+/// `AdmissionCycle.fieldConfig.requiredDocuments`. Each upload sits in
+/// Supabase Storage under `storagePath`.
+model ApplicationDocument {
+  id            String   @id @default(cuid())
+  applicationId String
+  requirementId String
+  storagePath   String
+  filename      String
+  mimeType      String
+  fileSizeBytes Int
+  uploadedAt    DateTime @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, requirementId])
+  @@index([applicationId])
 }
 
 // ───────────────────────── Document portal ─────────────────────────

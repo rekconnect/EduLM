@@ -52,19 +52,201 @@ export const ADMISSION_FIELDS: FieldDef[] = [
 
 export const WIZARD_STEPS: WizardStep[] = ["identity", "family", "academic"];
 
+// ─── Custom questions (Round 3) ───────────────────────────────
+
+export const QUESTION_TYPES = [
+  "short_text",
+  "long_text",
+  "yes_no",
+  "select",
+  "date",
+  "number",
+] as const;
+export type QuestionType = (typeof QUESTION_TYPES)[number];
+
+export type CustomQuestion = {
+  /** Stable client-generated id (cuid-like). Used as the answer key. */
+  id: string;
+  type: QuestionType;
+  label: string;
+  hint?: string;
+  required: boolean;
+  /** Only meaningful for `select`. Each entry is one dropdown option. */
+  options?: string[];
+};
+
+// ─── Required documents (Round 4) ─────────────────────────────
+
+export type RequiredDocument = {
+  /** Stable client-generated id. Used to match uploads to a requirement. */
+  id: string;
+  label: string;
+  hint?: string;
+  required: boolean;
+  /** Optional MIME-type filter for the file picker (e.g., "application/pdf,image/*") */
+  acceptedTypes?: string;
+};
+
 /**
  * Shape of `AdmissionCycle.fieldConfig`. Designed to be extended without
- * another migration as we add custom questions, label overrides, etc.
+ * another migration as we add label overrides, reorder, etc.
  */
 export type CycleFieldConfig = {
   fields?: Record<string, FieldVisibility>;
-  // Round 3+: customQuestions, customLabels, stepIntros, fieldOrder, etc.
+  customQuestions?: CustomQuestion[];
+  requiredDocuments?: RequiredDocument[];
+  /** Round 5-D: admin-supplied label override per built-in field key. */
+  customLabels?: Record<string, string>;
+  /** Round 5-D: admin-supplied intro paragraph shown above each wizard step. */
+  stepIntros?: Partial<Record<WizardStep, string>>;
+  /** Round 5-E: ordered list of built-in field keys per step. */
+  fieldOrder?: Partial<Record<WizardStep, string[]>>;
 };
 
 export function parseFieldConfig(raw: unknown): CycleFieldConfig {
   if (!raw || typeof raw !== "object") return {};
   const cfg = raw as Partial<CycleFieldConfig>;
-  return { fields: cfg.fields ?? {} };
+  return {
+    fields: cfg.fields ?? {},
+    customQuestions: Array.isArray(cfg.customQuestions)
+      ? cfg.customQuestions.filter(isCustomQuestion)
+      : [],
+    requiredDocuments: Array.isArray(cfg.requiredDocuments)
+      ? cfg.requiredDocuments.filter(isRequiredDocument)
+      : [],
+    customLabels: parseCustomLabels(cfg.customLabels),
+    stepIntros: parseStepIntros(cfg.stepIntros),
+    fieldOrder: parseFieldOrder(cfg.fieldOrder),
+  };
+}
+
+function parseCustomLabels(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, string> = {};
+  const allowed = new Set(ADMISSION_FIELDS.map((f) => f.key));
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!allowed.has(k)) continue;
+    if (typeof v !== "string") continue;
+    const trimmed = v.trim();
+    if (trimmed.length > 0 && trimmed.length <= 120) out[k] = trimmed;
+  }
+  return out;
+}
+
+function parseStepIntros(raw: unknown): Partial<Record<WizardStep, string>> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Partial<Record<WizardStep, string>> = {};
+  for (const step of WIZARD_STEPS) {
+    const v = (raw as Record<string, unknown>)[step];
+    if (typeof v !== "string") continue;
+    const trimmed = v.trim();
+    if (trimmed.length > 0 && trimmed.length <= 1000) out[step] = trimmed;
+  }
+  return out;
+}
+
+function parseFieldOrder(raw: unknown): Partial<Record<WizardStep, string[]>> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Partial<Record<WizardStep, string[]>> = {};
+  for (const step of WIZARD_STEPS) {
+    const list = (raw as Record<string, unknown>)[step];
+    if (!Array.isArray(list)) continue;
+    const allowed = new Set(fieldsForStep(step).map((f) => f.key));
+    const seen = new Set<string>();
+    const cleaned: string[] = [];
+    for (const item of list) {
+      if (typeof item !== "string") continue;
+      if (!allowed.has(item)) continue;
+      if (seen.has(item)) continue;
+      seen.add(item);
+      cleaned.push(item);
+    }
+    if (cleaned.length > 0) out[step] = cleaned;
+  }
+  return out;
+}
+
+/** Returns the admin's label override if any, falling back to the default t() value. */
+export function getFieldLabel(
+  config: CycleFieldConfig | undefined,
+  fieldKey: string,
+  fallback: string,
+): string {
+  return config?.customLabels?.[fieldKey] ?? fallback;
+}
+
+/**
+ * Returns the canonical field list for a wizard step in the order configured
+ * by the admin (Round 5-E). Fields without an override fall back to the
+ * registry order, and any newly-added registry fields are appended.
+ */
+export function orderedFieldsForStep(
+  step: WizardStep,
+  config: CycleFieldConfig | undefined,
+): FieldDef[] {
+  const defaults = fieldsForStep(step);
+  const order = config?.fieldOrder?.[step];
+  if (!order || order.length === 0) return defaults;
+  const byKey = new Map(defaults.map((f) => [f.key, f] as const));
+  const result: FieldDef[] = [];
+  for (const key of order) {
+    const def = byKey.get(key);
+    if (def) {
+      result.push(def);
+      byKey.delete(key);
+    }
+  }
+  for (const remaining of byKey.values()) result.push(remaining);
+  return result;
+}
+
+function isRequiredDocument(raw: unknown): raw is RequiredDocument {
+  if (!raw || typeof raw !== "object") return false;
+  const d = raw as Partial<RequiredDocument>;
+  return (
+    typeof d.id === "string" &&
+    typeof d.label === "string" &&
+    typeof d.required === "boolean"
+  );
+}
+
+function isCustomQuestion(raw: unknown): raw is CustomQuestion {
+  if (!raw || typeof raw !== "object") return false;
+  const q = raw as Partial<CustomQuestion>;
+  return (
+    typeof q.id === "string" &&
+    typeof q.label === "string" &&
+    typeof q.required === "boolean" &&
+    (QUESTION_TYPES as readonly string[]).includes(q.type as string)
+  );
+}
+
+/**
+ * Server-side answer validation. UI does the same checks for live feedback.
+ * Returns null on success, an error key string on failure.
+ */
+export function validateAnswer(
+  question: CustomQuestion,
+  value: string,
+): string | null {
+  const trimmed = (value ?? "").trim();
+  if (trimmed === "") {
+    return question.required ? "required" : null;
+  }
+  switch (question.type) {
+    case "yes_no":
+      return ["yes", "no"].includes(trimmed) ? null : "invalid";
+    case "select":
+      return question.options?.includes(trimmed) ? null : "invalid";
+    case "date":
+      return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? null : "invalid";
+    case "number":
+      return Number.isNaN(Number(trimmed)) ? "invalid" : null;
+    case "short_text":
+      return trimmed.length <= 200 ? null : "too_long";
+    case "long_text":
+      return trimmed.length <= 2000 ? null : "too_long";
+  }
 }
 
 export function getFieldVisibility(

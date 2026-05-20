@@ -28,7 +28,7 @@ export function TH({
   children,
   className = "",
 }: {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   className?: string;
 }) {
   return <th className={`px-4 py-3 font-medium ${className}`}>{children}</th>;

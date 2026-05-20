@@ -11,6 +11,8 @@ const TENANT_SCOPED_MODELS = new Set([
   "Class",
   "Student",
   "Guardian",
+  "Family",
+  "Establishment",
   "Enrollment",
   "AttendanceRecord",
   "DisciplineEvent",

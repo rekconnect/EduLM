@@ -558,6 +558,74 @@ export type CancelResult = { ok: true } | { ok: false; error: string };
  * navigate itself. This pattern works around server actions that redirect not
  * being able to surface success state to the caller.
  */
+/**
+ * Parent-initiated archive: hides the row from their default list.
+ * Reversible — admin (or this same parent via "Show archived") can
+ * restore it later. Always allowed regardless of status; archive is
+ * just a personal hygiene flag.
+ */
+export async function parentArchiveApplication(
+  id: string,
+  archived: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "unauthenticated" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id },
+      select: { id: true, submittedByUserId: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    if (app.submittedByUserId !== user.id)
+      return { ok: false, error: "forbidden" };
+    await db.application.update({
+      where: { id },
+      data: {
+        archived,
+        archivedAt: archived ? new Date() : null,
+        deletedAt: null,
+      },
+    });
+    revalidatePath("/parent/applications");
+    revalidatePath("/parent/dashboard");
+    return { ok: true };
+  });
+}
+
+/**
+ * Parent-initiated soft delete: tombstones the row so it disappears
+ * from their list. Admin can still see it in "Supprimés" and either
+ * restore it or purge it permanently. Same owner check as
+ * cancelDraftApplication — no status restriction since this is just
+ * a hide-from-my-view, not a true cancellation.
+ */
+export async function parentSoftDeleteApplication(
+  id: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "unauthenticated" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id },
+      select: { id: true, submittedByUserId: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    if (app.submittedByUserId !== user.id)
+      return { ok: false, error: "forbidden" };
+    await db.application.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+    revalidatePath("/parent/applications");
+    revalidatePath("/parent/dashboard");
+    return { ok: true };
+  });
+}
+
 export async function cancelDraftApplication(
   id: string,
 ): Promise<CancelResult> {

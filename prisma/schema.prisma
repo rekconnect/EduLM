@@ -74,6 +74,13 @@ model Tenant {
   // so answers captured during inscription land on the persistent profile.
   parentFieldsConfig  Json @default("{}")
   studentFieldsConfig Json @default("{}")
+  // Controls the /admin/parents/new form: which built-in fields are
+  // shown (firstName / lastName / relation / locale — email + password
+  // are always required) and any extra custom questions to ask up front.
+  // Stored as { builtin: { firstName: "required"|"optional"|"hidden", … },
+  //             categories: […], fields: […] } using the entity-fields
+  // schema for the custom side.
+  parentCreateFieldsConfig Json @default("{}")
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
@@ -115,6 +122,14 @@ model User {
   // Populated from application forms on accept, edited from the parent admin
   // detail page. Field definitions live on Tenant.parentFieldsConfig.
   customAnswers Json       @default("{}")
+  // Admin three-state lifecycle (only meaningful for PARENT users in the
+  // parents-admin list — TEACHER/ADMIN rows always stay active):
+  //  - active (archived=false, deletedAt=null)
+  //  - archived (archived=true, deletedAt=null)
+  //  - deleted (deletedAt!=null) → soft tombstone, restorable
+  archived      Boolean    @default(false)
+  archivedAt    DateTime?
+  deletedAt     DateTime?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
@@ -597,6 +612,15 @@ model Application {
   decisionAt         DateTime?
   decisionNote       String?
   resultingStudentId String?  @unique
+
+  // Three-state lifecycle in the admin list:
+  //  - active (archived=false, deletedAt=null) → default view
+  //  - archived (archived=true, deletedAt=null) → "Archivés" section
+  //  - deleted (deletedAt!=null) → "Supprimés" section, recoverable until
+  //    an admin permanently purges it
+  archived           Boolean  @default(false)
+  archivedAt         DateTime?
+  deletedAt          DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -28,6 +28,7 @@ export function DossierEditClient({
   studentInitial,
   establishments,
   user,
+  dossier,
 }: {
   applicationId: string;
   status: string;
@@ -37,6 +38,7 @@ export function DossierEditClient({
   studentInitial: FieldAnswers;
   establishments: FieldExtras["establishments"];
   user: NonNullable<FieldExtras["user"]>;
+  dossier: NonNullable<FieldExtras["dossier"]>;
 }) {
   const t = useTranslations("admissions");
   const tCommon = useTranslations("common");
@@ -50,11 +52,23 @@ export function DossierEditClient({
     if (v) parentSeeded[f.id] = v;
   }
 
+  // Seed student answers: dossierBoundTo overrides any stored value so the
+  // mirrored field always reflects the canonical dossier identity. For
+  // non-bound fields, fall through to the stored value.
+  const studentSeeded: FieldAnswers = {};
+  for (const f of studentConfig.fields) {
+    const v = resolveInitialValue(f, studentInitial[f.id] ?? "", { dossier });
+    if (v) studentSeeded[f.id] = v;
+  }
+
   const [parentAns, setParentAns] = useState<FieldAnswers>({
     ...parentSeeded,
     ...parentInitial,
   });
-  const [studentAns, setStudentAns] = useState<FieldAnswers>(studentInitial);
+  const [studentAns, setStudentAns] = useState<FieldAnswers>({
+    ...studentInitial,
+    ...studentSeeded, // dossier-mirrored values overwrite stored
+  });
   const [savingParent, startParentSave] = useTransition();
   const [savingStudent, startStudentSave] = useTransition();
   const [submitting, startSubmit] = useTransition();
@@ -112,7 +126,7 @@ export function DossierEditClient({
     });
   }
 
-  const extras: FieldExtras = { establishments, user };
+  const extras: FieldExtras = { establishments, user, dossier };
 
   return (
     <>

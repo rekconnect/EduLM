@@ -125,6 +125,24 @@ export const USER_BOUND_PROPS = [
 ] as const;
 export type UserBoundProp = (typeof USER_BOUND_PROPS)[number];
 
+/**
+ * Application identity fields that a student custom field can mirror. When
+ * a custom field has `dossierBoundTo` set, its value comes from the dossier
+ * itself (entered in the Identité section / dossier creation form). The
+ * custom field is rendered read-only so the canonical source stays the
+ * single editable surface.
+ *
+ * Only relevant on student fields — the dossier identity is about the child.
+ */
+export const DOSSIER_BOUND_PROPS = [
+  "childFirstName",
+  "childLastName",
+  "childDob",
+  "establishment",
+  "niveau",
+] as const;
+export type DossierBoundProp = (typeof DOSSIER_BOUND_PROPS)[number];
+
 export type FieldDef = {
   /** Stable client-generated id (used as the answer key). */
   id: string;
@@ -168,12 +186,21 @@ export type FieldDef = {
    */
   userBoundTo?: UserBoundProp;
   /**
-   * If true, this field also appears on the initial "+ Créer un dossier"
-   * quick form. Otherwise it only shows up on the full dossier edit page.
-   * Lets the admin extend the quick form with additional questions
-   * (passport number, languages, etc.) without forcing every field into it.
+   * Master on/off switch. When false, the field is hidden everywhere
+   * (renderer skips it, submit validation skips its required check, admin
+   * profile forms skip it). Lets admin keep a field definition around
+   * without exposing it to parents — useful while building or seasonally.
+   * Defaults to true (treated as active when absent in legacy data).
    */
-  showOnDossierCreate?: boolean;
+  active?: boolean;
+  /**
+   * Mirror a value from the dossier identity (Application columns set
+   * during creation). When set, the field shows the canonical value
+   * read-only — edits must happen via the "Identité du dossier" section.
+   * Use for layout/grouping flexibility without forcing the parent to
+   * re-enter info already captured at creation.
+   */
+  dossierBoundTo?: DossierBoundProp;
 };
 
 export type EntityFieldsConfig = {
@@ -238,7 +265,14 @@ export function parseEntityFieldsConfig(raw: unknown): EntityFieldsConfig {
             (USER_BOUND_PROPS as readonly string[]).includes(f.userBoundTo)
               ? (f.userBoundTo as UserBoundProp)
               : undefined,
-          showOnDossierCreate: f.showOnDossierCreate === true ? true : undefined,
+          // Default to active when missing (handles legacy data + fields
+          // created before this toggle existed).
+          active: f.active === false ? false : true,
+          dossierBoundTo:
+            typeof f.dossierBoundTo === "string" &&
+            (DOSSIER_BOUND_PROPS as readonly string[]).includes(f.dossierBoundTo)
+              ? (f.dossierBoundTo as DossierBoundProp)
+              : undefined,
         }))
       : [],
   };
@@ -359,6 +393,8 @@ export function evaluateShowIf(
   field: FieldDef,
   answers: Record<string, string>,
 ): boolean {
+  // active === false is a permanent kill switch — overrides every other rule.
+  if (field.active === false) return false;
   if (field.hideIf && matchesRule(field.hideIf, answers)) return false;
   if (field.showIf) return matchesRule(field.showIf, answers);
   return true;

@@ -304,6 +304,7 @@ export async function updateFamilyCodeSettings(
 // ─── Parent / Student field configs (Round 5) ─────────────────
 
 import {
+  DOSSIER_BOUND_PROPS,
   ENTITY_TYPES,
   FIELD_TYPES,
   USER_BOUND_PROPS,
@@ -357,7 +358,8 @@ const fieldSchema = z.object({
     })
     .optional(),
   userBoundTo: z.enum(USER_BOUND_PROPS).optional(),
-  showOnDossierCreate: z.boolean().optional(),
+  dossierBoundTo: z.enum(DOSSIER_BOUND_PROPS).optional(),
+  active: z.boolean().optional(),
 });
 
 const categorySchema = z.object({
@@ -386,6 +388,79 @@ export async function loadEntityFieldsConfig(entity: EntityType) {
   const raw =
     entity === "parent" ? tenant?.parentFieldsConfig : tenant?.studentFieldsConfig;
   return parseEntityFieldsConfig(raw);
+}
+
+// ─── Parent-create form config (built-in toggles + custom fields) ──
+
+const BUILTIN_MODES_ENUM = ["required", "optional", "hidden"] as const;
+const parentCreateConfigSchema = z.object({
+  builtin: z.object({
+    firstName: z.enum(BUILTIN_MODES_ENUM),
+    lastName: z.enum(BUILTIN_MODES_ENUM),
+    relation: z.enum(BUILTIN_MODES_ENUM),
+    locale: z.enum(BUILTIN_MODES_ENUM),
+  }),
+  categories: z.array(categorySchema).max(40),
+  fields: z.array(fieldSchema).max(200),
+});
+
+export async function loadParentCreateConfig() {
+  const user = await requireUser();
+  if (!user.tenantId) {
+    const { DEFAULT_PARENT_CREATE_CONFIG } = await import(
+      "@/lib/parent-create-config"
+    );
+    return DEFAULT_PARENT_CREATE_CONFIG;
+  }
+  const { parseParentCreateConfig } = await import(
+    "@/lib/parent-create-config"
+  );
+  const tenant = await unscopedDb().tenant.findUnique({
+    where: { id: user.tenantId },
+    select: { parentCreateFieldsConfig: true },
+  });
+  return parseParentCreateConfig(tenant?.parentCreateFieldsConfig);
+}
+
+export async function updateParentCreateConfig(
+  formData: FormData,
+): Promise<SettingsResult> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  if (!user.tenantId) return { ok: false, error: "no-tenant" };
+
+  const raw = String(formData.get("config") ?? "{}");
+  let parsedRaw: unknown;
+  try {
+    parsedRaw = JSON.parse(raw);
+  } catch {
+    return { ok: false, error: "invalid-json" };
+  }
+  const parsed = parentCreateConfigSchema.safeParse(parsedRaw);
+  if (!parsed.success) return { ok: false, error: "validation" };
+
+  // Same cross-validation as entity fields: drop orphaned fields, strip
+  // options for non-select types.
+  const categoryIds = new Set(parsed.data.categories.map((c) => c.id));
+  const cleanedFields = parsed.data.fields.filter((f) =>
+    categoryIds.has(f.categoryId),
+  );
+  const finalFields = cleanedFields.map((f) =>
+    f.type === "select" ? f : { ...f, options: undefined },
+  );
+
+  await unscopedDb().tenant.update({
+    where: { id: user.tenantId },
+    data: {
+      parentCreateFieldsConfig: {
+        builtin: parsed.data.builtin,
+        categories: parsed.data.categories,
+        fields: finalFields,
+      } as unknown as Record<string, unknown>,
+    },
+  });
+  revalidatePath("/settings");
+  revalidatePath("/admin/parents/new");
+  return { ok: true };
 }
 
 export async function updateEntityFieldsConfig(

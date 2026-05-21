@@ -166,6 +166,15 @@ export default async function DossierEditPage({
             name: sessionUser?.name ?? null,
             email: sessionUser?.email ?? null,
           }}
+          dossier={{
+            childFirstName: app.childFirstName ?? null,
+            childLastName: app.childLastName ?? null,
+            childDob: app.childDob
+              ? app.childDob.toISOString().slice(0, 10)
+              : null,
+            establishment: app.establishment?.name ?? null,
+            niveau: app.niveau ?? null,
+          }}
         />
       </main>
     );

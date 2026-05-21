@@ -9,6 +9,7 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
 import { AppStatusBadge } from "./_status-badge";
+import { SwipeableApplicationCard } from "./_swipeable-card";
 
 const STATUS_KEY: Record<string, string> = {
   DRAFT: "statusDraft",
@@ -30,7 +31,14 @@ export default async function ParentApplicationsPage() {
     const t = await getTranslations("admissions");
 
     const apps = await db.application.findMany({
-      where: { submittedByUserId: user.id },
+      // Default list hides what the parent has personally archived or
+      // soft-deleted. They can still see archived/deleted ones from the
+      // admin if any exist — we just keep this view clean.
+      where: {
+        submittedByUserId: user.id,
+        archived: false,
+        deletedAt: null,
+      },
       orderBy: { createdAt: "desc" },
       include: { cycle: { select: { label: true, targetYearLabel: true } } },
     });
@@ -76,42 +84,50 @@ export default async function ParentApplicationsPage() {
                   ? `/parent/inscriptions/${a.id}/edit`
                   : `/parent/applications/${a.id}`;
                 return (
-                  <Link key={a.id} href={href} className="block">
-                    <Card className="group transition-shadow duration-200 ease-out hover:border-[color:var(--color-border-strong)] hover:shadow-[var(--shadow-card-hover)]">
-                      <CardBody>
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
-                              {a.cycle.label}
-                            </p>
-                            <h2 className="mt-1 flex items-center gap-2 text-lg font-semibold text-[color:var(--color-foreground)] transition-colors group-hover:text-[color:var(--color-brand-600)]">
-                              {a.childFirstName || "—"} {a.childLastName || ""}
-                              {a.existingStudentId ? (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--color-brand-50)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[color:var(--color-brand-700)]">
-                                  <RefreshCw className="size-2.5" aria-hidden />
-                                  {t("renewalBadge")}
-                                </span>
-                              ) : null}
-                            </h2>
-                            <p className="mt-1 text-xs text-[color:var(--color-foreground-muted)]">
-                              {a.requestedLevel ? `${a.requestedLevel} · ` : ""}
-                              {a.cycle.targetYearLabel}
-                            </p>
+                  <SwipeableApplicationCard
+                    key={a.id}
+                    applicationId={a.id}
+                    href={href}
+                    archiveLabel={t("archive")}
+                    deleteLabel={t("delete")}
+                  >
+                    <Link href={href} className="block">
+                      <Card className="group transition-shadow duration-200 ease-out hover:border-[color:var(--color-border-strong)] hover:shadow-[var(--shadow-card-hover)]">
+                        <CardBody>
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
+                                {a.cycle.label}
+                              </p>
+                              <h2 className="mt-1 flex items-center gap-2 text-lg font-semibold text-[color:var(--color-foreground)] transition-colors group-hover:text-[color:var(--color-brand-600)]">
+                                {a.childFirstName || "—"} {a.childLastName || ""}
+                                {a.existingStudentId ? (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--color-brand-50)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[color:var(--color-brand-700)]">
+                                    <RefreshCw className="size-2.5" aria-hidden />
+                                    {t("renewalBadge")}
+                                  </span>
+                                ) : null}
+                              </h2>
+                              <p className="mt-1 text-xs text-[color:var(--color-foreground-muted)]">
+                                {a.requestedLevel ? `${a.requestedLevel} · ` : ""}
+                                {a.cycle.targetYearLabel}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <AppStatusBadge
+                                status={a.status}
+                                label={t(STATUS_KEY[a.status] ?? "statusDraft")}
+                              />
+                              <ArrowRight
+                                className="size-4 text-[color:var(--color-foreground-subtle)] transition-transform group-hover:translate-x-0.5 group-hover:text-[color:var(--color-brand-600)] rtl:group-hover:-translate-x-0.5 rtl:rotate-180"
+                                aria-hidden
+                              />
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <AppStatusBadge
-                              status={a.status}
-                              label={t(STATUS_KEY[a.status] ?? "statusDraft")}
-                            />
-                            <ArrowRight
-                              className="size-4 text-[color:var(--color-foreground-subtle)] transition-transform group-hover:translate-x-0.5 group-hover:text-[color:var(--color-brand-600)] rtl:group-hover:-translate-x-0.5 rtl:rotate-180"
-                              aria-hidden
-                            />
-                          </div>
-                        </div>
-                      </CardBody>
-                    </Card>
-                  </Link>
+                        </CardBody>
+                      </Card>
+                    </Link>
+                  </SwipeableApplicationCard>
                 );
               })}
             </StaggerGrid>

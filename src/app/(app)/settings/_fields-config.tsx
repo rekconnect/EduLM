@@ -20,11 +20,13 @@ import {
   CROSS_FIELD_LOOKUP_TYPES,
   DEFAULT_PARENT_CATEGORIES,
   DEFAULT_STUDENT_CATEGORIES,
+  DOSSIER_BOUND_PROPS,
   DYNAMIC_LOOKUP_TYPES,
   FIELD_TYPES,
   PRESET_LOOKUP_TYPES,
   USER_BOUND_PROPS,
   slugifyKey,
+  type DossierBoundProp,
   type EntityFieldsConfig,
   type EntityType,
   type FieldCategory,
@@ -430,14 +432,38 @@ function FieldRow({
             ))}
           </Select>
         </Field>
-        <div className="flex items-end pb-1">
+        <div className="flex flex-col items-start gap-1 pb-1">
           <label className="inline-flex items-center gap-1.5 text-xs">
             <input
               type="checkbox"
               checked={field.required}
               onChange={(e) => onUpdate({ required: e.target.checked })}
+              // A field that's globally disabled can't be required — that
+              // would block submission with no UI to fill the field. UI
+              // makes it explicit.
+              disabled={field.active === false}
             />
             {t("fieldsConfig.required")}
+          </label>
+          <label
+            className="inline-flex items-center gap-1.5 text-xs"
+            title={t("fieldsConfig.activeHint")}
+          >
+            <input
+              type="checkbox"
+              checked={field.active !== false}
+              onChange={(e) =>
+                onUpdate({
+                  // Persist explicit false so the value sticks across reloads.
+                  active: e.target.checked ? undefined : false,
+                  // If we're turning the field off, also clear `required` so
+                  // a future re-enable doesn't surprise the parent with a
+                  // suddenly-mandatory field.
+                  required: e.target.checked ? field.required : false,
+                })
+              }
+            />
+            {t("fieldsConfig.fieldActive")}
           </label>
         </div>
         <div className="flex items-end gap-1 pb-1">
@@ -745,31 +771,36 @@ function FieldRow({
             </label>
           </Field>
 
-          {/* Student-only: show this field on the dossier-creation quick form
-              (in addition to the full edit page). Lets the admin extend the
-              initial questions without putting everything in the quick form. */}
+          {/* Student-only: mirror a value from the dossier identity. The
+              field becomes read-only — edits flow through the Identité du
+              dossier section so the canonical value isn't duplicated. */}
           {entity === "student" ? (
             <div className="sm:col-span-2">
-              <label className="inline-flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-0.5"
-                  checked={!!field.showOnDossierCreate}
-                  onChange={(e) =>
+              <Field
+                label={t("fieldsConfig.dossierBoundLabel")}
+                htmlFor={`dossier-${field.id}`}
+                hint={t("fieldsConfig.dossierBoundHint")}
+              >
+                <Select
+                  id={`dossier-${field.id}`}
+                  value={field.dossierBoundTo ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
                     onUpdate({
-                      showOnDossierCreate: e.target.checked || undefined,
-                    })
-                  }
-                />
-                <span>
-                  <span className="font-medium text-[color:var(--color-foreground)]">
-                    {t("fieldsConfig.showOnDossierCreate")}
-                  </span>
-                  <span className="mt-0.5 block text-xs text-[color:var(--color-foreground-muted)]">
-                    {t("fieldsConfig.showOnDossierCreateHint")}
-                  </span>
-                </span>
-              </label>
+                      dossierBoundTo: v ? (v as DossierBoundProp) : undefined,
+                    });
+                  }}
+                >
+                  <option value="">
+                    {t("fieldsConfig.dossierBoundNone")}
+                  </option>
+                  {DOSSIER_BOUND_PROPS.map((p) => (
+                    <option key={p} value={p}>
+                      {t(`fieldsConfig.dossierBound_${p}` as never)}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
             </div>
           ) : null}
 

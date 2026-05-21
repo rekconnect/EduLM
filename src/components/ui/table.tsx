@@ -16,9 +16,19 @@ export function THead({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function TR({ children }: { children: React.ReactNode }) {
+export function TR({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <tr className="border-t border-[color:var(--color-border-subtle)] transition-colors duration-150 ease-out hover:bg-[color:var(--color-surface-hover)]">
+    <tr
+      className={`border-t border-[color:var(--color-border-subtle)] transition-colors duration-150 ease-out hover:bg-[color:var(--color-surface-hover)]${
+        className ? ` ${className}` : ""
+      }`}
+    >
       {children}
     </tr>
   );

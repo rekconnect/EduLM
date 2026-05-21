@@ -692,3 +692,210 @@ async function notifyParentOfDecision(
     applicationId,
   });
 }
+
+// ── Archive / soft-delete / restore (admin row actions) ─────
+
+/**
+ * Move an application to the Archived section (or back to Active). Archived
+ * rows still exist in the DB so reports + audit history work — they're just
+ * hidden from the default list view.
+ */
+export async function setApplicationArchived(
+  applicationId: string,
+  archived: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id: applicationId },
+      select: { id: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    await db.application.update({
+      where: { id: applicationId },
+      data: {
+        archived,
+        archivedAt: archived ? new Date() : null,
+        // Coming back from the deleted bucket: clear the tombstone too.
+        deletedAt: null,
+      },
+    });
+    revalidatePath("/admissions-admin");
+    revalidatePath(`/admissions-admin/${applicationId}`);
+    return { ok: true };
+  });
+}
+
+/**
+ * Soft delete — stamps `deletedAt` and moves the row into the Deleted
+ * section. Recoverable until an admin permanently purges it from there.
+ * Refuses if the application already produced a Student row, since the
+ * kid would lose their admission audit trail.
+ */
+export async function softDeleteApplication(
+  applicationId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id: applicationId },
+      select: { id: true, resultingStudentId: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    if (app.resultingStudentId) {
+      return { ok: false, error: "produced-student" };
+    }
+    await db.application.update({
+      where: { id: applicationId },
+      data: { deletedAt: new Date() },
+    });
+    revalidatePath("/admissions-admin");
+    revalidatePath(`/admissions-admin/${applicationId}`);
+    return { ok: true };
+  });
+}
+
+/**
+ * Restore a deleted (or archived) row back to Active. Clears both
+ * `deletedAt` and `archived` so the row reappears in the default view.
+ */
+export async function restoreApplication(
+  applicationId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id: applicationId },
+      select: { id: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    await db.application.update({
+      where: { id: applicationId },
+      data: { deletedAt: null, archived: false, archivedAt: null },
+    });
+    revalidatePath("/admissions-admin");
+    revalidatePath(`/admissions-admin/${applicationId}`);
+    return { ok: true };
+  });
+}
+
+/**
+ * Hard delete — permanently removes the application row and everything
+ * that FK-cascades (ApplicationAnswer, ApplicationDocument). Only
+ * accessible from the Deleted section; storage objects for documents
+ * are not cleaned up here.
+ *
+ * Same produced-student guard as soft delete — admin must detach the
+ * student first.
+ */
+export async function permanentlyDeleteApplication(
+  applicationId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id: applicationId },
+      select: { id: true, resultingStudentId: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    if (app.resultingStudentId) {
+      return { ok: false, error: "produced-student" };
+    }
+    await db.application.delete({ where: { id: applicationId } });
+    revalidatePath("/admissions-admin");
+    return { ok: true };
+  });
+}
+
+// ── Bulk variants ──────────────────────────────────────────
+// Each returns `{ ok, processed, skipped }` so the toast can tell the
+// admin "12 archived, 1 skipped (already produced a student)".
+
+type BulkResult = { ok: boolean; processed: number; skipped: number };
+
+async function withParents<T>(ids: string[], fn: (tenantId: string) => Promise<T>): Promise<T | { ok: false; processed: 0; skipped: 0 }> {
+  if (ids.length === 0) {
+    return { ok: false, processed: 0, skipped: 0 } as unknown as T;
+  }
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) {
+    return { ok: false, processed: 0, skipped: 0 } as unknown as T;
+  }
+  return runWithTenant({ tenantId, slug: null }, () => fn(tenantId));
+}
+
+/** Bulk move to/from the Archived section. Skips no rows. */
+export async function bulkSetApplicationsArchived(
+  ids: string[],
+  archived: boolean,
+): Promise<BulkResult> {
+  return withParents(ids, async () => {
+    const r = await db.application.updateMany({
+      where: { id: { in: ids } },
+      data: {
+        archived,
+        archivedAt: archived ? new Date() : null,
+        deletedAt: null,
+      },
+    });
+    revalidatePath("/admissions-admin");
+    return { ok: true, processed: r.count, skipped: ids.length - r.count };
+  }) as Promise<BulkResult>;
+}
+
+/** Bulk soft delete. Skips rows that already produced a Student. */
+export async function bulkSoftDeleteApplications(
+  ids: string[],
+): Promise<BulkResult> {
+  return withParents(ids, async () => {
+    const r = await db.application.updateMany({
+      where: { id: { in: ids }, resultingStudentId: null },
+      data: { deletedAt: new Date() },
+    });
+    revalidatePath("/admissions-admin");
+    return { ok: true, processed: r.count, skipped: ids.length - r.count };
+  }) as Promise<BulkResult>;
+}
+
+/** Bulk restore back to Active. */
+export async function bulkRestoreApplications(
+  ids: string[],
+): Promise<BulkResult> {
+  return withParents(ids, async () => {
+    const r = await db.application.updateMany({
+      where: { id: { in: ids } },
+      data: { deletedAt: null, archived: false, archivedAt: null },
+    });
+    revalidatePath("/admissions-admin");
+    return { ok: true, processed: r.count, skipped: ids.length - r.count };
+  }) as Promise<BulkResult>;
+}
+
+/**
+ * Bulk permanent delete. Same produced-student guard as the single
+ * version — those rows are skipped instead of failing the whole batch.
+ */
+export async function bulkPermanentlyDeleteApplications(
+  ids: string[],
+): Promise<BulkResult> {
+  return withParents(ids, async () => {
+    const r = await db.application.deleteMany({
+      where: { id: { in: ids }, resultingStudentId: null },
+    });
+    revalidatePath("/admissions-admin");
+    return { ok: true, processed: r.count, skipped: ids.length - r.count };
+  }) as Promise<BulkResult>;
+}

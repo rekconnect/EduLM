@@ -14,6 +14,13 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
 import { AppStatusBadge } from "@/app/(app)/parent/applications/_status-badge";
+import {
+  BulkHeaderCheckbox,
+  BulkRowCheckbox,
+  BulkSelectionProvider,
+} from "@/components/bulk-selection";
+import { AdmissionRowActions } from "./_row-actions";
+import { AdmissionsBulkToolbar } from "./_bulk-toolbar";
 
 const BASE = "/admissions-admin";
 
@@ -67,10 +74,21 @@ type AdminApp = {
   requestedLevel: string | null;
   submittedAt: Date | null;
   isRenewal: boolean;
+  archived: boolean;
+  deleted: boolean;
   cycle: { id: string; label: string };
   submittedBy: { id: string; email: string; name: string | null };
   existingChildren: number;
 };
+
+const VIEWS = ["active", "archived", "deleted"] as const;
+type View = (typeof VIEWS)[number];
+
+function parseView(raw: string | undefined): View {
+  return (VIEWS as readonly string[]).includes(raw ?? "")
+    ? (raw as View)
+    : "active";
+}
 
 export default async function AdmissionsAdminListPage({
   searchParams,
@@ -80,9 +98,11 @@ export default async function AdmissionsAdminListPage({
     cycleId?: string;
     sort?: string;
     dir?: string;
+    view?: string;
   }>;
 }) {
-  const { status, cycleId, sort, dir } = await searchParams;
+  const { status, cycleId, sort, dir, view } = await searchParams;
+  const currentView: View = parseView(view);
   const user = await requireRole("SCHOOL_ADMIN");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
@@ -104,33 +124,63 @@ export default async function AdmissionsAdminListPage({
       : "submitted";
     const sortDir: SortDir = dir === "asc" ? "asc" : "desc";
 
-    const where: { status?: ApplicationStatus; cycleId?: string } = {};
+    const where: {
+      status?: ApplicationStatus;
+      cycleId?: string;
+      archived?: boolean;
+      deletedAt?: null | { not: null };
+    } = {};
     if (statusFilter) where.status = statusFilter;
     if (cycleFilter) where.cycleId = cycleFilter;
+    // Three mutually-exclusive views — each shows exactly one bucket.
+    if (currentView === "active") {
+      where.archived = false;
+      where.deletedAt = null;
+    } else if (currentView === "archived") {
+      where.archived = true;
+      where.deletedAt = null;
+    } else {
+      where.deletedAt = { not: null };
+    }
 
-    const [apps, cycles] = await Promise.all([
-      db.application.findMany({
-        where,
-        orderBy: orderByFor(sortKey, sortDir),
-        include: {
-          cycle: { select: { id: true, label: true } },
-          submittedBy: {
-            select: {
-              id: true,
-              email: true,
-              name: true,
-              guardianProfile: {
-                select: { childLinks: { select: { studentId: true } } },
+    // Shared filters that apply to every view-count (cycle + status).
+    const countBase: { status?: ApplicationStatus; cycleId?: string } = {};
+    if (statusFilter) countBase.status = statusFilter;
+    if (cycleFilter) countBase.cycleId = cycleFilter;
+
+    const [apps, cycles, activeCount, archivedCount, deletedCount] =
+      await Promise.all([
+        db.application.findMany({
+          where,
+          orderBy: orderByFor(sortKey, sortDir),
+          include: {
+            cycle: { select: { id: true, label: true } },
+            submittedBy: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                guardianProfile: {
+                  select: { childLinks: { select: { studentId: true } } },
+                },
               },
             },
           },
-        },
-      }),
-      db.admissionCycle.findMany({
-        orderBy: { openAt: "desc" },
-        select: { id: true, label: true },
-      }),
-    ]);
+        }),
+        db.admissionCycle.findMany({
+          orderBy: { openAt: "desc" },
+          select: { id: true, label: true },
+        }),
+        db.application.count({
+          where: { ...countBase, archived: false, deletedAt: null },
+        }),
+        db.application.count({
+          where: { ...countBase, archived: true, deletedAt: null },
+        }),
+        db.application.count({
+          where: { ...countBase, deletedAt: { not: null } },
+        }),
+      ]);
 
     const newFamilyApps: AdminApp[] = [];
     const existingFamilyApps: AdminApp[] = [];
@@ -145,6 +195,8 @@ export default async function AdmissionsAdminListPage({
         requestedLevel: a.requestedLevel,
         submittedAt: a.submittedAt,
         isRenewal: !!a.existingStudentId,
+        archived: a.archived,
+        deleted: a.deletedAt !== null,
         cycle: a.cycle,
         submittedBy: {
           id: a.submittedBy.id,
@@ -157,17 +209,30 @@ export default async function AdmissionsAdminListPage({
       else newFamilyApps.push(row);
     }
 
-    const preserve = {
+    const viewParam = currentView === "active" ? undefined : currentView;
+    const preserve: Record<string, string | undefined> = {
       status: statusFilter,
       cycleId: cycleFilter,
       sort: sortKey,
       dir: sortDir,
+      view: viewParam,
     };
-    const filterPreserve = {
+    const filterPreserve: Record<string, string | undefined> = {
       cycleId: preserve.cycleId,
       sort: preserve.sort,
       dir: preserve.dir,
+      view: preserve.view,
     };
+    // For the view-tab links: drop the status pill so a "Deleted" tab
+    // doesn't get an unhelpful status filter inherited from elsewhere.
+    const viewPreserve: Record<string, string | undefined> = {
+      cycleId: cycleFilter,
+      sort: sortKey,
+      dir: sortDir,
+    };
+
+    // IDs the bulk toolbar / "select all" header treats as selectable.
+    const allVisibleIds = apps.map((a) => a.id);
 
     return (
         <main className="mx-auto max-w-6xl space-y-6 px-6 py-10">
@@ -180,6 +245,28 @@ export default async function AdmissionsAdminListPage({
               </LinkButton>
             }
           />
+
+          {/* View tabs — Active / Archived / Deleted */}
+          <div className="flex flex-wrap items-center gap-2 border-b border-[color:var(--color-border-subtle)] pb-3">
+            <ViewTab
+              href={hrefWith(BASE, { ...viewPreserve, view: undefined })}
+              label={t("viewActive")}
+              count={activeCount}
+              active={currentView === "active"}
+            />
+            <ViewTab
+              href={hrefWith(BASE, { ...viewPreserve, view: "archived" })}
+              label={t("viewArchived")}
+              count={archivedCount}
+              active={currentView === "archived"}
+            />
+            <ViewTab
+              href={hrefWith(BASE, { ...viewPreserve, view: "deleted" })}
+              label={t("viewDeleted")}
+              count={deletedCount}
+              active={currentView === "deleted"}
+            />
+          </div>
 
           {/* Cycle filter — auto-submits on change via UrlSelect */}
           <div className="max-w-xs">
@@ -212,32 +299,38 @@ export default async function AdmissionsAdminListPage({
             ))}
           </div>
 
-          <ApplicationGroup
-            title={t("groupNewFamily")}
-            description={t("groupNewFamilyHint")}
-            icon={Sparkles}
-            iconTone="bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-600)]"
-            apps={newFamilyApps}
-            emptyLabel={t("groupEmpty")}
-            t={t}
-            sortKey={sortKey}
-            sortDir={sortDir}
-            preserve={preserve}
-          />
+          {/* Bulk selection context wraps both groups, so the toolbar can
+              act across new- and existing-family selections at once. */}
+          <BulkSelectionProvider allIds={allVisibleIds}>
+            <AdmissionsBulkToolbar view={currentView} />
 
-          <ApplicationGroup
-            title={t("groupExistingFamily")}
-            description={t("groupExistingFamilyHint")}
-            icon={Users}
-            iconTone="bg-[color:var(--color-success-soft)] text-[color:var(--color-success-soft-fg)]"
-            apps={existingFamilyApps}
-            emptyLabel={t("groupEmpty")}
-            t={t}
-            sortKey={sortKey}
-            sortDir={sortDir}
-            preserve={preserve}
-            showChildCount
-          />
+            <ApplicationGroup
+              title={t("groupNewFamily")}
+              description={t("groupNewFamilyHint")}
+              icon={Sparkles}
+              iconTone="bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-600)]"
+              apps={newFamilyApps}
+              emptyLabel={t("groupEmpty")}
+              t={t}
+              sortKey={sortKey}
+              sortDir={sortDir}
+              preserve={preserve}
+            />
+
+            <ApplicationGroup
+              title={t("groupExistingFamily")}
+              description={t("groupExistingFamilyHint")}
+              icon={Users}
+              iconTone="bg-[color:var(--color-success-soft)] text-[color:var(--color-success-soft-fg)]"
+              apps={existingFamilyApps}
+              emptyLabel={t("groupEmpty")}
+              t={t}
+              sortKey={sortKey}
+              sortDir={sortDir}
+              preserve={preserve}
+              showChildCount
+            />
+          </BulkSelectionProvider>
         </main>
     );
   });
@@ -289,6 +382,9 @@ function ApplicationGroup({
       <Table>
         <THead>
           <tr>
+            <TH className="w-[1%] pe-0">
+              <BulkHeaderCheckbox ariaLabel={t("bulkSelectAllLabel")} />
+            </TH>
             <SortableTH
               label={t("colChild")}
               column="child"
@@ -328,10 +424,27 @@ function ApplicationGroup({
         </THead>
         <tbody>
           {apps.length === 0 ? (
-            <EmptyRow colSpan={7}>{emptyLabel}</EmptyRow>
+            <EmptyRow colSpan={8}>{emptyLabel}</EmptyRow>
           ) : (
             apps.map((a) => (
-              <TR key={a.id}>
+              <TR
+                key={a.id}
+                className={
+                  a.deleted
+                    ? "opacity-50"
+                    : a.archived
+                      ? "opacity-60"
+                      : undefined
+                }
+              >
+                <TD className="pe-0">
+                  <BulkRowCheckbox
+                    id={a.id}
+                    ariaLabel={t("bulkSelectRow", {
+                      name: `${a.childLastName} ${a.childFirstName}`,
+                    })}
+                  />
+                </TD>
                 <TD>
                   <Link
                     href={`/admissions-admin/${a.id}`}
@@ -340,6 +453,15 @@ function ApplicationGroup({
                     <span className="font-medium text-[color:var(--color-foreground)] transition-colors group-hover:text-[color:var(--color-brand-600)]">
                       {a.childLastName} {a.childFirstName}
                     </span>
+                    {a.deleted ? (
+                      <span className="inline-flex items-center rounded-full bg-[color:var(--color-danger)]/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[color:var(--color-danger)]">
+                        {t("deletedBadge")}
+                      </span>
+                    ) : a.archived ? (
+                      <span className="inline-flex items-center rounded-full bg-[color:var(--color-surface-sunken)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[color:var(--color-foreground-muted)]">
+                        {t("archivedBadge")}
+                      </span>
+                    ) : null}
                     {a.isRenewal ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--color-brand-50)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[color:var(--color-brand-700)]">
                         <RefreshCw className="size-2.5" aria-hidden />
@@ -374,12 +496,21 @@ function ApplicationGroup({
                   />
                 </TD>
                 <TD className="text-end">
-                  <Link
-                    href={`/admissions-admin/${a.id}`}
-                    className="inline-flex items-center gap-1 text-sm font-medium text-[color:var(--color-brand-600)] transition-colors hover:text-[color:var(--color-brand-700)] hover:underline"
-                  >
-                    <ArrowRight className="size-3.5" aria-hidden />
-                  </Link>
+                  <div className="inline-flex items-center gap-1">
+                    <AdmissionRowActions
+                      applicationId={a.id}
+                      childLabel={`${a.childLastName} ${a.childFirstName}`}
+                      archived={a.archived}
+                      deleted={a.deleted}
+                    />
+                    <Link
+                      href={`/admissions-admin/${a.id}`}
+                      className="inline-flex size-7 items-center justify-center rounded text-[color:var(--color-brand-600)] transition-colors hover:bg-[color:var(--color-surface-sunken)] hover:text-[color:var(--color-brand-700)]"
+                      aria-label={t("openApplication")}
+                    >
+                      <ArrowRight className="size-3.5" aria-hidden />
+                    </Link>
+                  </div>
                 </TD>
               </TR>
             ))
@@ -400,4 +531,45 @@ function hrefWith(
   }
   const qs = sp.toString();
   return qs ? `${base}?${qs}` : base;
+}
+
+function ViewTab({
+  href,
+  label,
+  count,
+  active,
+}: {
+  href: string;
+  label: string;
+  count: number;
+  active: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={
+        active
+          ? "relative inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-[color:var(--color-foreground)] transition-colors"
+          : "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-[color:var(--color-foreground-muted)] transition-colors hover:bg-[color:var(--color-surface-sunken)] hover:text-[color:var(--color-foreground)]"
+      }
+    >
+      <span>{label}</span>
+      <span
+        className={
+          active
+            ? "inline-flex min-w-[20px] items-center justify-center rounded-full bg-[color:var(--color-brand-50)] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[color:var(--color-brand-700)]"
+            : "inline-flex min-w-[20px] items-center justify-center rounded-full bg-[color:var(--color-surface-sunken)] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[color:var(--color-foreground-muted)]"
+        }
+      >
+        {count}
+      </span>
+      {active ? (
+        <span
+          aria-hidden
+          className="absolute -bottom-3 left-0 right-0 h-0.5 rounded-full bg-[color:var(--color-brand-600)]"
+        />
+      ) : null}
+    </Link>
+  );
 }

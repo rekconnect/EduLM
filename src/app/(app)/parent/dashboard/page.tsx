@@ -97,6 +97,8 @@ export default async function ParentDashboardPage() {
           submittedByUserId: user.id,
           existingStudentId: null,
           status: { in: ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "INTERVIEW_SCHEDULED", "WAITLISTED"] },
+          archived: false,
+          deletedAt: null,
         },
         orderBy: { updatedAt: "desc" },
         select: {
@@ -332,7 +334,7 @@ async function NoChildrenState({
 }) {
   const t = await getTranslations("parent");
   const apps = await db.application.findMany({
-    where: { submittedByUserId: user.id },
+    where: { submittedByUserId: user.id, archived: false, deletedAt: null },
     orderBy: { createdAt: "desc" },
     take: 5,
     include: { cycle: { select: { label: true } } },

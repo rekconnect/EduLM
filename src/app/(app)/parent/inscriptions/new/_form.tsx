@@ -5,12 +5,6 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Field, FormRow } from "@/components/ui/field";
-import {
-  FieldsRenderer,
-  type FieldAnswers,
-  type FieldExtras,
-} from "@/components/fields-renderer";
-import type { EntityFieldsConfig } from "@/lib/entity-fields";
 import { createDossier, type DossierFormState } from "../_actions";
 
 export type CycleOption = {
@@ -29,17 +23,10 @@ export function DossierForm({
   cycles,
   establishments,
   schoolName,
-  extraConfig,
 }: {
   cycles: CycleOption[];
   establishments: EstablishmentOption[];
   schoolName: string;
-  /**
-   * Admin-defined student fields marked `showOnDossierCreate`. Rendered as
-   * an extra section below the structural quick-form inputs. Their answers
-   * go into Application.studentAnswers via `createDossier`.
-   */
-  extraConfig?: EntityFieldsConfig;
 }) {
   const t = useTranslations("admissions");
   const tCommon = useTranslations("common");
@@ -52,7 +39,6 @@ export function DossierForm({
   // case: exactly one cycle — hidden field, no UI clutter.
   const [cycleId, setCycleId] = useState<string>(cycles[0]?.id ?? "");
   const [establishmentId, setEstablishmentId] = useState<string>("");
-  const [extraAnswers, setExtraAnswers] = useState<FieldAnswers>({});
 
   // Cascading: the niveau dropdown's options come from the selected
   // establishment's levels array. Empty array → free-text input fallback.
@@ -60,20 +46,6 @@ export function DossierForm({
     () => establishments.find((e) => e.id === establishmentId),
     [establishmentId, establishments],
   );
-
-  const rendererExtras: FieldExtras = useMemo(
-    () => ({
-      establishments: establishments.map((e) => ({
-        id: e.id,
-        name: e.name,
-        levels: e.levels,
-      })),
-    }),
-    [establishments],
-  );
-
-  const hasExtra =
-    !!extraConfig && extraConfig.fields.length > 0;
 
   return (
     <form action={formAction} className="space-y-6">
@@ -217,30 +189,6 @@ export function DossierForm({
           </Field>
         </FormRow>
       </div>
-
-      {/* Extra student fields the admin opted into the quick form. Same
-          renderer the full edit page uses, so cross-field cascades + presets
-          all work here too. Answers are submitted as `extra-<fieldId>` form
-          entries and unpacked server-side. */}
-      {hasExtra && extraConfig ? (
-        <div className="space-y-4 border-t border-[color:var(--color-border-subtle)] pt-6">
-          <FieldsRenderer
-            config={extraConfig}
-            answers={extraAnswers}
-            extras={rendererExtras}
-            onChange={(id, value) =>
-              setExtraAnswers((prev) => ({ ...prev, [id]: value }))
-            }
-          />
-          {/* Carry the extra answers through the form action via a hidden
-              JSON blob — keeps the action signature simple. */}
-          <input
-            type="hidden"
-            name="extraStudentAnswers"
-            value={JSON.stringify(extraAnswers)}
-          />
-        </div>
-      ) : null}
 
       {state.formError ? (
         <p className="text-sm text-[color:var(--color-danger)]" role="alert">

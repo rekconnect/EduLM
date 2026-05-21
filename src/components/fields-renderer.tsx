@@ -40,6 +40,18 @@ export type FieldExtras = {
     name?: string | null;
     email?: string | null;
   };
+  /**
+   * Dossier identity values from the Application row. Used to mirror these
+   * values into custom student fields that have `dossierBoundTo` set —
+   * read-only display, the canonical edit happens in the Identité section.
+   */
+  dossier?: {
+    childFirstName?: string | null;
+    childLastName?: string | null;
+    childDob?: string | null;
+    establishment?: string | null;
+    niveau?: string | null;
+  };
 };
 
 /**
@@ -52,6 +64,14 @@ export function resolveInitialValue(
   storedValue: string,
   extras?: FieldExtras,
 ): string {
+  // dossierBoundTo wins over storedValue — the field always reflects the
+  // canonical dossier identity, not whatever was previously persisted in
+  // the answers JSON. Otherwise admin edits in the identity section
+  // wouldn't propagate to the mirrored field.
+  if (field.dossierBoundTo && extras?.dossier) {
+    const v = extras.dossier[field.dossierBoundTo];
+    if (typeof v === "string" && v.length > 0) return v;
+  }
   if (storedValue && storedValue.length > 0) return storedValue;
   if (field.userBoundTo && extras?.user) {
     const u = extras.user;
@@ -150,6 +170,12 @@ function FieldInput({
   allAnswers: FieldAnswers;
   disabled: boolean;
 }) {
+  // Fields bound to dossier identity are read-only — the canonical edit
+  // happens in the Identité section. Force disabled regardless of the
+  // section-level prop.
+  const isMirrored = !!field.dossierBoundTo;
+  const effectiveDisabled = disabled || isMirrored;
+
   const commonProps = {
     id: `f-${field.id}`,
     name: `f-${field.id}`,
@@ -157,7 +183,7 @@ function FieldInput({
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       onChange(e.target.value),
     required: field.required,
-    disabled,
+    disabled: effectiveDisabled,
   };
 
   let input: React.ReactNode;
@@ -233,7 +259,7 @@ function FieldInput({
           value={value}
           onChange={onChange}
           establishments={extras?.establishments ?? []}
-          disabled={disabled}
+          disabled={effectiveDisabled}
         />
       );
     }
@@ -245,7 +271,7 @@ function FieldInput({
           field={field}
           value={value}
           onChange={onChange}
-          disabled={disabled}
+          disabled={effectiveDisabled}
         />
       );
     }
@@ -263,7 +289,7 @@ function FieldInput({
       const kaza = sepIdx >= 0 ? rawSource.slice(0, sepIdx) : rawSource;
       const opts = LEBANON_TOWNS_BY_KAZA[kaza] ?? [];
       input = (
-        <Select {...commonProps} disabled={disabled || !kaza}>
+        <Select {...commonProps} disabled={effectiveDisabled || !kaza}>
           <option value="">—</option>
           {opts.map((tw) => (
             <option key={tw} value={tw}>
@@ -292,7 +318,7 @@ function FieldInput({
       input = (
         <Select
           {...commonProps}
-          disabled={disabled || !establishmentName || opts.length === 0}
+          disabled={effectiveDisabled || !establishmentName || opts.length === 0}
         >
           <option value="">—</option>
           {opts.map((lv) => (

@@ -7,6 +7,7 @@ import { db, unscopedDb } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
 import {
+  evaluateShowIf,
   parseEntityFieldsConfig,
   type EntityFieldsConfig,
 } from "@/lib/entity-fields";
@@ -57,36 +58,9 @@ export async function createDossier(
     return { errors };
   }
 
-  // Parse the quick-form's extra student answers (admin-configured fields
-  // with showOnDossierCreate). Filter against the tenant's student field
-  // config so the parent can't smuggle in arbitrary keys.
-  let extraAnswers: Record<string, string> = {};
-  try {
-    const raw = String(formData.get("extraStudentAnswers") ?? "{}");
-    const parsedExtras = JSON.parse(raw);
-    if (parsedExtras && typeof parsedExtras === "object") {
-      const tenantConfig = await unscopedDb().tenant.findUnique({
-        where: { id: tenantId },
-        select: { studentFieldsConfig: true },
-      });
-      const config = parseEntityFieldsConfig(tenantConfig?.studentFieldsConfig);
-      const validIds = new Set(
-        config.fields.filter((f) => f.showOnDossierCreate).map((f) => f.id),
-      );
-      for (const [k, v] of Object.entries(parsedExtras as Record<string, unknown>)) {
-        if (!validIds.has(k)) continue;
-        if (typeof v !== "string") continue;
-        const value = v.trim();
-        if (value.length === 0) continue;
-        if (value.length > 2000) continue;
-        extraAnswers[k] = value;
-      }
-    }
-  } catch {
-    // Malformed extras → just ignore them. The parent can re-enter on the
-    // full edit page.
-    extraAnswers = {};
-  }
+  // (showOnDossierCreate was removed — the quick form is structural-only.
+  // All other student answers go through the full dossier edit page.)
+  const extraAnswers: Record<string, string> = {};
 
   let newId: string | undefined;
   await runWithTenant({ tenantId, slug: null }, async () => {
@@ -335,18 +309,22 @@ export async function submitDossier(
     const parentAns = (app.parentAnswers ?? {}) as Record<string, string>;
     const studentAns = (app.studentAnswers ?? {}) as Record<string, string>;
 
-    // Collect labels of required fields the parent left empty. Hidden-by-
-    // showIf fields don't count; if the gate condition isn't met, they
-    // aren't required.
+    // Collect labels of required fields the parent left empty.
+    //
+    // A field is "required to fill" only when it would actually render —
+    // i.e. evaluateShowIf returns true. That covers all visibility rules:
+    // hideIf wins (field hidden → not required), showIf with equals/
+    // equalsAny/anyValue all evaluated. A field hidden by either rule is
+    // skipped entirely, regardless of its `required` flag.
     const missing: string[] = [];
     for (const f of parentConfig.fields) {
       if (!f.required) continue;
-      if (f.showIf && parentAns[f.showIf.fieldId] !== f.showIf.equals) continue;
+      if (!evaluateShowIf(f, parentAns)) continue;
       if ((parentAns[f.id] ?? "").trim() === "") missing.push(f.label);
     }
     for (const f of studentConfig.fields) {
       if (!f.required) continue;
-      if (f.showIf && studentAns[f.showIf.fieldId] !== f.showIf.equals) continue;
+      if (!evaluateShowIf(f, studentAns)) continue;
       if ((studentAns[f.id] ?? "").trim() === "") missing.push(f.label);
     }
 

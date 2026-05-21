@@ -29,6 +29,7 @@ export const FIELD_TYPES = [
   "lebanon_town_for_kaza",
   "establishment_ref",
   "establishment_with_niveau",
+  "niveau_for_establishment",
   "date",
   "number",
   "phone",
@@ -54,11 +55,13 @@ export const PRESET_LOOKUP_TYPES: ReadonlySet<FieldType> = new Set([
   "lebanon_town_for_kaza",
   "establishment_ref",
   "establishment_with_niveau",
+  "niveau_for_establishment",
 ]);
 
 /** Subset that needs a source-field reference picker in the admin UI. */
 export const CROSS_FIELD_LOOKUP_TYPES: ReadonlySet<FieldType> = new Set([
   "lebanon_town_for_kaza",
+  "niveau_for_establishment",
 ]);
 
 /**
@@ -85,8 +88,25 @@ export type FieldCategory = {
 export type ConditionalRule = {
   /** Field id whose value drives visibility. */
   fieldId: string;
-  /** Show this field only when the referenced field's value equals this. */
-  equals: string;
+  /**
+   * Show this field only when the referenced field's value equals this.
+   * Single-value form. Ignored when `anyValue` or `equalsAny` is set.
+   * Kept for backwards compatibility with rules saved before multi-value
+   * matching landed — new admin saves write `equalsAny` instead.
+   */
+  equals?: string;
+  /**
+   * Show this field when the referenced field's value equals ANY of these.
+   * OR-match across the list (e.g. show when level is "6ème" OR "5ème" OR
+   * "4ème"). Takes precedence over `equals`.
+   */
+  equalsAny?: string[];
+  /**
+   * When true, show this field whenever the referenced field has ANY
+   * non-empty value. Useful for "show optional follow-up if the parent
+   * picked anything in the previous dropdown" patterns.
+   */
+  anyValue?: boolean;
 };
 
 /**
@@ -129,6 +149,12 @@ export type FieldDef = {
    */
   showIf?: ConditionalRule;
   /**
+   * Conditional HIDE. When this rule matches, the field is hidden even if
+   * showIf matches. Use for mutual-exclusion patterns (e.g. hide Passport
+   * when ID number has any value, and vice versa).
+   */
+  hideIf?: ConditionalRule;
+  /**
    * Cross-field options source. Used by types like `lebanon_town_for_kaza`:
    * the field's dropdown options derive from looking up `answers[fieldId]`
    * in a built-in mapping. Admin picks the source field at config time.
@@ -141,6 +167,13 @@ export type FieldDef = {
    * as usual — User columns are NOT modified from this flow.
    */
   userBoundTo?: UserBoundProp;
+  /**
+   * If true, this field also appears on the initial "+ Créer un dossier"
+   * quick form. Otherwise it only shows up on the full dossier edit page.
+   * Lets the admin extend the quick form with additional questions
+   * (passport number, languages, etc.) without forcing every field into it.
+   */
+  showOnDossierCreate?: boolean;
 };
 
 export type EntityFieldsConfig = {
@@ -191,7 +224,12 @@ export function parseEntityFieldsConfig(raw: unknown): EntityFieldsConfig {
           options: Array.isArray(f.options) ? f.options : undefined,
           categoryId: f.categoryId,
           order: f.order ?? 0,
-          showIf: isCondition(f.showIf) ? f.showIf : undefined,
+          showIf: isCondition(f.showIf)
+            ? cloneRule(f.showIf)
+            : undefined,
+          hideIf: isCondition(f.hideIf)
+            ? cloneRule(f.hideIf)
+            : undefined,
           optionsSource: isOptionsSource(f.optionsSource)
             ? f.optionsSource
             : undefined,
@@ -200,6 +238,7 @@ export function parseEntityFieldsConfig(raw: unknown): EntityFieldsConfig {
             (USER_BOUND_PROPS as readonly string[]).includes(f.userBoundTo)
               ? (f.userBoundTo as UserBoundProp)
               : undefined,
+          showOnDossierCreate: f.showOnDossierCreate === true ? true : undefined,
         }))
       : [],
   };
@@ -226,7 +265,29 @@ function isField(raw: unknown): raw is FieldDef {
 function isCondition(raw: unknown): raw is ConditionalRule {
   if (!raw || typeof raw !== "object") return false;
   const c = raw as Partial<ConditionalRule>;
-  return typeof c.fieldId === "string" && typeof c.equals === "string";
+  if (typeof c.fieldId !== "string") return false;
+  // Need at least one of the match modes set.
+  return (
+    typeof c.equals === "string" ||
+    (Array.isArray(c.equalsAny) && c.equalsAny.length > 0) ||
+    c.anyValue === true
+  );
+}
+
+/** Strip a parsed ConditionalRule to its canonical shape. */
+function cloneRule(r: ConditionalRule): ConditionalRule {
+  return {
+    fieldId: r.fieldId,
+    ...(typeof r.equals === "string" ? { equals: r.equals } : {}),
+    ...(Array.isArray(r.equalsAny)
+      ? {
+          equalsAny: r.equalsAny.filter(
+            (s): s is string => typeof s === "string",
+          ),
+        }
+      : {}),
+    ...(r.anyValue === true ? { anyValue: true } : {}),
+  };
 }
 
 function isOptionsSource(raw: unknown): raw is { fieldId: string } {
@@ -264,11 +325,41 @@ export function fieldsByCategory(
 /**
  * Evaluate a field's conditional visibility given the current answer set.
  * Returns true when the field should render (no condition, or condition met).
+ *
+ * Modes:
+ *   - `anyValue: true` → match if the source field has any non-empty answer
+ *   - `equals: "..."` → match if the source field's value equals exactly
+ */
+/**
+ * Match a single condition against the current answer set.
+ * Modes: `anyValue` > `equalsAny` > `equals` (single).
+ */
+function matchesRule(
+  rule: ConditionalRule,
+  answers: Record<string, string>,
+): boolean {
+  const sourceValue = (answers[rule.fieldId] ?? "").trim();
+  if (rule.anyValue) return sourceValue.length > 0;
+  if (Array.isArray(rule.equalsAny) && rule.equalsAny.length > 0) {
+    return rule.equalsAny.some((v) => v.trim() === sourceValue);
+  }
+  return sourceValue === (rule.equals ?? "");
+}
+
+/**
+ * Evaluate a field's conditional visibility given the current answer set.
+ * Returns true when the field should render.
+ *
+ * Precedence (top wins):
+ *   1. `hideIf` matches → hide
+ *   2. `showIf` exists → must match
+ *   3. No conditions → show
  */
 export function evaluateShowIf(
   field: FieldDef,
   answers: Record<string, string>,
 ): boolean {
-  if (!field.showIf) return true;
-  return (answers[field.showIf.fieldId] ?? "") === field.showIf.equals;
+  if (field.hideIf && matchesRule(field.hideIf, answers)) return false;
+  if (field.showIf) return matchesRule(field.showIf, answers);
+  return true;
 }

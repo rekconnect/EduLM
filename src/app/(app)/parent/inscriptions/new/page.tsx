@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody } from "@/components/ui/card";
 import { db } from "@/lib/db";
 import { withTenantSession } from "@/lib/session";
+import { loadEntityFieldsConfig } from "../../../settings/_actions";
 import { DossierForm, type EstablishmentOption } from "./_form";
 
 export default async function NewDossierPage() {
@@ -17,30 +18,40 @@ export default async function NewDossierPage() {
     // Active, currently-open cycles + the tenant's establishment list, in
     // parallel since they're independent.
     const now = new Date();
-    const [activeCycles, establishments, tenant] = await Promise.all([
-      db.admissionCycle.findMany({
-        where: {
-          isActive: true,
-          openAt: { lte: now },
-          OR: [{ closeAt: null }, { closeAt: { gte: now } }],
-        },
-        orderBy: { openAt: "desc" },
-        select: { id: true, label: true, targetYearLabel: true },
-      }),
-      db.establishment.findMany({
-        where: { isActive: true },
-        orderBy: [{ order: "asc" }, { name: "asc" }],
-        select: { id: true, name: true, levels: true },
-      }),
-      user.tenantId
-        ? db.tenant
-            .findUnique({
-              where: { id: user.tenantId },
-              select: { name: true },
-            })
-            .catch(() => null)
-        : Promise.resolve(null),
-    ]);
+    const [activeCycles, establishments, tenant, studentFieldsConfig] =
+      await Promise.all([
+        db.admissionCycle.findMany({
+          where: {
+            isActive: true,
+            openAt: { lte: now },
+            OR: [{ closeAt: null }, { closeAt: { gte: now } }],
+          },
+          orderBy: { openAt: "desc" },
+          select: { id: true, label: true, targetYearLabel: true },
+        }),
+        db.establishment.findMany({
+          where: { isActive: true },
+          orderBy: [{ order: "asc" }, { name: "asc" }],
+          select: { id: true, name: true, levels: true },
+        }),
+        user.tenantId
+          ? db.tenant
+              .findUnique({
+                where: { id: user.tenantId },
+                select: { name: true },
+              })
+              .catch(() => null)
+          : Promise.resolve(null),
+        loadEntityFieldsConfig("student"),
+      ]);
+
+    // Only the student fields marked `showOnDossierCreate` go in the quick
+    // form — admin opts each one in. Categories are preserved so the form
+    // groups them the same way as the full edit page.
+    const quickStudentConfig = {
+      categories: studentFieldsConfig.categories,
+      fields: studentFieldsConfig.fields.filter((f) => f.showOnDossierCreate),
+    };
 
     if (activeCycles.length === 0) notFound();
 
@@ -76,6 +87,7 @@ export default async function NewDossierPage() {
               cycles={activeCycles}
               establishments={establishmentOptions}
               schoolName={tenant?.name ?? ""}
+              extraConfig={quickStudentConfig}
             />
           </CardBody>
         </Card>

@@ -324,8 +324,32 @@ const fieldSchema = z.object({
   showIf: z
     .object({
       fieldId: z.string().trim().min(1).max(80),
-      equals: z.string().trim().max(200),
+      equals: z.string().trim().max(200).optional(),
+      equalsAny: z.array(z.string().trim().min(1).max(200)).max(50).optional(),
+      anyValue: z.boolean().optional(),
     })
+    .refine(
+      (s) =>
+        s.anyValue === true ||
+        typeof s.equals === "string" ||
+        (Array.isArray(s.equalsAny) && s.equalsAny.length > 0),
+      "showIf needs anyValue, equals, or equalsAny",
+    )
+    .optional(),
+  hideIf: z
+    .object({
+      fieldId: z.string().trim().min(1).max(80),
+      equals: z.string().trim().max(200).optional(),
+      equalsAny: z.array(z.string().trim().min(1).max(200)).max(50).optional(),
+      anyValue: z.boolean().optional(),
+    })
+    .refine(
+      (s) =>
+        s.anyValue === true ||
+        typeof s.equals === "string" ||
+        (Array.isArray(s.equalsAny) && s.equalsAny.length > 0),
+      "hideIf needs anyValue, equals, or equalsAny",
+    )
     .optional(),
   optionsSource: z
     .object({
@@ -333,6 +357,7 @@ const fieldSchema = z.object({
     })
     .optional(),
   userBoundTo: z.enum(USER_BOUND_PROPS).optional(),
+  showOnDossierCreate: z.boolean().optional(),
 });
 
 const categorySchema = z.object({

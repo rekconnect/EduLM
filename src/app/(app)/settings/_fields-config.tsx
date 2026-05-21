@@ -186,16 +186,33 @@ export function FieldsConfigForm({ entity, initial }: Props) {
   }
 
   function onSubmit() {
+    // Re-number `order` PER CATEGORY (not across the whole flat array) so
+    // each field's position within its category is preserved exactly as the
+    // admin arranged it. The previous flat-index approach silently broke
+    // per-category ordering whenever fields lived in multiple categories.
+    const perCategoryCounter = new Map<string, number>();
+    const orderedFields = [...fields]
+      .sort((a, b) => a.order - b.order)
+      .map((f) => {
+        const idx = perCategoryCounter.get(f.categoryId) ?? 0;
+        perCategoryCounter.set(f.categoryId, idx + 1);
+        return {
+          ...f,
+          order: idx,
+          key: (f.key || slugifyKey(f.label)).trim(),
+          label: f.label.trim(),
+        };
+      });
+
     const fd = new FormData();
     const payload = {
       entity,
-      categories: categories.map((c, i) => ({ ...c, order: i, name: c.name.trim() })),
-      fields: fields.map((f, i) => ({
-        ...f,
+      categories: categories.map((c, i) => ({
+        ...c,
         order: i,
-        key: (f.key || slugifyKey(f.label)).trim(),
-        label: f.label.trim(),
+        name: c.name.trim(),
       })),
+      fields: orderedFields,
     };
     fd.append("config", JSON.stringify(payload));
     startTransition(async () => {
@@ -369,17 +386,24 @@ function FieldRow({
     isPreset && !isDynamic && !isCrossField
       ? (presetOptionsForType(field.type)?.length ?? 0)
       : 0;
-  // For lebanon_town_for_kaza, the source field must be either a plain
-  // `lebanon_region` field OR a `lebanon_kaza_with_town` compound (we'll
-  // extract just the caza half from the compound value at render time).
-  const sourceCandidates =
+  // For cross-field types, the allowed source field types depend on which
+  // compound the field is feeding off.
+  //   lebanon_town_for_kaza ← lebanon_region | lebanon_kaza_with_town
+  //   niveau_for_establishment ← establishment_ref | establishment_with_niveau
+  const sourceCandidates: FieldDef[] =
     field.type === "lebanon_town_for_kaza"
       ? referenceable.filter(
           (rf) =>
             rf.type === "lebanon_region" ||
             rf.type === "lebanon_kaza_with_town",
         )
-      : [];
+      : field.type === "niveau_for_establishment"
+        ? referenceable.filter(
+            (rf) =>
+              rf.type === "establishment_ref" ||
+              rf.type === "establishment_with_niveau",
+          )
+        : [];
 
   return (
     <li className="rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] p-3">
@@ -480,15 +504,23 @@ function FieldRow({
         </p>
       ) : null}
 
-      {field.type === "lebanon_town_for_kaza" ? (
+      {isCrossField ? (
         <div className="mt-2 rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-sunken)]/60 p-3">
           <Field
-            label={t("fieldsConfig.townSourceField")}
-            htmlFor={`townsrc-${field.id}`}
-            hint={t("fieldsConfig.townSourceHint")}
+            label={
+              field.type === "niveau_for_establishment"
+                ? t("fieldsConfig.niveauSourceField")
+                : t("fieldsConfig.townSourceField")
+            }
+            htmlFor={`xsrc-${field.id}`}
+            hint={
+              field.type === "niveau_for_establishment"
+                ? t("fieldsConfig.niveauSourceHint")
+                : t("fieldsConfig.townSourceHint")
+            }
           >
             <Select
-              id={`townsrc-${field.id}`}
+              id={`xsrc-${field.id}`}
               value={field.optionsSource?.fieldId ?? ""}
               onChange={(e) => {
                 const v = e.target.value;
@@ -507,7 +539,9 @@ function FieldRow({
           </Field>
           {sourceCandidates.length === 0 ? (
             <p className="mt-1 text-xs text-[color:var(--color-warning)]">
-              {t("fieldsConfig.townSourceMissing")}
+              {field.type === "niveau_for_establishment"
+                ? t("fieldsConfig.niveauSourceMissing")
+                : t("fieldsConfig.townSourceMissing")}
             </p>
           ) : null}
         </div>
@@ -575,22 +609,169 @@ function FieldRow({
           <Field
             label={t("fieldsConfig.showIfEquals")}
             htmlFor={`showif-eq-${field.id}`}
+            hint={
+              field.showIf?.anyValue
+                ? t("fieldsConfig.showIfAnyHint")
+                : t("fieldsConfig.showIfEqualsAnyHint")
+            }
           >
-            <Input
+            {/* Multi-value OR matching. One value per line. The first save
+                migrates a legacy `equals` (single string) into `equalsAny`. */}
+            <Textarea
               id={`showif-eq-${field.id}`}
-              disabled={!field.showIf}
-              value={field.showIf?.equals ?? ""}
-              onChange={(e) =>
-                onUpdate({
-                  showIf: field.showIf
-                    ? { ...field.showIf, equals: e.target.value }
-                    : undefined,
-                })
+              rows={2}
+              disabled={!field.showIf || !!field.showIf.anyValue}
+              value={
+                field.showIf?.equalsAny
+                  ? field.showIf.equalsAny.join("\n")
+                  : field.showIf?.equals ?? ""
               }
-              placeholder="6ème"
-              maxLength={200}
+              onChange={(e) => {
+                if (!field.showIf) return;
+                const lines = e.target.value
+                  .split("\n")
+                  .map((s) => s.trim())
+                  .filter((s) => s.length > 0);
+                onUpdate({
+                  showIf: {
+                    fieldId: field.showIf.fieldId,
+                    equalsAny: lines.length > 0 ? lines : undefined,
+                    anyValue: field.showIf.anyValue,
+                    // Drop legacy `equals` — equalsAny supersedes it.
+                  },
+                });
+              }}
+              placeholder="6ème\n5ème\n4ème"
             />
+            <label className="mt-2 inline-flex items-center gap-2 text-xs text-[color:var(--color-foreground-muted)]">
+              <input
+                type="checkbox"
+                disabled={!field.showIf}
+                checked={!!field.showIf?.anyValue}
+                onChange={(e) =>
+                  onUpdate({
+                    showIf: field.showIf
+                      ? {
+                          ...field.showIf,
+                          anyValue: e.target.checked || undefined,
+                        }
+                      : undefined,
+                  })
+                }
+              />
+              {t("fieldsConfig.showIfAnyValue")}
+            </label>
           </Field>
+
+          {/* hideIf — symmetric counterpart. When the rule matches, the field
+              is hidden even if it would otherwise be shown. Use for mutual
+              exclusion (e.g. hide Passport when ID number is filled). */}
+          <Field
+            label={t("fieldsConfig.hideIfField")}
+            htmlFor={`hideif-field-${field.id}`}
+            hint={t("fieldsConfig.hideIfHint")}
+          >
+            <Select
+              id={`hideif-field-${field.id}`}
+              value={field.hideIf?.fieldId ?? ""}
+              onChange={(e) => {
+                const fieldId = e.target.value;
+                if (!fieldId) onUpdate({ hideIf: undefined });
+                else
+                  onUpdate({
+                    hideIf: { fieldId, equals: field.hideIf?.equals ?? "" },
+                  });
+              }}
+            >
+              <option value="">{t("fieldsConfig.hideIfNone")}</option>
+              {referenceable.map((rf) => (
+                <option key={rf.id} value={rf.id}>
+                  {rf.label || rf.key || rf.id}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field
+            label={t("fieldsConfig.hideIfEquals")}
+            htmlFor={`hideif-eq-${field.id}`}
+            hint={
+              field.hideIf?.anyValue
+                ? t("fieldsConfig.hideIfAnyHint")
+                : t("fieldsConfig.showIfEqualsAnyHint")
+            }
+          >
+            <Textarea
+              id={`hideif-eq-${field.id}`}
+              rows={2}
+              disabled={!field.hideIf || !!field.hideIf.anyValue}
+              value={
+                field.hideIf?.equalsAny
+                  ? field.hideIf.equalsAny.join("\n")
+                  : field.hideIf?.equals ?? ""
+              }
+              onChange={(e) => {
+                if (!field.hideIf) return;
+                const lines = e.target.value
+                  .split("\n")
+                  .map((s) => s.trim())
+                  .filter((s) => s.length > 0);
+                onUpdate({
+                  hideIf: {
+                    fieldId: field.hideIf.fieldId,
+                    equalsAny: lines.length > 0 ? lines : undefined,
+                    anyValue: field.hideIf.anyValue,
+                  },
+                });
+              }}
+              placeholder="…"
+            />
+            <label className="mt-2 inline-flex items-center gap-2 text-xs text-[color:var(--color-foreground-muted)]">
+              <input
+                type="checkbox"
+                disabled={!field.hideIf}
+                checked={!!field.hideIf?.anyValue}
+                onChange={(e) =>
+                  onUpdate({
+                    hideIf: field.hideIf
+                      ? {
+                          ...field.hideIf,
+                          anyValue: e.target.checked || undefined,
+                        }
+                      : undefined,
+                  })
+                }
+              />
+              {t("fieldsConfig.hideIfAnyValue")}
+            </label>
+          </Field>
+
+          {/* Student-only: show this field on the dossier-creation quick form
+              (in addition to the full edit page). Lets the admin extend the
+              initial questions without putting everything in the quick form. */}
+          {entity === "student" ? (
+            <div className="sm:col-span-2">
+              <label className="inline-flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={!!field.showOnDossierCreate}
+                  onChange={(e) =>
+                    onUpdate({
+                      showOnDossierCreate: e.target.checked || undefined,
+                    })
+                  }
+                />
+                <span>
+                  <span className="font-medium text-[color:var(--color-foreground)]">
+                    {t("fieldsConfig.showOnDossierCreate")}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-[color:var(--color-foreground-muted)]">
+                    {t("fieldsConfig.showOnDossierCreateHint")}
+                  </span>
+                </span>
+              </label>
+            </div>
+          ) : null}
 
           {/* Parent-only: link the field to a known User property so the
               parent doesn't re-type their own info on every dossier. */}

@@ -14,6 +14,7 @@ import {
   LEBANON_TOWNS_BY_KAZA,
   presetOptionsForType,
 } from "@/lib/lookups";
+import { splitLegacyName } from "@/lib/names";
 
 export type FieldAnswers = Record<string, string>;
 
@@ -54,8 +55,17 @@ export function resolveInitialValue(
   if (storedValue && storedValue.length > 0) return storedValue;
   if (field.userBoundTo && extras?.user) {
     const u = extras.user;
-    const v = u[field.userBoundTo];
-    if (typeof v === "string" && v.length > 0) return v;
+    const direct = u[field.userBoundTo];
+    if (typeof direct === "string" && direct.length > 0) return direct;
+    // Fallback: parents created via the legacy sign-up flow only have
+    // `User.name` populated, not firstName / lastName. Split on first space
+    // so a "Prénom" bound field still pre-fills sensibly.
+    if (field.userBoundTo === "firstName" && typeof u.name === "string") {
+      return splitLegacyName(u.name).firstName;
+    }
+    if (field.userBoundTo === "lastName" && typeof u.name === "string") {
+      return splitLegacyName(u.name).lastName;
+    }
   }
   return "";
 }
@@ -258,6 +268,36 @@ function FieldInput({
           {opts.map((tw) => (
             <option key={tw} value={tw}>
               {tw}
+            </option>
+          ))}
+        </Select>
+      );
+      break;
+    }
+    case "niveau_for_establishment": {
+      // Cross-field: niveau dropdown driven by an admin-selected source
+      // field of type establishment_ref or establishment_with_niveau.
+      // For the compound source we extract the establishment half.
+      const sourceFieldId = field.optionsSource?.fieldId;
+      const rawSource = sourceFieldId
+        ? (allAnswers[sourceFieldId] ?? "")
+        : "";
+      const sepIdx = rawSource.indexOf(ESTABLISHMENT_NIVEAU_SEPARATOR);
+      const establishmentName =
+        sepIdx >= 0 ? rawSource.slice(0, sepIdx) : rawSource;
+      const matchedEst = (extras?.establishments ?? []).find(
+        (e) => e.name === establishmentName,
+      );
+      const opts = matchedEst?.levels ?? [];
+      input = (
+        <Select
+          {...commonProps}
+          disabled={disabled || !establishmentName || opts.length === 0}
+        >
+          <option value="">—</option>
+          {opts.map((lv) => (
+            <option key={lv} value={lv}>
+              {lv}
             </option>
           ))}
         </Select>

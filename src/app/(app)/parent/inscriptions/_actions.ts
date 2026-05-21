@@ -57,6 +57,37 @@ export async function createDossier(
     return { errors };
   }
 
+  // Parse the quick-form's extra student answers (admin-configured fields
+  // with showOnDossierCreate). Filter against the tenant's student field
+  // config so the parent can't smuggle in arbitrary keys.
+  let extraAnswers: Record<string, string> = {};
+  try {
+    const raw = String(formData.get("extraStudentAnswers") ?? "{}");
+    const parsedExtras = JSON.parse(raw);
+    if (parsedExtras && typeof parsedExtras === "object") {
+      const tenantConfig = await unscopedDb().tenant.findUnique({
+        where: { id: tenantId },
+        select: { studentFieldsConfig: true },
+      });
+      const config = parseEntityFieldsConfig(tenantConfig?.studentFieldsConfig);
+      const validIds = new Set(
+        config.fields.filter((f) => f.showOnDossierCreate).map((f) => f.id),
+      );
+      for (const [k, v] of Object.entries(parsedExtras as Record<string, unknown>)) {
+        if (!validIds.has(k)) continue;
+        if (typeof v !== "string") continue;
+        const value = v.trim();
+        if (value.length === 0) continue;
+        if (value.length > 2000) continue;
+        extraAnswers[k] = value;
+      }
+    }
+  } catch {
+    // Malformed extras → just ignore them. The parent can re-enter on the
+    // full edit page.
+    extraAnswers = {};
+  }
+
   let newId: string | undefined;
   await runWithTenant({ tenantId, slug: null }, async () => {
     // Validate cycle is still open + within this tenant.
@@ -95,6 +126,9 @@ export async function createDossier(
         niveau: parsed.data.niveau,
         // Legacy column still expected by the existing wizard's level dropdown.
         requestedLevel: parsed.data.niveau,
+        // Pre-populate studentAnswers with the quick-form extras so they're
+        // immediately visible on the dossier edit page.
+        studentAnswers: extraAnswers,
         status: "DRAFT",
       },
       select: { id: true },

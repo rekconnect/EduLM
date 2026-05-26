@@ -358,7 +358,7 @@ async function NoChildrenState({
                   {t("noChildren")}
                 </p>
                 <div className="mt-5">
-                  <LinkButton href="/parent/applications/new" className="gap-1.5">
+                  <LinkButton href="/parent/inscriptions/new" className="gap-1.5">
                     <Plus className="size-4" aria-hidden />
                     Nouvelle inscription
                   </LinkButton>

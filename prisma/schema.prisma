@@ -81,6 +81,19 @@ model Tenant {
   //             categories: […], fields: […] } using the entity-fields
   // schema for the custom side.
   parentCreateFieldsConfig Json @default("{}")
+  // Which of the 10 dossier tabs are visible to parents on this tenant.
+  // Stored as { eleve: bool, responsables: bool, foyer: bool, scolarite: bool,
+  // sante: bool, transport: bool, contacts: bool, finance: bool,
+  // justificatifs: bool, validation: bool }. Defaults applied in code so
+  // tenants pre-dating this column still see the right tabs.
+  inscriptionTabsConfig    Json @default("{}")
+  // Per-tenant overrides for the 10-tab inscription dossier's HARDCODED
+  // fields — label per locale, required toggle, hidden toggle. Sparse:
+  // only diverging keys are stored, resetting a field deletes its key
+  // from the JSON. See src/lib/inscription-fields-resolver.ts for the
+  // typed shape (TenantInscriptionFormConfig). Distinct from the
+  // *FieldsConfig columns above (which configure tenant custom fields).
+  inscriptionFormConfig    Json @default("{}")
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
@@ -101,6 +114,10 @@ model Tenant {
   documents        TenantDocument[]
   announcements    Announcement[]
   contactMessages  ContactMessage[]
+  applicationResponsables ApplicationResponsable[]
+  applicationContacts     ApplicationContact[]
+  applicationSiblings     ApplicationSibling[]
+  inscriptionFormAuditLog TenantConfigAuditLog[]
 }
 
 model User {
@@ -147,6 +164,7 @@ model User {
   announcementReads  AnnouncementRead[]
   sentMessages       ContactMessage[]  @relation("ContactSender")
   readMessages       ContactMessage[]  @relation("ContactReader")
+  inscriptionFormAuditEntries TenantConfigAuditLog[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -309,6 +327,23 @@ model Family {
   tenantId  String
   code      String
   name      String?   // optional admin-friendly label, e.g. "Famille El Kady"
+
+  // Foyer-level info shared across all the family's children (Page 3 of
+  // the Montaigne paper form). When a parent registers a second child
+  // we pre-fill this so they don't type it twice.
+  addressStreet  String?
+  addressHood    String?   // quartier
+  addressPostal  String?
+  addressCity    String?
+  addressCountry String?
+  // Image-rights toggles — Montaigne form lists 4 separately rather
+  // than the Eduka single "droits à l'image" yes/no.
+  imageRightsSite   Boolean?  // site web
+  imageRightsBook   Boolean?  // livre souvenir / yearbook
+  imageRightsSocial Boolean?  // réseaux sociaux
+  imageRightsRadio  Boolean?  // web radio
+  imageRightsAnsweredAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -518,6 +553,10 @@ model AdmissionCycle {
   targetYearLabel     String
   openAt              DateTime @default(now())
   closeAt             DateTime?
+  // First day of school for this cycle's target year. Pre-fills the
+  // parent's "Date d'entrée souhaitée" on the Scolarité tab — admin
+  // sets it once per cycle so every dossier inherits the same date.
+  schoolStartDate     DateTime?
   inscriptionFeeCents Int?     @default(0)
   currency            String   @default("USD")
   isActive            Boolean  @default(true)
@@ -561,8 +600,24 @@ model Application {
   childLastName     String
   childDob          DateTime?
   childGender       ChildGender?
+  // Montaigne lists "Nationalité Libanaise" as its own Oui/Non
+  // question, then up to 2 extra nationalities. Stored separately so
+  // admin can filter "Lebanese kids" trivially.
+  childIsLebanese   Boolean?
+  // Lebanese passport / ID number — only meaningful when
+  // childIsLebanese = true; UI hides it otherwise.
+  childPassportLebanese String?
+  // Up to 2 extra nationalities (the 3rd slot was dropped — the
+  // Lebanese passport above replaces it).
   childNationality  String?
+  childNationality2 String?
+  childNationality3 String?
+  // Ville (city) + Pays (country) of birth — Montaigne captures both.
   childPlaceOfBirth String?
+  childBirthCountry String?
+  // الاسم / الشهرة — Arabic first + last name per the official ID.
+  childFirstNameAr  String?
+  childLastNameAr   String?
 
   // Family (Step 2)
   primaryParentName    String
@@ -596,6 +651,34 @@ model Application {
   // so the answers survive on the persistent profile.
   parentAnswers   Json @default("{}")
   studentAnswers  Json @default("{}")
+
+  // ── Dossier (10-tab Eduka-style inscription) ──
+  // Family-situation flags coming off the Responsables tab.
+  monoParental    Boolean  @default(false)
+  // Submitting parent's relation to the child (père / mère / tuteur /
+  // grand-père / etc.). Single value for now — Phase 4 will migrate
+  // this to per-responsable rows on ApplicationResponsable.
+  submitterRelation   String?
+  // Lebanese-nationality Oui/Non for the submitting parent + passport
+  // number when Yes. Phase 4 migrates to ApplicationResponsable.
+  submitterIsLebanese     Boolean?
+  submitterPassportLebanese String?
+  // Up to 2 other nationalities — mirrors the Élève tab layout.
+  submitterNationality   String?
+  submitterNationality2  String?
+
+  // Bag of free-form answers used by the dossier tabs that don't have a
+  // dedicated column yet (Scolarité antérieure rows, EBEP toggles,
+  // pedagogical choices for 2nde/1ère/Tle, transport, restauration,
+  // finance acknowledgements, etc.). Each tab namespaces its keys to
+  // avoid collisions (e.g. "scolarite.previousYear1.school").
+  // Pre-WYSIWYG, the keys are hardcoded in lib/dossier-fields.ts.
+  dossierAnswers  Json @default("{}")
+
+  // Per-tab completion flag. Auto-derived from required-field presence
+  // at save time and cached here for fast À REMPLIR badge rendering.
+  // Shape: { eleve: bool, responsables: bool, foyer: bool, ... }
+  tabsCompleted   Json @default("{}")
 
   // Internal notes (admin-only)
   internalNotes   String?
@@ -634,12 +717,160 @@ model Application {
   establishment    Establishment? @relation(fields: [establishmentId], references: [id], onDelete: SetNull)
   answers          ApplicationAnswer[]
   documents        ApplicationDocument[]
+  responsables     ApplicationResponsable[]
+  contacts         ApplicationContact[]
+  siblings         ApplicationSibling[]
 
   @@unique([cycleId, existingStudentId])
   @@index([tenantId, cycleId, status])
   @@index([tenantId, submittedByUserId])
   @@index([tenantId, status, submittedAt])
   @@index([tenantId, existingStudentId])
+}
+
+// ───────────────────────── Dossier sub-models ─────────────────────────
+// Phase 1 of the 10-tab Eduka-style inscription. These live on the
+// Application (one row per inscription dossier) and capture the rich
+// per-tab content that doesn't fit cleanly into a flat key-value bag.
+
+enum ResponsableKind {
+  PERE
+  MERE
+  TUTEUR
+  AUTRE
+}
+
+/// One row per responsable on the Responsables tab. Montaigne typically
+/// has two (Père + Mère); monoparental families flag `Application.monoParental`
+/// and use a single row. Tuteur or grand-parent is just `kind = AUTRE`.
+///
+/// The Lebanese family registry (No. registre + caza + village) only
+/// belongs to one parent at a time — `holdsRegistre = true` marks them.
+model ApplicationResponsable {
+  id            String   @id @default(cuid())
+  tenantId      String
+  applicationId String
+
+  order         Int             @default(0)
+  kind          ResponsableKind @default(AUTRE)
+  holdsRegistre Boolean         @default(false)
+
+  // Identity (Latin + Arabic per Montaigne form)
+  civility      String?  // Mr / Mme
+  lastName      String?
+  maidenName    String?  // nom de jeune fille
+  firstName     String?
+  firstName2    String?
+  lastNameAr    String?
+  firstNameAr   String?
+
+  // Lebanese-nationality Oui/Non — separate from the dropdowns below
+  // because Montaigne asks the question explicitly.
+  isLebanese     Boolean?
+  // Nationality + passport / ID (up to 2 nationalities like the form)
+  nationality1   String?
+  nationality2   String?
+  passport1No    String?
+  passport1Exp   DateTime?
+  passport2No    String?
+  passport2Exp   DateTime?
+
+  // Contact
+  email           String?
+  emailPro        String?
+  phoneMobile     String?
+  phoneHome       String?
+  phoneWork       String?
+  phonePreferred  String?  // "mobile" | "home" | "work"
+
+  // Family situation + custody (only meaningful when divorced/separated)
+  maritalStatus               String?  // marié / divorcé / séparé / veuf / autre
+  custody                     String?  // pere / mere / autre
+  custodyOther                String?  // free text when "autre"
+  financiallyResponsible      String?  // pere / mere / autre
+  financiallyResponsibleOther String?
+
+  // Professional info
+  employmentStatus  String?  // employed / unemployed / self_employed / retired / other
+  profession        String?
+  professionDetails String?
+  employer          String?
+  jobTitle          String?
+  workAddress       String?
+  workPhone         String?
+  diploma           String?  // dernier diplôme
+
+  // Lycée Montaigne extras
+  isFormerStudent      Boolean?  // ancien élève du lycée
+  allowDirectoryEmail  Boolean?  // accept comité-de-parents email sharing
+
+  // Any tenant-defined extra fields go here.
+  customAnswers Json @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@index([tenantId])
+}
+
+enum ContactKind {
+  URGENCE  // personne à prévenir en cas d'urgence
+  PICKUP   // personne autorisée à récupérer l'enfant
+}
+
+/// "Autres contacts" tab — two stacked lists with identical schema. The
+/// UI enforces that contacts are different people than the responsables.
+model ApplicationContact {
+  id            String      @id @default(cuid())
+  tenantId      String
+  applicationId String
+
+  kind          ContactKind
+  order         Int         @default(0)
+
+  firstName     String
+  lastName      String
+  relation      String?     // e.g. "grand-père", "oncle", "voisin"
+  photoUrl      String?     // optional — Supabase storage path
+  phoneMobile   String?
+  phoneHome     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@index([tenantId])
+}
+
+/// Sibling rows on the Foyer tab — informational only (siblings already
+/// at this school are tracked via Student/Family; this captures siblings
+/// at OTHER schools so admin has a complete family picture).
+model ApplicationSibling {
+  id            String   @id @default(cuid())
+  tenantId      String
+  applicationId String
+
+  order         Int      @default(0)
+  firstName     String
+  birthYear     Int?
+  className     String?  // current class
+  schoolName    String?  // current school
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@index([tenantId])
 }
 
 /// Per-application answers to the cycle's custom questions. The list of
@@ -811,4 +1042,38 @@ model ContactMessage {
 
   @@index([tenantId, status, createdAt])
   @@index([tenantId, fromUserId])
+}
+
+// ───────────────────────── WYSIWYG audit log ─────────────────────────
+// Append-only ledger of every change made via the inscription-form
+// editor at /admin/inscription-config/preview. Written from the
+// saveFieldOverride + resetFieldOverride server actions. No UI consumes
+// it yet — it's data first so we don't lose history. A "Historique des
+// modifications" admin view can land later without a migration.
+
+enum TenantConfigAuditAction {
+  SET
+  RESET
+}
+
+model TenantConfigAuditLog {
+  id            String                  @id @default(cuid())
+  tenantId      String
+  /// User who triggered the change (SCHOOL_ADMIN role, enforced in the action).
+  userId        String
+  /// Registry key from inscription-fields-registry.ts (e.g. "eleve.etatCivil.lastName").
+  fieldKey      String
+  action        TenantConfigAuditAction
+  /// The override that was in place BEFORE this change. Null when the
+  /// field had no override (first edit).
+  previousValue Json?
+  /// The override that's in place AFTER this change. Null for resets.
+  newValue      Json?
+  createdAt     DateTime                @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, fieldKey, createdAt])
 }

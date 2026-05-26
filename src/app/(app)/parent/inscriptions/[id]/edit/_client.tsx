@@ -22,6 +22,7 @@ import {
 export function DossierEditClient({
   applicationId,
   status,
+  section = "both",
   parentConfig,
   studentConfig,
   parentInitial,
@@ -32,6 +33,10 @@ export function DossierEditClient({
 }: {
   applicationId: string;
   status: string;
+  /** Which half to render: "parent" (Responsables tab), "student"
+   *  (Élève tab), or "both" (legacy single-page mode — still used by
+   *  the admin custom-answers editor). */
+  section?: "parent" | "student" | "both";
   parentConfig: EntityFieldsConfig;
   studentConfig: EntityFieldsConfig;
   parentInitial: FieldAnswers;
@@ -128,9 +133,15 @@ export function DossierEditClient({
 
   const extras: FieldExtras = { establishments, user, dossier };
 
+  const showParent = section === "parent" || section === "both";
+  const showStudent = section === "student" || section === "both";
+  // The bottom bar in the new tab shell owns submission. We only show
+  // the inline "Envoyer le dossier" CTA in legacy "both" mode.
+  const showInlineSubmit = section === "both";
+
   return (
     <>
-      {parentConfig.fields.length > 0 ? (
+      {showParent && parentConfig.fields.length > 0 ? (
         <Card>
           <CardHeader title={t("dossierParentSectionTitle")} />
           <CardBody>
@@ -163,7 +174,7 @@ export function DossierEditClient({
         </Card>
       ) : null}
 
-      {studentConfig.fields.length > 0 ? (
+      {showStudent && studentConfig.fields.length > 0 ? (
         <Card>
           <CardHeader title={t("dossierStudentSectionTitle")} />
           <CardBody>
@@ -196,7 +207,7 @@ export function DossierEditClient({
         </Card>
       ) : null}
 
-      {parentConfig.fields.length === 0 && studentConfig.fields.length === 0 ? (
+      {showParent && showStudent && parentConfig.fields.length === 0 && studentConfig.fields.length === 0 ? (
         <Card>
           <CardBody>
             <p className="text-sm text-[color:var(--color-foreground-muted)]">
@@ -206,7 +217,7 @@ export function DossierEditClient({
         </Card>
       ) : null}
 
-      {!isReadOnly && (parentConfig.fields.length > 0 || studentConfig.fields.length > 0) ? (
+      {showInlineSubmit && !isReadOnly && (parentConfig.fields.length > 0 || studentConfig.fields.length > 0) ? (
         <div className="flex items-center justify-end gap-2 pt-2">
           {status === "DRAFT" ? (
             <Button

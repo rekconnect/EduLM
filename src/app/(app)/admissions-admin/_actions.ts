@@ -17,6 +17,9 @@ const cycleSchema = z.object({
   targetYearLabel: z.string().trim().min(1).max(40),
   openAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   closeAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  // First day of school for this cycle's target year (e.g. 2026-09-01).
+  // Pre-fills the parent's "Date d'entrée souhaitée".
+  schoolStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   inscriptionFee: z.string().optional(),
   currency: z.string().trim().length(3),
   description: z.string().max(1000).optional(),
@@ -42,6 +45,8 @@ export async function createCycle(
     targetYearLabel: String(formData.get("targetYearLabel") ?? ""),
     openAt: String(formData.get("openAt") ?? ""),
     closeAt: String(formData.get("closeAt") ?? "") || undefined,
+    schoolStartDate:
+      String(formData.get("schoolStartDate") ?? "") || undefined,
     inscriptionFee: String(formData.get("inscriptionFee") ?? "") || undefined,
     currency: String(formData.get("currency") ?? "USD").toUpperCase(),
     description: String(formData.get("description") ?? "") || undefined,
@@ -77,6 +82,9 @@ export async function createCycle(
         targetYearLabel: parsed.data.targetYearLabel,
         openAt: new Date(`${parsed.data.openAt}T00:00:00.000Z`),
         closeAt: parsed.data.closeAt ? new Date(`${parsed.data.closeAt}T23:59:59.000Z`) : null,
+        schoolStartDate: parsed.data.schoolStartDate
+          ? new Date(`${parsed.data.schoolStartDate}T00:00:00.000Z`)
+          : null,
         inscriptionFeeCents: feeCents ?? 0,
         currency: parsed.data.currency,
         description: parsed.data.description ?? null,
@@ -108,6 +116,8 @@ export async function updateCycle(
     targetYearLabel: String(formData.get("targetYearLabel") ?? ""),
     openAt: String(formData.get("openAt") ?? ""),
     closeAt: String(formData.get("closeAt") ?? "") || undefined,
+    schoolStartDate:
+      String(formData.get("schoolStartDate") ?? "") || undefined,
     inscriptionFee: String(formData.get("inscriptionFee") ?? "") || undefined,
     currency: String(formData.get("currency") ?? "USD").toUpperCase(),
     description: String(formData.get("description") ?? "") || undefined,
@@ -134,6 +144,9 @@ export async function updateCycle(
         closeAt: parsed.data.closeAt
           ? new Date(`${parsed.data.closeAt}T23:59:59.000Z`)
           : null,
+        schoolStartDate: parsed.data.schoolStartDate
+          ? new Date(`${parsed.data.schoolStartDate}T00:00:00.000Z`)
+          : null,
         inscriptionFeeCents: feeCents ?? 0,
         currency: parsed.data.currency,
         description: parsed.data.description ?? null,
@@ -144,6 +157,51 @@ export async function updateCycle(
   revalidatePath("/admissions-admin/cycles");
   revalidatePath(`/admissions-admin/cycles/${cycleId}`);
   return {};
+}
+
+/**
+ * Delete an admission cycle and everything that hangs off it
+ * (Application rows + their answers / documents / contacts / siblings
+ * cascade via FK). Refuses if a) cycle doesn't belong to this admin's
+ * tenant, or b) any of its applications already produced a Student
+ * (acceptance) — those need manual unlinking first to avoid orphaning
+ * a real kid.
+ */
+export async function deleteCycle(
+  cycleId: string,
+): Promise<{ ok: boolean; error?: string; producedStudentCount?: number }> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const cycle = await db.admissionCycle.findUnique({
+      where: { id: cycleId },
+      select: {
+        id: true,
+        _count: { select: { applications: true } },
+      },
+    });
+    if (!cycle) return { ok: false, error: "not-found" };
+
+    // Guard: refuse if any application has already produced a student.
+    // Cascading the delete would wipe the audit trail of accepted kids.
+    const producedStudent = await db.application.count({
+      where: { cycleId, resultingStudentId: { not: null } },
+    });
+    if (producedStudent > 0) {
+      return {
+        ok: false,
+        error: "produced-students",
+        producedStudentCount: producedStudent,
+      };
+    }
+
+    await db.admissionCycle.delete({ where: { id: cycleId } });
+    revalidatePath("/admissions-admin/cycles");
+    revalidatePath("/admissions-admin");
+    return { ok: true };
+  });
 }
 
 // ── Cycle field-config (per-cycle wizard customization) ────

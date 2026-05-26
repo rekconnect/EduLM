@@ -140,6 +140,7 @@ export const DOSSIER_BOUND_PROPS = [
   "childDob",
   "establishment",
   "niveau",
+  "childPassportLebanese",
 ] as const;
 export type DossierBoundProp = (typeof DOSSIER_BOUND_PROPS)[number];
 

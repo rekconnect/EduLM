@@ -3,7 +3,6 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
-import { Card, CardBody } from "@/components/ui/card";
 import { db } from "@/lib/db";
 import { withTenantSession } from "@/lib/session";
 import { DossierForm, type EstablishmentOption } from "./_form";
@@ -70,15 +69,11 @@ export default async function NewDossierPage() {
             </Link>
           }
         />
-        <Card>
-          <CardBody>
-            <DossierForm
-              cycles={activeCycles}
-              establishments={establishmentOptions}
-              schoolName={tenant?.name ?? ""}
-            />
-          </CardBody>
-        </Card>
+        <DossierForm
+          cycles={activeCycles}
+          establishments={establishmentOptions}
+          schoolName={tenant?.name ?? ""}
+        />
       </main>
     );
   });

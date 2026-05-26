@@ -1,20 +1,36 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { ArrowLeft, ArrowUpDown, FileText, HelpCircle, Info, Sliders, Type } from "lucide-react";
+import { ArrowLeft, FileText, HelpCircle, Info } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
-import { WIZARD_STEPS, fieldsForStep, parseFieldConfig } from "@/lib/admission-fields";
+import { parseFieldConfig } from "@/lib/admission-fields";
 import { centsToDecimalString } from "@/lib/money";
 import { updateCycle } from "../../_actions";
 import { CycleGeneralInfoForm } from "./_general-info";
-import { FieldConfigForm } from "./_field-config";
 import { CustomQuestionsForm } from "./_custom-questions";
 import { RequiredDocumentsForm } from "./_required-documents";
-import { LabelsAndIntrosForm } from "./_labels-intros";
-import { FieldOrderForm } from "./_field-order";
+import { DeleteCycleButton } from "./_delete-cycle";
+
+/*
+ * NOTE: three sections used to live here that have moved to tenant-level
+ * configuration and were removed from the UI in Phase 5 v2:
+ *   1. Field config (per-cycle required/optional/hidden on built-in
+ *      fields) → now /admin/inscription-config (WYSIWYG editor)
+ *   2. Labels + step intros (per-cycle label overrides + intro text)
+ *      → labels handled by WYSIWYG; step intros are dead since the
+ *      10-tab dossier replaced the 3-step wizard.
+ *   3. Field order (per-cycle reorder on legacy wizard fields) → dead
+ *      with the wizard; a tenant-level drag-to-reorder is the v2 path.
+ *
+ * The underlying `cycle.fieldConfig` columns still parse those keys, so
+ * any historical data is preserved — it just doesn't render or update.
+ * The companion components (_field-config.tsx, _labels-intros.tsx,
+ * _field-order.tsx) remain on disk as dead code; safe to delete in a
+ * follow-up cleanup pass.
+ */
 
 export default async function CycleEditPage({
   params,
@@ -37,11 +53,13 @@ export default async function CycleEditPage({
         targetYearLabel: true,
         openAt: true,
         closeAt: true,
+        schoolStartDate: true,
         inscriptionFeeCents: true,
         currency: true,
         description: true,
         isActive: true,
         fieldConfig: true,
+        _count: { select: { applications: true } },
       },
     });
     if (!cycle) notFound();
@@ -90,6 +108,9 @@ export default async function CycleEditPage({
                   closeAt: cycle.closeAt
                     ? cycle.closeAt.toISOString().slice(0, 10)
                     : "",
+                  schoolStartDate: cycle.schoolStartDate
+                    ? cycle.schoolStartDate.toISOString().slice(0, 10)
+                    : "",
                   inscriptionFee: cycle.inscriptionFeeCents
                     ? centsToDecimalString(cycle.inscriptionFeeCents)
                     : "",
@@ -97,38 +118,6 @@ export default async function CycleEditPage({
                   description: cycle.description ?? "",
                   isActive: cycle.isActive,
                 }}
-              />
-            </div>
-          </section>
-
-          <section className="rounded-card border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] shadow-card">
-            <header className="flex items-start gap-3 border-b border-[color:var(--color-border-subtle)] px-6 py-4">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-600)]">
-                <Sliders className="size-4" aria-hidden />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-[color:var(--color-foreground)]">
-                  {t("fieldConfigTitle")}
-                </h2>
-                <p className="mt-0.5 text-sm text-[color:var(--color-foreground-muted)]">
-                  {t("fieldConfigDescription")}
-                </p>
-              </div>
-            </header>
-            <div className="p-6">
-              <FieldConfigForm
-                cycleId={cycle.id}
-                steps={WIZARD_STEPS.map((step) => ({
-                  step,
-                  fields: fieldsForStep(step).map((f) => ({
-                    key: f.key,
-                    labelKey: f.labelKey,
-                    locked: !!f.locked,
-                    current: f.locked
-                      ? "required"
-                      : (config.fields?.[f.key] ?? f.default),
-                  })),
-                }))}
               />
             </div>
           </section>
@@ -177,66 +166,11 @@ export default async function CycleEditPage({
             </div>
           </section>
 
-          <section className="rounded-card border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] shadow-card">
-            <header className="flex items-start gap-3 border-b border-[color:var(--color-border-subtle)] px-6 py-4">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-600)]">
-                <Type className="size-4" aria-hidden />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-[color:var(--color-foreground)]">
-                  {t("labelsTitle")}
-                </h2>
-                <p className="mt-0.5 text-sm text-[color:var(--color-foreground-muted)]">
-                  {t("labelsDescription")}
-                </p>
-              </div>
-            </header>
-            <div className="p-6">
-              <LabelsAndIntrosForm
-                cycleId={cycle.id}
-                steps={WIZARD_STEPS.map((step) => ({
-                  step,
-                  fields: fieldsForStep(step).map((f) => ({
-                    key: f.key,
-                    labelKey: f.labelKey,
-                    defaultLabelFallback: t(f.labelKey),
-                  })),
-                }))}
-                initialLabels={config.customLabels ?? {}}
-                initialIntros={config.stepIntros ?? {}}
-              />
-            </div>
-          </section>
-
-          <section className="rounded-card border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] shadow-card">
-            <header className="flex items-start gap-3 border-b border-[color:var(--color-border-subtle)] px-6 py-4">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-600)]">
-                <ArrowUpDown className="size-4" aria-hidden />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-[color:var(--color-foreground)]">
-                  {t("fieldOrderTitle")}
-                </h2>
-                <p className="mt-0.5 text-sm text-[color:var(--color-foreground-muted)]">
-                  {t("fieldOrderDescription")}
-                </p>
-              </div>
-            </header>
-            <div className="p-6">
-              <FieldOrderForm
-                cycleId={cycle.id}
-                steps={WIZARD_STEPS.map((step) => ({
-                  step,
-                  fields: fieldsForStep(step).map((f) => ({
-                    key: f.key,
-                    labelKey: f.labelKey,
-                  })),
-                  defaultOrder: fieldsForStep(step).map((f) => f.key),
-                }))}
-                initialOrder={config.fieldOrder ?? {}}
-              />
-            </div>
-          </section>
+          <DeleteCycleButton
+            cycleId={cycle.id}
+            cycleLabel={cycle.label}
+            applicationCount={cycle._count.applications}
+          />
         </main>
     );
   });

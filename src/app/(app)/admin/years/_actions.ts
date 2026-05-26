@@ -89,3 +89,44 @@ export async function setActiveYear(yearId: string) {
   revalidatePath("/dashboard");
   revalidatePath("/classes");
 }
+
+/**
+ * Hard delete an academic year. Cascades to Classes via the schema's
+ * `onDelete: Cascade` and to Enrollments (which FK to both Class and
+ * Year). Refuses if the year still has enrollments — those represent
+ * real kids, deleting them silently would be data loss.
+ */
+export async function deleteYear(
+  yearId: string,
+): Promise<{ ok: boolean; error?: string; enrollmentCount?: number }> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const year = await db.academicYear.findUnique({
+      where: { id: yearId },
+      select: {
+        id: true,
+        _count: { select: { enrollments: true, classes: true } },
+      },
+    });
+    if (!year) return { ok: false, error: "not-found" };
+
+    // Refuse when real enrollments still hang off the year — would
+    // wipe student-classroom assignments silently.
+    if (year._count.enrollments > 0) {
+      return {
+        ok: false,
+        error: "has-enrollments",
+        enrollmentCount: year._count.enrollments,
+      };
+    }
+
+    await db.academicYear.delete({ where: { id: yearId } });
+    revalidatePath("/admin/years");
+    revalidatePath("/dashboard");
+    revalidatePath("/classes");
+    return { ok: true };
+  });
+}

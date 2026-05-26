@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
 import { setActiveYear } from "./_actions";
+import { DeleteYearButton } from "./_delete-year";
 
 export default async function YearsPage() {
   const user = await requireRole("SCHOOL_ADMIN");
@@ -41,11 +42,12 @@ export default async function YearsPage() {
                 <TH className="text-right">Classes</TH>
                 <TH className="text-right">Inscriptions</TH>
                 <TH>{t("yearFieldActive")}</TH>
+                <TH className="text-end" />
               </tr>
             </THead>
             <tbody>
               {years.length === 0 ? (
-                <EmptyRow colSpan={6}>{t("yearEmpty")}</EmptyRow>
+                <EmptyRow colSpan={7}>{t("yearEmpty")}</EmptyRow>
               ) : (
                 years.map((y) => {
                   const boundSetActive = setActiveYear.bind(null, y.id);
@@ -72,6 +74,14 @@ export default async function YearsPage() {
                             </Button>
                           </form>
                         )}
+                      </TD>
+                      <TD className="text-end">
+                        <DeleteYearButton
+                          yearId={y.id}
+                          yearLabel={y.label}
+                          classCount={y._count.classes}
+                          enrollmentCount={y._count.enrollments}
+                        />
                       </TD>
                     </TR>
                   );

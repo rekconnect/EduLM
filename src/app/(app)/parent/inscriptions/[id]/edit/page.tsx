@@ -1,15 +1,51 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
-import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { db } from "@/lib/db";
+import { db, unscopedDb } from "@/lib/db";
 import { withTenantSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
-import { loadEntityFieldsConfig, listEstablishments } from "../../../../settings/_actions";
+import {
+  DOSSIER_TABS,
+  parseTabsCompleted,
+  parseTabsConfig,
+  type DossierTab,
+} from "@/lib/dossier-tabs";
+import {
+  parseTenantInscriptionFormConfig,
+  type DossierLocale,
+} from "@/lib/inscription-fields-resolver";
+import { TenantConfigProvider } from "@/components/dossier/tenant-config-context";
+import { DossierTabStrip } from "@/components/dossier/tab-strip";
+import {
+  DossierBottomBar,
+  DossierRemainingPill,
+} from "@/components/dossier/bottom-bar";
+import {
+  loadEntityFieldsConfig,
+  listEstablishments,
+} from "../../../../settings/_actions";
 import { DossierEditClient } from "./_client";
-import { DossierIdentitySection } from "./_identity-section";
+import { DossierTabPlaceholder } from "./_tab-placeholder";
+import { CancelApplicationDialog } from "./_cancel-dialog";
+import { DossierTabFoyer } from "./_tab-foyer";
+import { DossierTabScolarite } from "./_tab-scolarite";
+import { DossierTabTransport } from "./_tab-transport";
+import { EleveEtatCivilSection } from "./_section-eleve-etat-civil";
+import { ElevePassportSection } from "./_section-eleve-passport";
+import { ResponsableLebaneseSection } from "./_section-responsable-lebanese";
+import { ResponsableFooter } from "./_section-responsable-footer";
+import {
+  parseScolarite,
+  parseTransport,
+} from "@/lib/dossier-content";
+import { parsePedagogique } from "@/lib/pedagogique";
+import { DossierTabContacts } from "./_tab-contacts";
+import { DossierTabSante } from "./_tab-sante";
+import { DossierTabFinance } from "./_tab-finance";
+import { parseSante, parseFinance } from "@/lib/dossier-content";
+import { DossierTabValidation } from "./_tab-validation";
 
 const STATUS_TONE: Record<string, string> = {
   DRAFT:
@@ -28,40 +64,128 @@ const STATUS_TONE: Record<string, string> = {
     "bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger-soft-fg)]",
 };
 
+function parseTab(raw: string | undefined): DossierTab {
+  if (raw && (DOSSIER_TABS as readonly string[]).includes(raw)) {
+    return raw as DossierTab;
+  }
+  return "eleve";
+}
+
 export default async function DossierEditPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const { id } = await params;
+  const { tab } = await searchParams;
+  const currentTab = parseTab(tab);
 
   return withTenantSession(async (user) => {
     if (user.role !== "PARENT") notFound();
     const t = await getTranslations("admissions");
+    const tDossier = await getTranslations("dossier");
 
-    const [app, parentFieldsConfig, studentFieldsConfig, establishmentsRaw] =
-      await Promise.all([
-        db.application.findUnique({
-          where: { id },
-          select: {
-            id: true,
-            status: true,
-            submittedByUserId: true,
-            childFirstName: true,
-            childLastName: true,
-            childDob: true,
-            niveau: true,
-            establishmentId: true,
-            parentAnswers: true,
-            studentAnswers: true,
-            establishment: { select: { name: true } },
-            cycle: { select: { label: true, targetYearLabel: true } },
+    const [
+      app,
+      parentFieldsConfig,
+      studentFieldsConfig,
+      establishmentsRaw,
+      tenant,
+      guardian,
+    ] = await Promise.all([
+      db.application.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          status: true,
+          submittedByUserId: true,
+          childFirstName: true,
+          childLastName: true,
+          childDob: true,
+          childGender: true,
+          childPlaceOfBirth: true,
+          childBirthCountry: true,
+          childIsLebanese: true,
+          childPassportLebanese: true,
+          childNationality: true,
+          childNationality2: true,
+          childFirstNameAr: true,
+          childLastNameAr: true,
+          submitterIsLebanese: true,
+          submitterPassportLebanese: true,
+          submitterNationality: true,
+          submitterNationality2: true,
+          submitterRelation: true,
+          monoParental: true,
+          niveau: true,
+          establishmentId: true,
+          parentAnswers: true,
+          studentAnswers: true,
+          dossierAnswers: true,
+          tabsCompleted: true,
+          establishment: { select: { name: true } },
+          cycle: {
+            select: {
+              label: true,
+              targetYearLabel: true,
+              schoolStartDate: true,
+            },
           },
-        }),
-        loadEntityFieldsConfig("parent"),
-        loadEntityFieldsConfig("student"),
-        listEstablishments(),
-      ]);
+          siblings: {
+            orderBy: { order: "asc" },
+            select: {
+              firstName: true,
+              birthYear: true,
+              className: true,
+              schoolName: true,
+            },
+          },
+          contacts: {
+            orderBy: { order: "asc" },
+            select: {
+              id: true,
+              kind: true,
+              firstName: true,
+              lastName: true,
+              relation: true,
+              phoneMobile: true,
+              phoneHome: true,
+            },
+          },
+        },
+      }),
+      loadEntityFieldsConfig("parent"),
+      loadEntityFieldsConfig("student"),
+      listEstablishments(),
+      user.tenantId
+        ? unscopedDb().tenant.findUnique({
+            where: { id: user.tenantId },
+            select: {
+              inscriptionTabsConfig: true,
+              inscriptionFormConfig: true,
+              name: true,
+            },
+          })
+        : Promise.resolve(null),
+      db.guardian.findUnique({
+        where: { userId: user.id },
+        select: {
+          family: {
+            select: {
+              addressStreet: true,
+              addressHood: true,
+              addressCity: true,
+              imageRightsSite: true,
+              imageRightsBook: true,
+              imageRightsSocial: true,
+              imageRightsRadio: true,
+            },
+          },
+        },
+      }),
+    ]);
 
     if (!app) notFound();
     if (app.submittedByUserId !== user.id) notFound();
@@ -95,13 +219,29 @@ export default async function DossierEditPage({
           : [],
       }));
 
-    const statusKey = `status${app.status.charAt(0)}${app.status.slice(1).toLowerCase().replace(/_(.)/g, (_, c) => c.toUpperCase())}`;
-    // The mapping above produces "statusDraft", "statusSubmitted",
-    // "statusUnderReview", "statusInterviewScheduled" etc. — match the
-    // existing i18n keys' casing.
+    const tabsConfig = parseTabsConfig(tenant?.inscriptionTabsConfig);
+    const tabsCompleted = parseTabsCompleted(app.tabsCompleted);
+
+    // WYSIWYG editor (Phase 2) — parse the tenant's per-field overrides
+    // once and hand them down through context. The Élève tab consumes it
+    // via useField() in Phase 2; other tabs follow in Phase 4.
+    const inscriptionFormConfig = parseTenantInscriptionFormConfig(
+      tenant?.inscriptionFormConfig,
+    );
+    const localeStr = await getLocale();
+    const dossierLocale: DossierLocale =
+      localeStr === "en" || localeStr === "ar" ? localeStr : "fr";
+
+    const statusKey = `status${app.status.charAt(0)}${app.status
+      .slice(1)
+      .toLowerCase()
+      .replace(/_(.)/g, (_, c) => c.toUpperCase())}`;
+
+    const baseHref = `/parent/inscriptions/${app.id}/edit`;
+    const editable = app.status === "DRAFT" || app.status === "SUBMITTED";
 
     return (
-      <main className="mx-auto max-w-3xl space-y-6 px-6 py-10">
+      <main className="mx-auto max-w-5xl space-y-6 px-6 py-10">
         <PageHeader
           title={`${app.childLastName} ${app.childFirstName}`.trim()}
           description={`${app.cycle.label} · ${app.cycle.targetYearLabel}`}
@@ -116,8 +256,8 @@ export default async function DossierEditPage({
           }
         />
 
-        {/* Status chip — small, header-adjacent, no longer a full card */}
-        <div className="flex items-center gap-3">
+        {/* Status + À COMPLÉTER pill on one row */}
+        <div className="flex items-center justify-between gap-3">
           <span
             className={cn(
               "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium",
@@ -126,56 +266,305 @@ export default async function DossierEditPage({
           >
             {t(statusKey as never)}
           </span>
+          <DossierRemainingPill
+            visibility={tabsConfig}
+            completed={tabsCompleted}
+          />
         </div>
 
-        {/* Editable identity section — pre-filled with what the parent
-            entered during dossier creation. They can correct + save. */}
-        <Card>
-          <CardHeader title={t("dossierIdentityTitle")} />
-          <CardBody>
-            <DossierIdentitySection
+        {/* Intro + required-hint banner, only on DRAFT for first-time users */}
+        {editable ? (
+          <div className="rounded-lg border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] px-4 py-3 text-sm text-[color:var(--color-foreground-muted)]">
+            <p>{tDossier("intro")}</p>
+            <p className="mt-1 text-[color:var(--color-danger)]">
+              {tDossier("requiredHint")}
+            </p>
+          </div>
+        ) : null}
+
+        <DossierTabStrip
+          baseHref={baseHref}
+          current={currentTab}
+          visibility={tabsConfig}
+          completed={tabsCompleted}
+        />
+
+        {/* ── Tab content ──
+            Wrapped in TenantConfigProvider so every section can read
+            tenant per-field overrides via useField(). Phase 2 only
+            consumes it inside the two Élève sections; Phase 4 threads
+            the remaining 9 tabs. */}
+        <TenantConfigProvider
+          config={inscriptionFormConfig}
+          locale={dossierLocale}
+        >
+        <div className="space-y-6">
+          {currentTab === "eleve" ? (
+            <>
+              <EleveEtatCivilSection
+                applicationId={app.id}
+                disabled={!editable}
+                initial={{
+                  childFirstName: app.childFirstName ?? "",
+                  childLastName: app.childLastName ?? "",
+                  childDob: app.childDob
+                    ? app.childDob.toISOString().slice(0, 10)
+                    : "",
+                  childGender: app.childGender ?? "",
+                  childPlaceOfBirth: app.childPlaceOfBirth ?? "",
+                  childBirthCountry: app.childBirthCountry ?? "",
+                  childFirstNameAr: app.childFirstNameAr ?? "",
+                  childLastNameAr: app.childLastNameAr ?? "",
+                }}
+              />
+
+              <ElevePassportSection
+                applicationId={app.id}
+                disabled={!editable}
+                initial={{
+                  childIsLebanese: app.childIsLebanese,
+                  childPassportLebanese: app.childPassportLebanese ?? "",
+                  childNationality: app.childNationality ?? "",
+                  childNationality2: app.childNationality2 ?? "",
+                }}
+              />
+            </>
+          ) : null}
+
+          {currentTab === "responsables" ? (
+            <ResponsableLebaneseSection
               applicationId={app.id}
-              disabled={
-                app.status !== "DRAFT" && app.status !== "SUBMITTED"
-              }
+              disabled={!editable}
               initial={{
-                childFirstName: app.childFirstName ?? "",
-                childLastName: app.childLastName ?? "",
+                submitterRelation: app.submitterRelation,
+                submitterIsLebanese: app.submitterIsLebanese,
+                submitterPassportLebanese: app.submitterPassportLebanese ?? "",
+              }}
+            />
+          ) : null}
+
+          {currentTab === "responsables" ? (
+            <DossierEditClient
+              applicationId={app.id}
+              status={app.status}
+              section="parent"
+              parentConfig={parentFieldsConfig}
+              studentConfig={studentFieldsConfig}
+              parentInitial={coerceAnswers(app.parentAnswers)}
+              studentInitial={coerceAnswers(app.studentAnswers)}
+              establishments={establishmentsForRenderer}
+              user={{
+                firstName: sessionUser?.firstName ?? null,
+                lastName: sessionUser?.lastName ?? null,
+                name: sessionUser?.name ?? null,
+                email: sessionUser?.email ?? null,
+              }}
+              dossier={{
+                childFirstName: app.childFirstName ?? null,
+                childLastName: app.childLastName ?? null,
                 childDob: app.childDob
                   ? app.childDob.toISOString().slice(0, 10)
-                  : "",
-                establishmentId: app.establishmentId ?? "",
-                niveau: app.niveau ?? "",
+                  : null,
+                establishment: app.establishment?.name ?? null,
+                niveau: app.niveau ?? null,
               }}
-              establishments={establishmentsForRenderer}
             />
-          </CardBody>
-        </Card>
+          ) : null}
 
-        <DossierEditClient
-          applicationId={app.id}
-          status={app.status}
-          parentConfig={parentFieldsConfig}
-          studentConfig={studentFieldsConfig}
-          parentInitial={coerceAnswers(app.parentAnswers)}
-          studentInitial={coerceAnswers(app.studentAnswers)}
-          establishments={establishmentsForRenderer}
-          user={{
-            firstName: sessionUser?.firstName ?? null,
-            lastName: sessionUser?.lastName ?? null,
-            name: sessionUser?.name ?? null,
-            email: sessionUser?.email ?? null,
-          }}
-          dossier={{
-            childFirstName: app.childFirstName ?? null,
-            childLastName: app.childLastName ?? null,
-            childDob: app.childDob
-              ? app.childDob.toISOString().slice(0, 10)
-              : null,
-            establishment: app.establishment?.name ?? null,
-            niveau: app.niveau ?? null,
-          }}
+          {currentTab === "responsables" ? (
+            <ResponsableFooter
+              applicationId={app.id}
+              disabled={!editable}
+              initialMonoParental={app.monoParental}
+            />
+          ) : null}
+
+          {/* ── Phase 2 tabs ── */}
+          {currentTab === "foyer" ? (() => {
+            const dossier =
+              app.dossierAnswers &&
+              typeof app.dossierAnswers === "object"
+                ? (app.dossierAnswers as Record<string, unknown>)
+                : {};
+            const foyerExtras =
+              dossier.foyer && typeof dossier.foyer === "object"
+                ? (dossier.foyer as Record<string, unknown>)
+                : {};
+            const fam = guardian?.family;
+            return (
+              <DossierTabFoyer
+                applicationId={app.id}
+                disabled={!editable}
+                initial={{
+                  addressCaza: fam?.addressCity ?? "",
+                  addressVillage: fam?.addressHood ?? "",
+                  addressStreet: fam?.addressStreet ?? "",
+                  addressBuilding:
+                    typeof foyerExtras.building === "string"
+                      ? foyerExtras.building
+                      : "",
+                  addressFloor:
+                    typeof foyerExtras.floor === "string"
+                      ? foyerExtras.floor
+                      : "",
+                  addressDetails:
+                    typeof foyerExtras.details === "string"
+                      ? foyerExtras.details
+                      : "",
+                  addressNotes:
+                    typeof foyerExtras.notes === "string"
+                      ? foyerExtras.notes
+                      : "",
+                  imageRightsSite: fam?.imageRightsSite ?? null,
+                  imageRightsBook: fam?.imageRightsBook ?? null,
+                  imageRightsSocial: fam?.imageRightsSocial ?? null,
+                  imageRightsRadio: fam?.imageRightsRadio ?? null,
+                  siblings: app.siblings.map((s) => ({
+                    firstName: s.firstName,
+                    birthYear: s.birthYear != null ? String(s.birthYear) : "",
+                    className: s.className ?? "",
+                    schoolName: s.schoolName ?? "",
+                  })),
+                }}
+              />
+            );
+          })() : null}
+
+          {currentTab === "scolarite" ? (() => {
+            const dossier =
+              app.dossierAnswers &&
+              typeof app.dossierAnswers === "object"
+                ? (app.dossierAnswers as Record<string, unknown>)
+                : {};
+            return (
+              <DossierTabScolarite
+                applicationId={app.id}
+                disabled={!editable}
+                initial={parseScolarite(dossier.scolarite)}
+                initialEstablishmentId={app.establishmentId ?? ""}
+                initialNiveau={app.niveau ?? ""}
+                initialPedagogique={parsePedagogique(dossier.pedagogique)}
+                establishments={establishmentsForRenderer}
+                schoolName={tenant?.name ?? ""}
+                defaultEntryDate={
+                  app.cycle.schoolStartDate
+                    ? app.cycle.schoolStartDate.toISOString().slice(0, 10)
+                    : ""
+                }
+              />
+            );
+          })() : null}
+
+          {currentTab === "transport" ? (() => {
+            const dossier =
+              app.dossierAnswers &&
+              typeof app.dossierAnswers === "object"
+                ? (app.dossierAnswers as Record<string, unknown>)
+                : {};
+            return (
+              <DossierTabTransport
+                applicationId={app.id}
+                disabled={!editable}
+                niveau={app.niveau}
+                initial={parseTransport(dossier.transport)}
+              />
+            );
+          })() : null}
+
+          {currentTab === "contacts" ? (
+            <DossierTabContacts
+              applicationId={app.id}
+              disabled={!editable}
+              initial={app.contacts.map((c) => ({
+                id: c.id,
+                kind: c.kind,
+                firstName: c.firstName,
+                lastName: c.lastName,
+                relation: c.relation,
+                phoneMobile: c.phoneMobile,
+                phoneHome: c.phoneHome,
+              }))}
+            />
+          ) : null}
+
+          {currentTab === "sante" ? (() => {
+            const dossier =
+              app.dossierAnswers && typeof app.dossierAnswers === "object"
+                ? (app.dossierAnswers as Record<string, unknown>)
+                : {};
+            return (
+              <DossierTabSante
+                applicationId={app.id}
+                disabled={!editable}
+                initial={parseSante(dossier.sante)}
+              />
+            );
+          })() : null}
+
+          {currentTab === "finance" ? (() => {
+            const dossier =
+              app.dossierAnswers && typeof app.dossierAnswers === "object"
+                ? (app.dossierAnswers as Record<string, unknown>)
+                : {};
+            return (
+              <DossierTabFinance
+                applicationId={app.id}
+                disabled={!editable}
+                initial={parseFinance(dossier.finance)}
+              />
+            );
+          })() : null}
+
+          {currentTab === "validation" ? (() => {
+            const dossier =
+              app.dossierAnswers && typeof app.dossierAnswers === "object"
+                ? (app.dossierAnswers as Record<string, unknown>)
+                : {};
+            const validation =
+              dossier.validation && typeof dossier.validation === "object"
+                ? (dossier.validation as Record<string, unknown>)
+                : {};
+            return (
+              <DossierTabValidation
+                applicationId={app.id}
+                disabled={!editable}
+                acknowledged={validation.acknowledged === true}
+                documentsListMarkdown=""
+              />
+            );
+          })() : null}
+
+          {/* Justificatifs tab still falls through to the placeholder
+              for now — Phase 5 will hook it up to the existing
+              ApplicationDocument upload flow. */}
+          {currentTab === "justificatifs" ? (
+            <DossierTabPlaceholder
+              applicationId={app.id}
+              tab={currentTab}
+              completed={tabsCompleted[currentTab] === true}
+            />
+          ) : null}
+        </div>
+        </TenantConfigProvider>
+
+        <DossierBottomBar
+          baseHref={baseHref}
+          current={currentTab}
+          visibility={tabsConfig}
+          completed={tabsCompleted}
+          applicationId={editable ? app.id : undefined}
         />
+
+        {/* Cancel-application affordance — DRAFT only. The action
+            hard-deletes the row, so we hide the trigger for any
+            submitted / decided status. SUBMITTED applications need a
+            separate "Retirer" (withdraw) flow that sets status =
+            WITHDRAWN without losing the data — follow-up task. */}
+        {app.status === "DRAFT" ? (
+          <div className="flex justify-end pt-2">
+            <CancelApplicationDialog applicationId={app.id} />
+          </div>
+        ) : null}
       </main>
     );
   });

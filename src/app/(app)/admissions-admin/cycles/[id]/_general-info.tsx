@@ -19,6 +19,7 @@ export function CycleGeneralInfoForm({
     targetYearLabel: string;
     openAt: string;
     closeAt: string;
+    schoolStartDate: string;
     inscriptionFee: string;
     currency: string;
     description: string;
@@ -89,6 +90,19 @@ export function CycleGeneralInfoForm({
             name="closeAt"
             type="date"
             defaultValue={initial.closeAt}
+          />
+        </Field>
+        <Field
+          label={t("cycleFieldSchoolStartDate")}
+          htmlFor={`start-${cycleId}`}
+          error={state.errors?.schoolStartDate}
+          hint={t("cycleFieldSchoolStartDateHint")}
+        >
+          <Input
+            id={`start-${cycleId}`}
+            name="schoolStartDate"
+            type="date"
+            defaultValue={initial.schoolStartDate}
           />
         </Field>
       </FormRow>

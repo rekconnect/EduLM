@@ -11,6 +11,90 @@ import {
   parseEntityFieldsConfig,
   type EntityFieldsConfig,
 } from "@/lib/entity-fields";
+import {
+  parseTenantInscriptionFormConfig,
+  resolveField,
+  type TenantInscriptionFormConfig,
+} from "@/lib/inscription-fields-resolver";
+
+/**
+ * Load and parse the tenant's per-field inscription overrides. Wraps
+ * the unscoped tenant fetch + JSON parse so save actions don't
+ * duplicate it. Cheap enough to call once per save action.
+ */
+async function loadInscriptionFormConfig(
+  tenantId: string,
+): Promise<TenantInscriptionFormConfig> {
+  const tenant = await unscopedDb().tenant.findUnique({
+    where: { id: tenantId },
+    select: { inscriptionFormConfig: true },
+  });
+  return parseTenantInscriptionFormConfig(tenant?.inscriptionFormConfig);
+}
+
+/**
+ * True iff the field is required AFTER applying any tenant override.
+ * Hidden fields are never required (defensive). Unknown registry keys
+ * conservatively return true so we don't accidentally permit empty
+ * required submissions for fields we forgot to register.
+ */
+function isFieldRequiredEffective(
+  key: string,
+  tenantConfig: TenantInscriptionFormConfig | null,
+): boolean {
+  const resolved = resolveField(key, tenantConfig, "fr");
+  if (!resolved) return true;
+  return resolved.required && !resolved.hidden;
+}
+
+/**
+ * Foyer-tab completion check that honors the tenant's inscription
+ * overrides. Mirrors evaluateEleveComplete's pattern: required-by-
+ * default fields can be flipped to optional or hidden by admin and
+ * stop blocking the REMPLI badge.
+ *
+ * Required fields by registry default:
+ *   foyer.address.caza / village / street
+ *   foyer.imageRights.{site,book,social,radio}   (none are required by
+ *     default — the 3-state radios just need an answer to flip the
+ *     badge to green, which is captured here as "must not be null").
+ */
+function evaluateFoyerComplete(
+  a: {
+    addressCaza: string;
+    addressVillage: string;
+    addressStreet: string;
+    imageRightsSite: boolean | null;
+    imageRightsBook: boolean | null;
+    imageRightsSocial: boolean | null;
+    imageRightsRadio: boolean | null;
+  },
+  tenantConfig: TenantInscriptionFormConfig | null,
+): boolean {
+  const need = (key: string) => isFieldRequiredEffective(key, tenantConfig);
+  if (need("foyer.address.caza") && !a.addressCaza.trim()) return false;
+  if (need("foyer.address.village") && !a.addressVillage.trim()) return false;
+  if (need("foyer.address.street") && !a.addressStreet.trim()) return false;
+  // Image-rights toggles default to non-required in the registry but
+  // the baseline completion rule (legacy isFoyerComplete) needs all
+  // four answered. Treat each as "needs an answer" UNLESS admin
+  // explicitly set required=false in the override (then we skip).
+  const imgKeys = [
+    ["foyer.imageRights.site", a.imageRightsSite],
+    ["foyer.imageRights.book", a.imageRightsBook],
+    ["foyer.imageRights.social", a.imageRightsSocial],
+    ["foyer.imageRights.radio", a.imageRightsRadio],
+  ] as const;
+  for (const [key, value] of imgKeys) {
+    const resolved = resolveField(key, tenantConfig, "fr");
+    if (resolved?.hidden) continue;
+    // If admin explicitly set required=false, respect it. Otherwise
+    // the legacy "must be answered" rule applies.
+    if (resolved?.hasOverride && resolved.required === false) continue;
+    if (value === null) return false;
+  }
+  return true;
+}
 
 const dossierSchema = z.object({
   childFirstName: z.string().trim().min(1).max(80),
@@ -32,8 +116,9 @@ export type DossierFormState = {
  * cycle, Établissement, niveau) up front. The full tenant-configured field
  * collection happens in the wizard step that follows.
  *
- * On success: redirects to /parent/applications/[id]/edit?step=1 so the
- * parent immediately starts filling the rest of the dossier.
+ * On success: redirects to /parent/applications (the "Mes inscriptions"
+ * list) so the parent sees the new draft alongside any existing ones,
+ * matching the Eduka flow. From there one click opens the dossier shell.
  */
 export async function createDossier(
   _prev: DossierFormState,
@@ -113,8 +198,10 @@ export async function createDossier(
   if (!newId) return { formError: "create-failed" };
   revalidatePath("/parent/applications");
   revalidatePath("/parent/dashboard");
-  // Land in the new tenant-fields wizard, not the legacy hardcoded one.
-  redirect(`/parent/inscriptions/${newId}/edit`);
+  // Land on the Mes inscriptions list so the parent confirms the new
+  // draft was created (Eduka pattern). One click on the draft card
+  // opens the 10-tab dossier shell from there.
+  redirect("/parent/applications");
 }
 
 // ── Edit dossier core fields (name, DOB, scolarité) ──────────
@@ -191,6 +278,380 @@ export async function updateDossierCore(
   });
 }
 
+// ── Completion helpers (Élève + Scolarité) ────────────────────
+// Both tabs have data spread across multiple save actions, so the
+// completion flag is derived in one place and called from every save.
+
+type EleveCompletionInput = {
+  childFirstName: string | null;
+  childLastName: string | null;
+  childDob: Date | null;
+  childGender: unknown;
+  childPlaceOfBirth: string | null;
+  childBirthCountry: string | null;
+  childFirstNameAr: string | null;
+  childLastNameAr: string | null;
+  childIsLebanese: boolean | null;
+  childPassportLebanese: string | null;
+  childNationality: string | null;
+};
+
+function evaluateEleveComplete(
+  a: EleveCompletionInput,
+  tenantConfig: TenantInscriptionFormConfig | null,
+): boolean {
+  // Helper closure so each line below reads cleanly. Returns true when
+  // the field is required after applying the tenant override AND the
+  // application's stored value is blank → completion fails.
+  const missing = (key: string, value: unknown): boolean => {
+    if (!isFieldRequiredEffective(key, tenantConfig)) return false;
+    if (typeof value === "string") return !value.trim();
+    if (value === null || value === undefined || value === "") return true;
+    return false;
+  };
+
+  // État civil
+  if (missing("eleve.etatCivil.firstName", a.childFirstName)) return false;
+  if (missing("eleve.etatCivil.lastName", a.childLastName)) return false;
+  if (missing("eleve.etatCivil.dob", a.childDob)) return false;
+  if (missing("eleve.etatCivil.gender", a.childGender)) return false;
+  if (missing("eleve.etatCivil.placeOfBirth", a.childPlaceOfBirth))
+    return false;
+  if (missing("eleve.etatCivil.birthCountry", a.childBirthCountry))
+    return false;
+  if (missing("eleve.etatCivil.firstNameAr", a.childFirstNameAr)) return false;
+  if (missing("eleve.etatCivil.lastNameAr", a.childLastNameAr)) return false;
+
+  // Passport — the Yes/No radio
+  if (
+    isFieldRequiredEffective("eleve.passport.isLebanese", tenantConfig) &&
+    a.childIsLebanese === null
+  ) {
+    return false;
+  }
+
+  // Conditional: if Lebanese=true, the passport-number field comes into
+  // play. Respect the override (if set) or fall back to the registry
+  // default (required=true).
+  if (a.childIsLebanese === true) {
+    if (missing("eleve.passport.passportLebanese", a.childPassportLebanese)) {
+      return false;
+    }
+  }
+
+  // Conditional: if Lebanese=false, the parent must enter Nationalité 1.
+  // The registry default for that field is required=false (so the row
+  // doesn't paint a red bar in the Lebanese=Yes case), and the form
+  // upgrades it to required=true when isLebanese=false. We mirror that
+  // upgrade here — UNLESS admin has set an explicit override, in which
+  // case we trust their choice.
+  if (a.childIsLebanese === false) {
+    const nat1 = resolveField(
+      "eleve.passport.nationality1",
+      tenantConfig,
+      "fr",
+    );
+    const nat1NeedsValue = nat1?.hasOverride
+      ? nat1.required && !nat1.hidden
+      : true;
+    if (nat1NeedsValue && !a.childNationality?.trim()) return false;
+  }
+
+  return true;
+}
+
+const ELEVE_COMPLETION_SELECT = {
+  childFirstName: true,
+  childLastName: true,
+  childDob: true,
+  childGender: true,
+  childPlaceOfBirth: true,
+  childBirthCountry: true,
+  childFirstNameAr: true,
+  childLastNameAr: true,
+  childIsLebanese: true,
+  childPassportLebanese: true,
+  childNationality: true,
+} as const;
+
+// ── Student "État civil" card (Élève tab) ─────────────────────
+// Captures the built-in identity fields beyond the file-identity
+// (gender, place + country of birth, 3 nationalities, Arabic names).
+
+/**
+ * Save the unified "État civil de l'élève" card on the Élève tab.
+ * After the file is created via /parent/inscriptions/new, this single
+ * action owns every identity edit the parent makes — name, DOB,
+ * gender, place + country of birth, Arabic names, AND the establishment
+ * / niveau choice that used to live on the standalone File Identity
+ * section.
+ */
+const eleveEtatCivilSchema = z.object({
+  childFirstName: z.string().trim().min(1).max(80),
+  childLastName: z.string().trim().min(1).max(80),
+  childDob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  childGender: z.enum(["MALE", "FEMALE", "OTHER"]).optional(),
+  childPlaceOfBirth: z.string().trim().max(80).optional(),
+  childBirthCountry: z.string().trim().max(80).optional(),
+  childFirstNameAr: z.string().trim().max(80).optional(),
+  childLastNameAr: z.string().trim().max(80).optional(),
+});
+
+export async function saveEleveEtatCivil(
+  applicationId: string,
+  payload: unknown,
+): Promise<{ ok: boolean; error?: string; errors?: Record<string, string> }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  const parsed = eleveEtatCivilSchema.safeParse(payload);
+  if (!parsed.success) {
+    const flat = z.flattenError(parsed.error).fieldErrors as Record<
+      string,
+      string[] | undefined
+    >;
+    const errors: Record<string, string> = {};
+    for (const [k, v] of Object.entries(flat)) if (v?.[0]) errors[k] = v[0];
+    return { ok: false, errors };
+  }
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id: applicationId },
+      select: { id: true, submittedByUserId: true, status: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    if (app.submittedByUserId !== user.id) return { ok: false, error: "forbidden" };
+    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
+      return { ok: false, error: "locked" };
+    }
+
+    await db.application.update({
+      where: { id: applicationId },
+      data: {
+        childFirstName: parsed.data.childFirstName,
+        childLastName: parsed.data.childLastName,
+        childDob: new Date(`${parsed.data.childDob}T00:00:00.000Z`),
+        childGender: parsed.data.childGender ?? null,
+        childPlaceOfBirth: parsed.data.childPlaceOfBirth || null,
+        childBirthCountry: parsed.data.childBirthCountry || null,
+        childFirstNameAr: parsed.data.childFirstNameAr || null,
+        childLastNameAr: parsed.data.childLastNameAr || null,
+      },
+    });
+
+    // Refresh tabsCompleted.eleve so the badge updates immediately
+    // after saving. Re-fetch to include the row we just wrote, then run
+    // the completion checker against the tenant's per-field overrides
+    // (hidden / admin-marked-optional fields don't block the badge).
+    const [fresh, tenantFormConfig] = await Promise.all([
+      db.application.findUnique({
+        where: { id: applicationId },
+        select: { ...ELEVE_COMPLETION_SELECT, tabsCompleted: true },
+      }),
+      loadInscriptionFormConfig(tenantId),
+    ]);
+    if (fresh) {
+      await db.application.update({
+        where: { id: applicationId },
+        data: {
+          tabsCompleted: mergeTabsCompleted(
+            fresh.tabsCompleted,
+            "eleve",
+            evaluateEleveComplete(fresh, tenantFormConfig),
+          ),
+        },
+      });
+    }
+
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    revalidatePath("/parent/dashboard");
+    return { ok: true };
+  });
+}
+
+/**
+ * Save the "Passeport / Carte d'identité" card — Lebanese-nationality
+ * Yes/No plus up to 3 nationalities. Passport numbers + expiry land
+ * here later.
+ */
+const elevePassportSchema = z.object({
+  childIsLebanese: z.boolean().nullable().optional(),
+  childPassportLebanese: z.string().trim().max(40).optional(),
+  childNationality: z.string().trim().max(80).optional(),
+  childNationality2: z.string().trim().max(80).optional(),
+});
+
+export async function saveElevePassport(
+  applicationId: string,
+  payload: unknown,
+): Promise<{ ok: boolean; error?: string; errors?: Record<string, string> }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  const parsed = elevePassportSchema.safeParse(payload);
+  if (!parsed.success) {
+    const flat = z.flattenError(parsed.error).fieldErrors as Record<
+      string,
+      string[] | undefined
+    >;
+    const errors: Record<string, string> = {};
+    for (const [k, v] of Object.entries(flat)) if (v?.[0]) errors[k] = v[0];
+    return { ok: false, errors };
+  }
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id: applicationId },
+      select: { id: true, submittedByUserId: true, status: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    if (app.submittedByUserId !== user.id) return { ok: false, error: "forbidden" };
+    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
+      return { ok: false, error: "locked" };
+    }
+    // Only persist the Lebanese passport when the kid IS Lebanese.
+    // Saying "Non" wipes any previously entered value, so admin
+    // doesn't see stale data attached to a non-Lebanese child.
+    const persistLebanesePassport =
+      parsed.data.childIsLebanese === true
+        ? parsed.data.childPassportLebanese || null
+        : null;
+
+    await db.application.update({
+      where: { id: applicationId },
+      data: {
+        childIsLebanese:
+          parsed.data.childIsLebanese === undefined
+            ? undefined
+            : parsed.data.childIsLebanese,
+        childPassportLebanese: persistLebanesePassport,
+        childNationality: parsed.data.childNationality || null,
+        childNationality2: parsed.data.childNationality2 || null,
+        // Slot 3 was removed from the UI — null it out on every save
+        // so old DB values (from earlier sessions) don't linger.
+        childNationality3: null,
+      },
+    });
+
+    const [fresh, tenantFormConfig] = await Promise.all([
+      db.application.findUnique({
+        where: { id: applicationId },
+        select: { ...ELEVE_COMPLETION_SELECT, tabsCompleted: true },
+      }),
+      loadInscriptionFormConfig(tenantId),
+    ]);
+    if (fresh) {
+      await db.application.update({
+        where: { id: applicationId },
+        data: {
+          tabsCompleted: mergeTabsCompleted(
+            fresh.tabsCompleted,
+            "eleve",
+            evaluateEleveComplete(fresh, tenantFormConfig),
+          ),
+        },
+      });
+    }
+
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    return { ok: true };
+  });
+}
+
+/**
+ * Save the submitting parent's identity card on the Responsables tab —
+ * relation to the child + Lebanese-nationality Oui/Non. Stored on
+ * Application columns for now; Phase 4's multi-responsable UI will
+ * migrate these onto each ApplicationResponsable row.
+ */
+const responsableIdentitySchema = z.object({
+  relation: z.string().trim().max(40).optional(),
+  isLebanese: z.boolean().nullable().optional(),
+  passportLebanese: z.string().trim().max(40).optional(),
+});
+
+export async function saveResponsableIdentity(
+  applicationId: string,
+  payload: unknown,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  const parsed = responsableIdentitySchema.safeParse(payload);
+  if (!parsed.success) return { ok: false, error: "validation" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id: applicationId },
+      select: { id: true, submittedByUserId: true, status: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    if (app.submittedByUserId !== user.id) return { ok: false, error: "forbidden" };
+    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
+      return { ok: false, error: "locked" };
+    }
+    // Same Lebanese-passport rule as the student: only persist when
+    // the parent is Lebanese; clear it on switch to "Non" so admin
+    // never sees stale data.
+    const persistLebanesePassport =
+      parsed.data.isLebanese === true
+        ? parsed.data.passportLebanese || null
+        : null;
+
+    // submitterNationality + submitterNationality2 used to be written
+    // from this card too. They moved to the tenant's custom parent
+    // fields (rendered just below via DossierEditClient) so admin can
+    // mark them optional without code changes. The legacy columns are
+    // left untouched here so historical data is preserved and reports
+    // that still read them continue to work for old records.
+    await db.application.update({
+      where: { id: applicationId },
+      data: {
+        submitterRelation: parsed.data.relation || null,
+        submitterIsLebanese:
+          parsed.data.isLebanese === undefined
+            ? undefined
+            : parsed.data.isLebanese,
+        submitterPassportLebanese: persistLebanesePassport,
+      },
+    });
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    return { ok: true };
+  });
+}
+
+/** Toggle the Famille monoparentale flag on the application. */
+export async function saveMonoParental(
+  applicationId: string,
+  monoParental: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id: applicationId },
+      select: { id: true, submittedByUserId: true, status: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    if (app.submittedByUserId !== user.id) return { ok: false, error: "forbidden" };
+    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
+      return { ok: false, error: "locked" };
+    }
+    await db.application.update({
+      where: { id: applicationId },
+      data: { monoParental },
+    });
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    return { ok: true };
+  });
+}
+
 // ── Save tenant custom answers on the dossier (Round 8) ──────
 
 /**
@@ -212,7 +673,25 @@ async function saveAnswers(
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await db.application.findUnique({
       where: { id: applicationId },
-      select: { id: true, submittedByUserId: true, status: true },
+      select: {
+        id: true,
+        submittedByUserId: true,
+        status: true,
+        tabsCompleted: true,
+        childFirstName: true,
+        childLastName: true,
+        childDob: true,
+        childGender: true,
+        childIsLebanese: true,
+        childPassportLebanese: true,
+        childNationality: true,
+        childPlaceOfBirth: true,
+        childBirthCountry: true,
+        childFirstNameAr: true,
+        childLastNameAr: true,
+        establishmentId: true,
+        niveau: true,
+      },
     });
     if (!app) return { ok: false, error: "not-found" };
     if (app.submittedByUserId !== user.id) return { ok: false, error: "forbidden" };
@@ -245,12 +724,35 @@ async function saveAnswers(
       answers[fieldId] = value;
     }
 
+    // Auto-derive the tab's REMPLI/À REMPLIR badge from required-field
+    // presence. Honors active/showIf/hideIf so hidden fields don't
+    // hold the tab back. For Élève we additionally require the dossier
+    // identity (lastName/firstName/dob/establishment/niveau) since
+    // those live on Application columns, not in studentAnswers.
+    const visible = config.fields.filter(
+      (f) => evaluateShowIf(f, answers) === true,
+    );
+    const missingRequired = visible.filter((f) => {
+      if (f.required !== true) return false;
+      const v = answers[f.id];
+      return !v || v.length === 0;
+    });
+    let tabDone = missingRequired.length === 0;
+
+    // The Élève tab no longer renders tenant custom student fields,
+    // so writing studentAnswers shouldn't touch tabsCompleted.eleve
+    // either. For "parent" it still updates the Responsables badge.
+    const tabKey = entity === "parent" ? "responsables" : null;
+    const nextTabs = tabKey
+      ? mergeTabsCompleted(app.tabsCompleted, tabKey, tabDone)
+      : (app.tabsCompleted as Record<string, unknown>);
+
     await db.application.update({
       where: { id: applicationId },
       data:
         entity === "parent"
-          ? { parentAnswers: answers }
-          : { studentAnswers: answers },
+          ? { parentAnswers: answers, tabsCompleted: nextTabs }
+          : { studentAnswers: answers, tabsCompleted: nextTabs },
     });
     revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
     return { ok: true };
@@ -289,6 +791,29 @@ export async function submitDossier(
         status: true,
         parentAnswers: true,
         studentAnswers: true,
+        // Bound-source columns — for any custom field with
+        // dossierBoundTo, the canonical value lives here (filled by
+        // the parent through the Élève card / Scolarité tab). Submit
+        // validation has to consult these or it'll complain about
+        // "empty" required fields that the parent IS filling — just
+        // not via the custom-field input.
+        childFirstName: true,
+        childLastName: true,
+        childDob: true,
+        childPassportLebanese: true,
+        niveau: true,
+        establishmentId: true,
+        // submitterRelation / submitterPassportLebanese etc. aren't
+        // currently mappable via dossierBoundTo, but we still need
+        // the user record for parent-side userBoundTo fields.
+        submittedBy: {
+          select: {
+            firstName: true,
+            lastName: true,
+            name: true,
+            email: true,
+          },
+        },
       },
     });
     if (!app) return { ok: false, error: "not-found" };
@@ -309,6 +834,43 @@ export async function submitDossier(
     const parentAns = (app.parentAnswers ?? {}) as Record<string, string>;
     const studentAns = (app.studentAnswers ?? {}) as Record<string, string>;
 
+    // ── Bound-source value resolvers ───────────────────────────────
+    // dossierBoundTo (student side) — pull from Application columns.
+    function resolveDossierBound(prop: string): string {
+      switch (prop) {
+        case "childFirstName":
+          return app!.childFirstName?.trim() ?? "";
+        case "childLastName":
+          return app!.childLastName?.trim() ?? "";
+        case "childDob":
+          return app!.childDob ? app!.childDob.toISOString().slice(0, 10) : "";
+        case "establishment":
+          return app!.establishmentId ?? "";
+        case "niveau":
+          return app!.niveau?.trim() ?? "";
+        case "childPassportLebanese":
+          return app!.childPassportLebanese?.trim() ?? "";
+        default:
+          return "";
+      }
+    }
+    // userBoundTo (parent side) — pull from the submitter's User row.
+    function resolveUserBound(prop: string): string {
+      const u = app!.submittedBy;
+      switch (prop) {
+        case "firstName":
+          return u.firstName?.trim() ?? "";
+        case "lastName":
+          return u.lastName?.trim() ?? "";
+        case "name":
+          return u.name?.trim() ?? "";
+        case "email":
+          return u.email?.trim() ?? "";
+        default:
+          return "";
+      }
+    }
+
     // Collect labels of required fields the parent left empty.
     //
     // A field is "required to fill" only when it would actually render —
@@ -316,16 +878,35 @@ export async function submitDossier(
     // hideIf wins (field hidden → not required), showIf with equals/
     // equalsAny/anyValue all evaluated. A field hidden by either rule is
     // skipped entirely, regardless of its `required` flag.
+    //
+    // For bound fields (dossierBoundTo / userBoundTo) we read the
+    // canonical source instead of the answers blob — the answers blob
+    // is intentionally empty for those keys since the parent fills
+    // them via the hardcoded surface.
     const missing: string[] = [];
     for (const f of parentConfig.fields) {
       if (!f.required) continue;
       if (!evaluateShowIf(f, parentAns)) continue;
-      if ((parentAns[f.id] ?? "").trim() === "") missing.push(f.label);
+      let value: string;
+      if (f.userBoundTo) {
+        value = resolveUserBound(f.userBoundTo);
+      } else if (f.dossierBoundTo) {
+        value = resolveDossierBound(f.dossierBoundTo);
+      } else {
+        value = (parentAns[f.id] ?? "").trim();
+      }
+      if (value === "") missing.push(f.label);
     }
     for (const f of studentConfig.fields) {
       if (!f.required) continue;
       if (!evaluateShowIf(f, studentAns)) continue;
-      if ((studentAns[f.id] ?? "").trim() === "") missing.push(f.label);
+      let value: string;
+      if (f.dossierBoundTo) {
+        value = resolveDossierBound(f.dossierBoundTo);
+      } else {
+        value = (studentAns[f.id] ?? "").trim();
+      }
+      if (value === "") missing.push(f.label);
     }
 
     if (missing.length > 0) {
@@ -337,6 +918,764 @@ export async function submitDossier(
       data: { status: "SUBMITTED", submittedAt: new Date() },
     });
     revalidatePath("/parent/dashboard");
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    return { ok: true };
+  });
+}
+
+/**
+ * Phase 1 dossier helper: explicitly mark a tab as filled/unfilled. Used
+ * by the placeholder tabs (Foyer/Scolarité/Transport/Contacts/Validation)
+ * before they have real content. Phase 2+ tabs will auto-derive this
+ * flag from required-field presence on save and stop using this action.
+ */
+const DOSSIER_TABS_LIST = [
+  "eleve",
+  "responsables",
+  "foyer",
+  "scolarite",
+  "sante",
+  "transport",
+  "contacts",
+  "finance",
+  "justificatifs",
+  "validation",
+] as const;
+type DossierTabName = (typeof DOSSIER_TABS_LIST)[number];
+
+// ── Phase 2 tab saves ──────────────────────────────────────
+// Each helper auto-derives the tab's "complete" flag from the same
+// validation that the UI shows. Phase 5's WYSIWYG editor will swap the
+// hardcoded shape for a tenant-configured one, but the save/derive
+// pattern stays the same.
+
+async function loadApplicationOwnedBy(
+  applicationId: string,
+  parentUserId: string,
+) {
+  return db.application.findFirst({
+    where: { id: applicationId, submittedByUserId: parentUserId },
+    select: {
+      id: true,
+      submittedByUserId: true,
+      dossierAnswers: true,
+      tabsCompleted: true,
+    },
+  });
+}
+
+function mergeTabsCompleted(
+  raw: unknown,
+  tab: string,
+  done: boolean,
+): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  if (raw && typeof raw === "object") {
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof v === "boolean") out[k] = v;
+    }
+  }
+  out[tab] = done;
+  return out;
+}
+
+function mergeDossierAnswers(
+  raw: unknown,
+  tab: string,
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (raw && typeof raw === "object") {
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      out[k] = v;
+    }
+  }
+  out[tab] = payload;
+  return out;
+}
+
+// Foyer ───────────────────────────
+// Address + image-rights flow to the parent's Family row so siblings
+// inherit. Sibling rows go to ApplicationSibling.
+
+export async function saveFoyerTab(
+  applicationId: string,
+  payload: {
+    addressCaza: string;
+    addressVillage: string;
+    addressStreet: string;
+    addressBuilding: string;
+    addressFloor: string;
+    addressDetails: string;
+    addressNotes: string;
+    imageRightsSite: boolean | null;
+    imageRightsBook: boolean | null;
+    imageRightsSocial: boolean | null;
+    imageRightsRadio: boolean | null;
+    siblings: Array<{
+      firstName: string;
+      birthYear: number | null;
+      className: string;
+      schoolName: string;
+    }>;
+  },
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  // Phase 4 — completion now uses evaluateFoyerComplete (defined above)
+  // which respects tenant per-field overrides. The pure isFoyerComplete
+  // from @/lib/dossier-content remains available for any non-action
+  // callers.
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await loadApplicationOwnedBy(applicationId, user.id);
+    if (!app) return { ok: false, error: "not-found" };
+
+    // Locate the parent's Family via Guardian. Created at signup, but
+    // defend against missing rows gracefully.
+    const guardian = await db.guardian.findUnique({
+      where: { userId: user.id },
+      select: { familyId: true },
+    });
+
+    if (guardian?.familyId) {
+      await db.family.update({
+        where: { id: guardian.familyId },
+        data: {
+          addressStreet: payload.addressStreet || null,
+          addressHood: payload.addressVillage || null, // village mapped to hood for now
+          addressPostal: null,
+          addressCity: payload.addressCaza || null,
+          addressCountry: "Liban",
+          imageRightsSite: payload.imageRightsSite,
+          imageRightsBook: payload.imageRightsBook,
+          imageRightsSocial: payload.imageRightsSocial,
+          imageRightsRadio: payload.imageRightsRadio,
+          imageRightsAnsweredAt:
+            payload.imageRightsSite !== null ? new Date() : null,
+        },
+      });
+    }
+
+    // Replace sibling list — simplest semantics; parent re-types every
+    // save. Volume is small so churn doesn't matter.
+    await db.applicationSibling.deleteMany({ where: { applicationId } });
+    if (payload.siblings.length > 0) {
+      await db.applicationSibling.createMany({
+        data: payload.siblings
+          .filter((s) => s.firstName.trim().length > 0)
+          .map((s, idx) => ({
+            tenantId,
+            applicationId,
+            order: idx,
+            firstName: s.firstName.trim(),
+            birthYear: s.birthYear,
+            className: s.className.trim() || null,
+            schoolName: s.schoolName.trim() || null,
+          })),
+      });
+    }
+
+    // Also stash the building/floor/details/notes inside dossierAnswers
+    // (Family doesn't have columns for those). Kept under the foyer
+    // namespace so Phase 5 can move them without migration pain.
+    const foyerExtras = {
+      building: payload.addressBuilding,
+      floor: payload.addressFloor,
+      details: payload.addressDetails,
+      notes: payload.addressNotes,
+    };
+
+    // Phase 4 — completion now honors the tenant's per-field overrides
+    // from inscriptionFormConfig (hidden / required toggles).
+    const tenantFormConfig = await loadInscriptionFormConfig(tenantId);
+    const complete = evaluateFoyerComplete(
+      {
+        addressCaza: payload.addressCaza,
+        addressVillage: payload.addressVillage,
+        addressStreet: payload.addressStreet,
+        imageRightsSite: payload.imageRightsSite,
+        imageRightsBook: payload.imageRightsBook,
+        imageRightsSocial: payload.imageRightsSocial,
+        imageRightsRadio: payload.imageRightsRadio,
+      },
+      tenantFormConfig,
+    );
+
+    await db.application.update({
+      where: { id: applicationId },
+      data: {
+        dossierAnswers: mergeDossierAnswers(
+          app.dossierAnswers,
+          "foyer",
+          foyerExtras,
+        ),
+        tabsCompleted: mergeTabsCompleted(app.tabsCompleted, "foyer", complete),
+      },
+    });
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    return { ok: true };
+  });
+}
+
+// Scolarité ───────────────────────
+
+export async function saveScolariteTab(
+  applicationId: string,
+  payload: unknown,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  const { parseScolarite } = await import("@/lib/dossier-content");
+  const {
+    classifyNiveau,
+    parsePedagogique,
+    isPedagogiqueCompleteFor,
+  } = await import("@/lib/pedagogique");
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id: applicationId, submittedByUserId: user.id },
+      select: { id: true, dossierAnswers: true, tabsCompleted: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+
+    const data = parseScolarite(payload);
+
+    // Establishment + niveau used to live on the Élève tab; they were
+    // moved here. Extract from the payload (string fields, not part of
+    // ScolariteData) and write to dedicated Application columns.
+    const raw =
+      payload && typeof payload === "object"
+        ? (payload as Record<string, unknown>)
+        : {};
+    const newEstablishmentId =
+      typeof raw.establishmentId === "string" && raw.establishmentId
+        ? raw.establishmentId
+        : null;
+    const newNiveau =
+      typeof raw.niveau === "string" && raw.niveau ? raw.niveau : null;
+
+    if (newEstablishmentId) {
+      const est = await db.establishment.findUnique({
+        where: { id: newEstablishmentId },
+        select: { id: true },
+      });
+      if (!est) return { ok: false, error: "establishment-not-found" };
+    }
+
+    // Pedagogical card — parsed defensively, included in completion.
+    const pedagogique = parsePedagogique(raw.pedagogique);
+    const niveauGroup = classifyNiveau(newNiveau);
+    const pedagogiqueComplete = isPedagogiqueCompleteFor(
+      niveauGroup,
+      pedagogique,
+    );
+
+    // Phase 4: completion now respects tenant per-field overrides.
+    // Each scalar field's required-ness comes from the registry +
+    // tenant override merge; hidden fields are skipped entirely.
+    const tenantFormConfig = await loadInscriptionFormConfig(tenantId);
+    const need = (key: string) =>
+      isFieldRequiredEffective(key, tenantFormConfig);
+    const missing = (key: string, value: unknown): boolean => {
+      if (!need(key)) return false;
+      if (typeof value === "string") return !value.trim();
+      if (value === null || value === undefined || value === "") return true;
+      return false;
+    };
+    const scolariteFieldsComplete =
+      !missing("scolarite.previous.school", data.previousSchool) &&
+      !missing("scolarite.previous.class", data.previousClass) &&
+      !(need("scolarite.previous.attendedMlfBefore") &&
+        data.attendedMlfBefore === null) &&
+      !(need("scolarite.ebep.previous") && data.ebepPrevious === null) &&
+      !(need("scolarite.ebep.current") && data.ebepCurrent === null) &&
+      !(need("scolarite.dispense.libanais") && !data.dispenseLibanais) &&
+      !missing("scolarite.wishlist.entryDate", data.entryDate) &&
+      !(need("scolarite.wishlist.establishment") && !newEstablishmentId) &&
+      !(need("scolarite.wishlist.niveau") && !newNiveau?.trim());
+    const hardcodedComplete = scolariteFieldsComplete && pedagogiqueComplete;
+
+    // Persist both scolarite and pedagogique blobs in dossierAnswers.
+    const mergedAfterScolarite = mergeDossierAnswers(
+      app.dossierAnswers,
+      "scolarite",
+      data as unknown as Record<string, unknown>,
+    );
+    const mergedWithPedagogique = mergeDossierAnswers(
+      mergedAfterScolarite,
+      "pedagogique",
+      pedagogique as unknown as Record<string, unknown>,
+    );
+
+    await db.application.update({
+      where: { id: applicationId },
+      data: {
+        establishmentId: newEstablishmentId,
+        niveau: newNiveau,
+        requestedLevel: newNiveau,
+        dossierAnswers: mergedWithPedagogique,
+        tabsCompleted: mergeTabsCompleted(
+          app.tabsCompleted,
+          "scolarite",
+          hardcodedComplete,
+        ),
+      },
+    });
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    revalidatePath("/parent/dashboard");
+    return { ok: true };
+  });
+}
+
+// Transport ───────────────────────
+
+export async function saveTransportTab(
+  applicationId: string,
+  payload: unknown,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  const { parseTransport } = await import("@/lib/dossier-content");
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await loadApplicationOwnedBy(applicationId, user.id);
+    if (!app) return { ok: false, error: "not-found" };
+
+    const data = parseTransport(payload);
+
+    // Phase 4: completion respects tenant per-field overrides.
+    const tenantFormConfig = await loadInscriptionFormConfig(tenantId);
+    const need = (key: string) =>
+      isFieldRequiredEffective(key, tenantFormConfig);
+    let complete = true;
+    if (need("transport.mode.aller") && !data.modeAller) complete = false;
+    if (complete && need("transport.mode.retour") && !data.modeRetour)
+      complete = false;
+    if (complete && data.hasAlternateAddress) {
+      if (need("transport.altAddress.caza") && !data.altCaza) complete = false;
+      if (complete && need("transport.altAddress.village") && !data.altVillage)
+        complete = false;
+      if (complete && need("transport.altAddress.street") && !data.altStreet)
+        complete = false;
+    }
+    if (complete && need("transport.restauration.collation") &&
+        data.collation === null) complete = false;
+    if (complete && need("transport.restauration.cantine") &&
+        data.cantine === null) complete = false;
+
+    await db.application.update({
+      where: { id: applicationId },
+      data: {
+        dossierAnswers: mergeDossierAnswers(
+          app.dossierAnswers,
+          "transport",
+          data as unknown as Record<string, unknown>,
+        ),
+        tabsCompleted: mergeTabsCompleted(
+          app.tabsCompleted,
+          "transport",
+          complete,
+        ),
+      },
+    });
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    return { ok: true };
+  });
+}
+
+export async function setDossierTabCompleted(
+  applicationId: string,
+  tab: string,
+  completed: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+  if (!(DOSSIER_TABS_LIST as readonly string[]).includes(tab)) {
+    return { ok: false, error: "unknown-tab" };
+  }
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id: applicationId },
+      select: { id: true, submittedByUserId: true, tabsCompleted: true },
+    });
+    if (!app || app.submittedByUserId !== user.id) {
+      return { ok: false, error: "not-found" };
+    }
+    const current =
+      app.tabsCompleted && typeof app.tabsCompleted === "object"
+        ? (app.tabsCompleted as Record<string, unknown>)
+        : {};
+    const next: Record<string, boolean> = {};
+    for (const k of DOSSIER_TABS_LIST) {
+      const v = current[k];
+      if (typeof v === "boolean") next[k] = v;
+    }
+    next[tab as DossierTabName] = completed;
+    await db.application.update({
+      where: { id: applicationId },
+      data: { tabsCompleted: next },
+    });
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    return { ok: true };
+  });
+}
+
+// ── Autres contacts tab (urgence + pickup lists) ──────────────────
+
+const contactSchema = z.object({
+  kind: z.enum(["URGENCE", "PICKUP"]),
+  firstName: z.string().trim().min(1).max(80),
+  lastName: z.string().trim().min(1).max(80),
+  relation: z.string().trim().max(40).optional(),
+  phoneMobile: z.string().trim().max(40).optional(),
+  phoneHome: z.string().trim().max(40).optional(),
+});
+
+async function refreshContactsCompletion(
+  applicationId: string,
+  app: { tabsCompleted: unknown },
+  tenantId: string,
+): Promise<void> {
+  // Contacts tab is complete when at least one URGENCE contact exists.
+  // Pickup-authorized contacts are optional — the school falls back to
+  // the responsables list if the parent doesn't add any.
+  //
+  // Phase 4: if admin hides or marks-optional contacts.urgence.list,
+  // the tab passes regardless of whether any URGENCE contacts exist.
+  const tenantFormConfig = await loadInscriptionFormConfig(tenantId);
+  const urgenceRequired = isFieldRequiredEffective(
+    "contacts.urgence.list",
+    tenantFormConfig,
+  );
+  let done: boolean;
+  if (!urgenceRequired) {
+    done = true;
+  } else {
+    const urgenceCount = await db.applicationContact.count({
+      where: { applicationId, kind: "URGENCE" },
+    });
+    done = urgenceCount > 0;
+  }
+  await db.application.update({
+    where: { id: applicationId },
+    data: { tabsCompleted: mergeTabsCompleted(app.tabsCompleted, "contacts", done) },
+  });
+}
+
+export async function saveContact(
+  applicationId: string,
+  contactId: string | null,
+  payload: unknown,
+): Promise<{ ok: boolean; error?: string; errors?: Record<string, string> }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  const parsed = contactSchema.safeParse(payload);
+  if (!parsed.success) {
+    const flat = z.flattenError(parsed.error).fieldErrors as Record<
+      string,
+      string[] | undefined
+    >;
+    const errors: Record<string, string> = {};
+    for (const [k, v] of Object.entries(flat)) if (v?.[0]) errors[k] = v[0];
+    return { ok: false, errors };
+  }
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id: applicationId, submittedByUserId: user.id },
+      select: { id: true, status: true, tabsCompleted: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
+      return { ok: false, error: "locked" };
+    }
+
+    if (contactId) {
+      // Update — verify the row belongs to this application.
+      const existing = await db.applicationContact.findUnique({
+        where: { id: contactId },
+        select: { applicationId: true },
+      });
+      if (!existing || existing.applicationId !== applicationId) {
+        return { ok: false, error: "not-found" };
+      }
+      await db.applicationContact.update({
+        where: { id: contactId },
+        data: {
+          kind: parsed.data.kind,
+          firstName: parsed.data.firstName,
+          lastName: parsed.data.lastName,
+          relation: parsed.data.relation || null,
+          phoneMobile: parsed.data.phoneMobile || null,
+          phoneHome: parsed.data.phoneHome || null,
+        },
+      });
+    } else {
+      // Create — append at the end of the kind's list.
+      const maxOrder = await db.applicationContact.aggregate({
+        where: { applicationId, kind: parsed.data.kind },
+        _max: { order: true },
+      });
+      await db.applicationContact.create({
+        data: {
+          tenantId,
+          applicationId,
+          kind: parsed.data.kind,
+          order: (maxOrder._max.order ?? -1) + 1,
+          firstName: parsed.data.firstName,
+          lastName: parsed.data.lastName,
+          relation: parsed.data.relation || null,
+          phoneMobile: parsed.data.phoneMobile || null,
+          phoneHome: parsed.data.phoneHome || null,
+        },
+      });
+    }
+
+    await refreshContactsCompletion(applicationId, app, tenantId);
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    return { ok: true };
+  });
+}
+
+export async function deleteContact(
+  applicationId: string,
+  contactId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id: applicationId, submittedByUserId: user.id },
+      select: { id: true, status: true, tabsCompleted: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
+      return { ok: false, error: "locked" };
+    }
+    const existing = await db.applicationContact.findUnique({
+      where: { id: contactId },
+      select: { applicationId: true },
+    });
+    if (!existing || existing.applicationId !== applicationId) {
+      return { ok: false, error: "not-found" };
+    }
+    await db.applicationContact.delete({ where: { id: contactId } });
+    await refreshContactsCompletion(applicationId, app, tenantId);
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    return { ok: true };
+  });
+}
+
+// ── Santé tab ────────────────────────────────────────────────────
+
+const santeSchema = z.object({
+  allergies: z.string().trim().max(2000).optional(),
+  traitement: z.string().trim().max(2000).optional(),
+  doctorName: z.string().trim().max(120).optional(),
+  doctorPhone: z.string().trim().max(40).optional(),
+  vaccinationsUpToDate: z.boolean().nullable().optional(),
+  hasPai: z.boolean().nullable().optional(),
+  paiDetails: z.string().trim().max(2000).optional(),
+  diet: z.string().trim().max(2000).optional(),
+  notes: z.string().trim().max(2000).optional(),
+});
+
+export async function saveSanteTab(
+  applicationId: string,
+  payload: unknown,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  const parsed = santeSchema.safeParse(payload);
+  if (!parsed.success) return { ok: false, error: "validation" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await loadApplicationOwnedBy(applicationId, user.id);
+    if (!app) return { ok: false, error: "not-found" };
+
+    // Phase 4 — completion respects tenant overrides. Vaccinations + PAI
+    // are required by default; admin can flip either to optional or
+    // hide them entirely.
+    const tenantFormConfig = await loadInscriptionFormConfig(tenantId);
+    const need = (key: string) =>
+      isFieldRequiredEffective(key, tenantFormConfig);
+    let complete = true;
+    if (
+      need("sante.info.vaccinationsUpToDate") &&
+      (parsed.data.vaccinationsUpToDate === undefined ||
+        parsed.data.vaccinationsUpToDate === null)
+    ) {
+      complete = false;
+    }
+    if (
+      complete &&
+      need("sante.info.hasPai") &&
+      (parsed.data.hasPai === undefined || parsed.data.hasPai === null)
+    ) {
+      complete = false;
+    }
+
+    await db.application.update({
+      where: { id: applicationId },
+      data: {
+        dossierAnswers: mergeDossierAnswers(
+          app.dossierAnswers,
+          "sante",
+          parsed.data as unknown as Record<string, unknown>,
+        ),
+        tabsCompleted: mergeTabsCompleted(app.tabsCompleted, "sante", complete),
+      },
+    });
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    return { ok: true };
+  });
+}
+
+// ── Finance tab ──────────────────────────────────────────────────
+
+const financeSchema = z.object({
+  acknowledgedReglementInterieur: z.boolean().optional(),
+  acknowledgedReglementFinancier: z.boolean().optional(),
+  acknowledgedDroitsEntreeMlf: z.boolean().optional(),
+  comiteParents: z.boolean().nullable().optional(),
+  caisseLbp: z.string().trim().max(40).optional(), // "3000000" | "6000000" | "9000000" | "none" | custom
+  caisseLbpAutreAmount: z.string().trim().max(20).optional(),
+  caisseUsd: z.string().trim().max(40).optional(),
+  caisseUsdAutreAmount: z.string().trim().max(20).optional(),
+});
+
+export async function saveFinanceTab(
+  applicationId: string,
+  payload: unknown,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  const parsed = financeSchema.safeParse(payload);
+  if (!parsed.success) return { ok: false, error: "validation" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await loadApplicationOwnedBy(applicationId, user.id);
+    if (!app) return { ok: false, error: "not-found" };
+
+    // Phase 4 — completion respects tenant overrides. Three acks +
+    // comité are required by default; admin can flip any to optional
+    // or hide. Caisse de solidarité stays optional in all cases.
+    const tenantFormConfig = await loadInscriptionFormConfig(tenantId);
+    const need = (key: string) =>
+      isFieldRequiredEffective(key, tenantFormConfig);
+    let complete = true;
+    if (
+      need("finance.reglements.ackInterieur") &&
+      parsed.data.acknowledgedReglementInterieur !== true
+    ) {
+      complete = false;
+    }
+    if (
+      complete &&
+      need("finance.reglements.ackFinancier") &&
+      parsed.data.acknowledgedReglementFinancier !== true
+    ) {
+      complete = false;
+    }
+    if (
+      complete &&
+      need("finance.droitsMlf.ack") &&
+      parsed.data.acknowledgedDroitsEntreeMlf !== true
+    ) {
+      complete = false;
+    }
+    if (
+      complete &&
+      need("finance.comite.subscribe") &&
+      (parsed.data.comiteParents === undefined ||
+        parsed.data.comiteParents === null)
+    ) {
+      complete = false;
+    }
+
+    await db.application.update({
+      where: { id: applicationId },
+      data: {
+        dossierAnswers: mergeDossierAnswers(
+          app.dossierAnswers,
+          "finance",
+          parsed.data as unknown as Record<string, unknown>,
+        ),
+        tabsCompleted: mergeTabsCompleted(
+          app.tabsCompleted,
+          "finance",
+          complete,
+        ),
+      },
+    });
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    return { ok: true };
+  });
+}
+
+// ── Validation tab ───────────────────────────────────────────────
+
+export async function saveValidationAck(
+  applicationId: string,
+  acknowledged: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await loadApplicationOwnedBy(applicationId, user.id);
+    if (!app) return { ok: false, error: "not-found" };
+
+    const dossier =
+      app.dossierAnswers && typeof app.dossierAnswers === "object"
+        ? (app.dossierAnswers as Record<string, unknown>)
+        : {};
+    const validation = {
+      ...(dossier.validation && typeof dossier.validation === "object"
+        ? (dossier.validation as Record<string, unknown>)
+        : {}),
+      acknowledged,
+    };
+
+    // Phase 4 — if admin hides or marks-optional the ack field, the
+    // validation tab passes regardless of the checkbox state.
+    const tenantFormConfig = await loadInscriptionFormConfig(tenantId);
+    const ackRequired = isFieldRequiredEffective(
+      "validation.ack.acknowledged",
+      tenantFormConfig,
+    );
+    const complete = ackRequired ? acknowledged : true;
+
+    await db.application.update({
+      where: { id: applicationId },
+      data: {
+        dossierAnswers: mergeDossierAnswers(app.dossierAnswers, "validation", validation),
+        tabsCompleted: mergeTabsCompleted(
+          app.tabsCompleted,
+          "validation",
+          complete,
+        ),
+      },
+    });
     revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
     return { ok: true };
   });

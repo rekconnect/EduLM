@@ -52,6 +52,17 @@ export function CycleForm({
       </FormRow>
 
       <FormRow>
+        <Field
+          label={t("cycleFieldSchoolStartDate")}
+          htmlFor="schoolStartDate"
+          error={state.errors?.schoolStartDate}
+          hint={t("cycleFieldSchoolStartDateHint")}
+        >
+          <Input id="schoolStartDate" name="schoolStartDate" type="date" />
+        </Field>
+      </FormRow>
+
+      <FormRow>
         <Field label={t("cycleFieldFee")} htmlFor="inscriptionFee" error={state.errors?.inscriptionFee}>
           <Input id="inscriptionFee" name="inscriptionFee" inputMode="decimal" placeholder="200" />
         </Field>

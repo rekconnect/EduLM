@@ -49,7 +49,7 @@ export default async function ParentApplicationsPage() {
             title={t("myApplicationsTitle")}
             description={t("myApplicationsLead")}
             action={
-              <LinkButton href="/parent/applications/new" size="sm" className="gap-1.5">
+              <LinkButton href="/parent/inscriptions/new" size="sm" className="gap-1.5">
                 <Plus className="size-4" aria-hidden />
                 {t("newCta")}
               </LinkButton>
@@ -65,7 +65,7 @@ export default async function ParentApplicationsPage() {
                 {t("noApplications")}
               </p>
               <div className="mt-5">
-                <LinkButton href="/parent/applications/new" size="sm" className="gap-1.5">
+                <LinkButton href="/parent/inscriptions/new" size="sm" className="gap-1.5">
                   <Plus className="size-4" aria-hidden />
                   {t("newCta")}
                 </LinkButton>

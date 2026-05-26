@@ -7,6 +7,7 @@ import { Input, Select, Textarea } from "@/components/ui/input";
 import { Field, FormRow } from "@/components/ui/field";
 import { type FieldDef } from "@/lib/entity-fields";
 import { type ParentCreateConfig } from "@/lib/parent-create-config";
+import { RESPONSABLE_RELATIONS } from "@/app/(app)/parent/inscriptions/[id]/edit/_section-responsable-lebanese";
 import { createParent, type ParentFormState } from "../_actions";
 
 /**
@@ -19,9 +20,26 @@ import { createParent, type ParentFormState } from "../_actions";
  *   prefixed by "f-" so the server action can pull them out and write
  *   them into User.customAnswers.
  */
-export function CreateParentForm({ config }: { config: ParentCreateConfig }) {
+export function CreateParentForm({
+  config,
+  labels,
+}: {
+  config: ParentCreateConfig;
+  /**
+   * Override the default i18n labels for built-in fields. Pass the
+   * tenant-configured labels (resolved from parentFieldsConfig's
+   * userBoundTo fields) so this form matches the rest of the app
+   * (Compte tab, EditParentForm, parent dossier, etc.).
+   */
+  labels?: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  };
+}) {
   const t = useTranslations("parents");
   const tCommon = useTranslations("common");
+  const tDossier = useTranslations("dossierForms");
   const [state, formAction, pending] = useActionState<ParentFormState, FormData>(
     createParent,
     {},
@@ -42,7 +60,7 @@ export function CreateParentForm({ config }: { config: ParentCreateConfig }) {
         <FormRow>
           {showFirstName ? (
             <Field
-              label={t("fieldFirstName")}
+              label={labels?.firstName ?? t("fieldFirstName")}
               htmlFor="firstName"
               required={config.builtin.firstName === "required"}
               error={state.errors?.firstName}
@@ -57,7 +75,7 @@ export function CreateParentForm({ config }: { config: ParentCreateConfig }) {
           ) : null}
           {showLastName ? (
             <Field
-              label={t("fieldLastName")}
+              label={labels?.lastName ?? t("fieldLastName")}
               htmlFor="lastName"
               required={config.builtin.lastName === "required"}
               error={state.errors?.lastName}
@@ -73,7 +91,7 @@ export function CreateParentForm({ config }: { config: ParentCreateConfig }) {
       )}
 
       <Field
-        label={t("fieldEmail")}
+        label={labels?.email ?? t("fieldEmail")}
         htmlFor="email"
         required
         error={state.errors?.email === "exists" ? t("emailExists") : state.errors?.email}
@@ -89,12 +107,19 @@ export function CreateParentForm({ config }: { config: ParentCreateConfig }) {
               htmlFor="relation"
               required={config.builtin.relation === "required"}
             >
-              <Input
+              <Select
                 id="relation"
                 name="relation"
                 required={config.builtin.relation === "required"}
-                placeholder="père / mère / tuteur"
-              />
+                defaultValue=""
+              >
+                <option value="">—</option>
+                {RESPONSABLE_RELATIONS.map((r) => (
+                  <option key={r} value={r}>
+                    {tDossier(`responsable.relations.${r}` as never)}
+                  </option>
+                ))}
+              </Select>
             </Field>
           ) : null}
           {showLocale ? (

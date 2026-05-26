@@ -92,7 +92,10 @@ export async function sendApplicationDecidedEmail(args: {
       heading: copy.heading,
       intro: copy.intro,
       bodyHtml: `${note}<p style="margin:0 0 8px;color:#52525b;font-size:14px;">Concerne <strong>${args.childFirstName} ${args.childLastName}</strong>.</p>`,
-      ctaHref: url(`/parent/applications/${args.applicationId}`),
+      // Point directly at the 10-tab dossier shell — handles read-only
+      // mode for ACCEPTED/DECLINED/etc. The legacy /parent/applications/{id}
+      // route now just redirects here anyway, so this saves a hop.
+      ctaHref: url(`/parent/inscriptions/${args.applicationId}/edit`),
       ctaLabel: "Voir le dossier",
     }),
   });

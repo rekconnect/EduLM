@@ -284,6 +284,30 @@ export const INSCRIPTION_FIELDS_REGISTRY = {
     conditionallyVisible: true,
     note: "Visible et obligatoire uniquement si « Nationalité libanaise » = Oui.",
   },
+  "responsables.identity.nationality1": {
+    tab: "responsables",
+    section: "identity",
+    type: "select",
+    defaultLabel: {
+      fr: "Nationalité 1",
+      en: "Nationality 1",
+      ar: "الجنسية 1",
+    },
+    defaultRequired: false,
+    conditionalRequired: true,
+    note: "Obligatoire si « Nationalité libanaise » = Non. Mêmes options que l'élève.",
+  },
+  "responsables.identity.nationality2": {
+    tab: "responsables",
+    section: "identity",
+    type: "select",
+    defaultLabel: {
+      fr: "Nationalité 2",
+      en: "Nationality 2",
+      ar: "الجنسية 2",
+    },
+    defaultRequired: false,
+  },
 
   // Section: Famille (footer)
   "responsables.family.monoParental": {

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Field, FormRow } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/input";
+import { NATIONALITIES_FR } from "@/lib/lookups";
 import { useField } from "@/components/dossier/tenant-config-context";
 import { EditableField } from "@/components/dossier/preview-edit-mode-context";
 import { saveResponsableIdentity } from "../../_actions";
@@ -35,11 +36,12 @@ export const RESPONSABLE_RELATIONS = [
 export type ResponsableRelation = (typeof RESPONSABLE_RELATIONS)[number];
 
 /**
- * "Identité du responsable" card on the Responsables tab.
- *
- * Phase 4: every label / required / hidden read through useField();
- * every <Field> wrapped in <EditableField> so the WYSIWYG editor can
- * pencil-overlay it. Same pattern as the Élève sections from Phase 2/3.
+ * "Identité du responsable" card on the Responsables tab. Mirrors the
+ * child's Élève passport card structure 1:1 so parents see consistent
+ * patterns across the two:
+ *   1. Relation avec l'enfant
+ *   2. Nationalité libanaise Oui/Non · Passeport libanais (when Oui)
+ *   3. Nationalité 1 · Nationalité 2
  */
 export function ResponsableLebaneseSection({
   applicationId,
@@ -52,6 +54,8 @@ export function ResponsableLebaneseSection({
     submitterRelation: string | null;
     submitterIsLebanese: boolean | null;
     submitterPassportLebanese: string;
+    submitterNationality: string;
+    submitterNationality2: string;
   };
   disabled: boolean;
   editMode?: boolean;
@@ -66,10 +70,18 @@ export function ResponsableLebaneseSection({
   const [passportLebanese, setPassportLebanese] = useState<string>(
     initial.submitterPassportLebanese,
   );
+  const [nationality, setNationality] = useState<string>(
+    initial.submitterNationality,
+  );
+  const [nationality2, setNationality2] = useState<string>(
+    initial.submitterNationality2,
+  );
 
   const fRelation = useField("responsables.identity.relation");
   const fIsLebanese = useField("responsables.identity.isLebanese");
   const fPassportLebanese = useField("responsables.identity.passportLebanese");
+  const fNationality1 = useField("responsables.identity.nationality1");
+  const fNationality2 = useField("responsables.identity.nationality2");
 
   function onSave() {
     if (editMode) {
@@ -82,6 +94,8 @@ export function ResponsableLebaneseSection({
         isLebanese,
         passportLebanese:
           isLebanese === true ? passportLebanese || undefined : undefined,
+        nationality: nationality || undefined,
+        nationality2: nationality2 || undefined,
       });
       if (r.ok) toast.success(tCommon("saved"));
       else toast.error(t("saveError"));
@@ -182,6 +196,68 @@ export function ResponsableLebaneseSection({
             </EditableField>
           ) : (
             <div />
+          )}
+        </FormRow>
+
+        {/* 3. Other nationalities — up to 2 (same shape as the Élève card) */}
+        <FormRow>
+          {fNationality1?.hidden ? (
+            <div />
+          ) : (
+            <EditableField fieldKey="responsables.identity.nationality1">
+              <Field
+                label={fNationality1?.label ?? t("responsable.nationality1")}
+                htmlFor="submitterNationality"
+                required={
+                  // Mirror the Élève card's behavior — if admin set
+                  // an explicit override, respect it; otherwise fall
+                  // back to the legacy "required when not Lebanese"
+                  // pattern.
+                  fNationality1?.hasOverride
+                    ? fNationality1.required
+                    : isLebanese === false
+                }
+              >
+                <Select
+                  id="submitterNationality"
+                  value={nationality}
+                  onChange={(e) => setNationality(e.target.value)}
+                  disabled={disabled}
+                >
+                  <option value="">—</option>
+                  {NATIONALITIES_FR.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </EditableField>
+          )}
+          {fNationality2?.hidden ? (
+            <div />
+          ) : (
+            <EditableField fieldKey="responsables.identity.nationality2">
+              <Field
+                label={fNationality2?.label ?? t("responsable.nationality2")}
+                htmlFor="submitterNationality2"
+                required={fNationality2?.required ?? false}
+              >
+                <Select
+                  id="submitterNationality2"
+                  value={nationality2}
+                  onChange={(e) => setNationality2(e.target.value)}
+                  disabled={disabled}
+                >
+                  <option value="">—</option>
+                  {NATIONALITIES_FR.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </EditableField>
           )}
         </FormRow>
 

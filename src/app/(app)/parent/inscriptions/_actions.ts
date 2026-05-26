@@ -167,10 +167,63 @@ export async function createDossier(
       if (!est) return;
     }
 
-    // We DON'T fetch primary parent info here — the parent will fill it in
-    // the subsequent wizard step. Required column `primaryParentName` is
-    // seeded with the parent's display name to keep the schema happy; admin
-    // sees the live values after the parent saves step 2.
+    // Pre-fill from the parent's most recent prior application (any
+    // status) — for sibling #2, sibling #3, etc. The parent (responsable)
+    // identity is the same person, the household is the same, the custom
+    // parent answers are the same. We only re-ask kid-specific things
+    // (Élève identity, Scolarité, Transport, Santé, etc.) which the
+    // parent fills via the dossier shell.
+    //
+    // Family-level data (address, image rights) already auto-shares via
+    // the Family table on Guardian.userId — siblings read from the same
+    // Family row. The foyer EXTRAS (building, floor, details, notes)
+    // live in dossierAnswers per-application; we copy those too so the
+    // sibling dossier starts pre-filled.
+    const prior = await db.application.findFirst({
+      where: { submittedByUserId: user.id },
+      orderBy: { createdAt: "desc" },
+      select: {
+        submitterRelation: true,
+        submitterIsLebanese: true,
+        submitterPassportLebanese: true,
+        submitterNationality: true,
+        submitterNationality2: true,
+        monoParental: true,
+        parentAnswers: true,
+        dossierAnswers: true,
+      },
+    });
+
+    // Fall back to Guardian for the very first dossier (no prior
+    // application). Admin may have entered identity from /admin/parents
+    // before the parent created any dossier — Guardian is the canonical
+    // parent-level store, so we use it to pre-fill submitter* columns
+    // and monoParental on the new draft.
+    const guardian = prior
+      ? null
+      : await db.guardian.findUnique({
+          where: { userId: user.id },
+          select: {
+            relation: true,
+            isLebanese: true,
+            passportLebanese: true,
+            nationality1: true,
+            nationality2: true,
+            monoParental: true,
+          },
+        });
+
+    // Extract just the foyer slice from prior dossierAnswers — the
+    // household-level extras. Skip scolarite / pedagogique / transport /
+    // sante / finance / validation because those are kid-specific.
+    let priorFoyerExtras: Record<string, unknown> | null = null;
+    if (prior?.dossierAnswers && typeof prior.dossierAnswers === "object") {
+      const d = prior.dossierAnswers as Record<string, unknown>;
+      if (d.foyer && typeof d.foyer === "object") {
+        priorFoyerExtras = d.foyer as Record<string, unknown>;
+      }
+    }
+
     const created = await db.application.create({
       data: {
         tenantId,
@@ -185,9 +238,32 @@ export async function createDossier(
         niveau: parsed.data.niveau,
         // Legacy column still expected by the existing wizard's level dropdown.
         requestedLevel: parsed.data.niveau,
-        // Pre-populate studentAnswers with the quick-form extras so they're
-        // immediately visible on the dossier edit page.
+        // ── Per-kid (empty for new sibling) ──
         studentAnswers: extraAnswers,
+        // ── Responsable identity carried over from prior dossier,
+        //    or from Guardian when this is the parent's first dossier. ──
+        submitterRelation:
+          prior?.submitterRelation ?? guardian?.relation ?? null,
+        submitterIsLebanese:
+          prior?.submitterIsLebanese ?? guardian?.isLebanese ?? null,
+        submitterPassportLebanese:
+          prior?.submitterPassportLebanese ??
+          guardian?.passportLebanese ??
+          null,
+        submitterNationality:
+          prior?.submitterNationality ?? guardian?.nationality1 ?? null,
+        submitterNationality2:
+          prior?.submitterNationality2 ?? guardian?.nationality2 ?? null,
+        monoParental: prior?.monoParental ?? guardian?.monoParental ?? false,
+        // ── Custom parent fields carried over ──
+        parentAnswers:
+          prior?.parentAnswers && typeof prior.parentAnswers === "object"
+            ? (prior.parentAnswers as object)
+            : {},
+        // ── Foyer extras (building / floor / details / notes) carried
+        //    over — Family address + image rights auto-share via the
+        //    Family relation, no copy needed. ──
+        dossierAnswers: priorFoyerExtras ? { foyer: priorFoyerExtras } : {},
         status: "DRAFT",
       },
       select: { id: true },
@@ -571,6 +647,8 @@ const responsableIdentitySchema = z.object({
   relation: z.string().trim().max(40).optional(),
   isLebanese: z.boolean().nullable().optional(),
   passportLebanese: z.string().trim().max(40).optional(),
+  nationality: z.string().trim().max(80).optional(),
+  nationality2: z.string().trim().max(80).optional(),
 });
 
 export async function saveResponsableIdentity(
@@ -602,12 +680,10 @@ export async function saveResponsableIdentity(
         ? parsed.data.passportLebanese || null
         : null;
 
-    // submitterNationality + submitterNationality2 used to be written
-    // from this card too. They moved to the tenant's custom parent
-    // fields (rendered just below via DossierEditClient) so admin can
-    // mark them optional without code changes. The legacy columns are
-    // left untouched here so historical data is preserved and reports
-    // that still read them continue to work for old records.
+    // Nationalité 1 + 2 are back on the hardcoded Responsable identity
+    // card (mirrors the child's Élève passport card). Admin should
+    // delete the duplicate custom parent fields from /settings → Forms
+    // → Parents so the parent doesn't see the same dropdowns twice.
     await db.application.update({
       where: { id: applicationId },
       data: {
@@ -617,8 +693,34 @@ export async function saveResponsableIdentity(
             ? undefined
             : parsed.data.isLebanese,
         submitterPassportLebanese: persistLebanesePassport,
+        submitterNationality: parsed.data.nationality || null,
+        submitterNationality2: parsed.data.nationality2 || null,
       },
     });
+    // Mirror identity onto Guardian — Guardian is now the canonical
+    // store for parent-level identity (admin can read/edit it even
+    // when no application exists). Without this mirror, admin's
+    // /admin/parents view would lag behind dossier edits.
+    const guardianUpdate: Record<string, unknown> = {};
+    if (parsed.data.relation !== undefined) {
+      guardianUpdate.relation = parsed.data.relation || null;
+    }
+    if (parsed.data.isLebanese !== undefined) {
+      guardianUpdate.isLebanese = parsed.data.isLebanese;
+      guardianUpdate.passportLebanese = persistLebanesePassport;
+    }
+    if (parsed.data.nationality !== undefined) {
+      guardianUpdate.nationality1 = parsed.data.nationality || null;
+    }
+    if (parsed.data.nationality2 !== undefined) {
+      guardianUpdate.nationality2 = parsed.data.nationality2 || null;
+    }
+    if (Object.keys(guardianUpdate).length > 0) {
+      await db.guardian.updateMany({
+        where: { userId: user.id },
+        data: guardianUpdate,
+      });
+    }
     revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
     return { ok: true };
   });
@@ -645,6 +747,13 @@ export async function saveMonoParental(
     }
     await db.application.update({
       where: { id: applicationId },
+      data: { monoParental },
+    });
+    // Mirror to Guardian so admin's parent profile reflects the
+    // current state even when admin opens a different application
+    // or before they look at one.
+    await db.guardian.updateMany({
+      where: { userId: user.id },
       data: { monoParental },
     });
     revalidatePath(`/parent/inscriptions/${applicationId}/edit`);

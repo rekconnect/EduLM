@@ -5,11 +5,13 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Field, FormRow } from "@/components/ui/field";
+import { RESPONSABLE_RELATIONS } from "@/app/(app)/parent/inscriptions/[id]/edit/_section-responsable-lebanese";
 import type { ParentFormState } from "../_actions";
 
 export function EditParentForm({
   action,
   initial,
+  labels,
 }: {
   action: (state: ParentFormState, formData: FormData) => Promise<ParentFormState>;
   initial: {
@@ -19,16 +21,28 @@ export function EditParentForm({
     relation: string;
     locale: string;
   };
+  /**
+   * Override the default i18n labels for built-in fields. Pass the
+   * tenant-configured labels (resolved from parentFieldsConfig's
+   * userBoundTo fields) so the edit form matches the rest of the app.
+   * When undefined, falls back to the parents i18n namespace.
+   */
+  labels?: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  };
 }) {
   const t = useTranslations("parents");
   const tCommon = useTranslations("common");
+  const tDossier = useTranslations("dossierForms");
   const [state, formAction, pending] = useActionState<ParentFormState, FormData>(action, {});
 
   return (
     <form action={formAction} className="space-y-5">
       <FormRow>
         <Field
-          label={t("fieldFirstName")}
+          label={labels?.firstName ?? t("fieldFirstName")}
           htmlFor="firstName"
           required
           error={state.errors?.firstName}
@@ -36,7 +50,7 @@ export function EditParentForm({
           <Input id="firstName" name="firstName" defaultValue={initial.firstName} required />
         </Field>
         <Field
-          label={t("fieldLastName")}
+          label={labels?.lastName ?? t("fieldLastName")}
           htmlFor="lastName"
           required
           error={state.errors?.lastName}
@@ -46,7 +60,7 @@ export function EditParentForm({
       </FormRow>
 
       <Field
-        label={t("fieldEmail")}
+        label={labels?.email ?? t("fieldEmail")}
         htmlFor="email"
         required
         error={state.errors?.email === "exists" ? t("emailExists") : state.errors?.email}
@@ -56,7 +70,14 @@ export function EditParentForm({
 
       <FormRow>
         <Field label={t("fieldRelation")} htmlFor="relation">
-          <Input id="relation" name="relation" defaultValue={initial.relation} />
+          <Select id="relation" name="relation" defaultValue={initial.relation}>
+            <option value="">—</option>
+            {RESPONSABLE_RELATIONS.map((r) => (
+              <option key={r} value={r}>
+                {tDossier(`responsable.relations.${r}` as never)}
+              </option>
+            ))}
+          </Select>
         </Field>
         <Field label={t("fieldLocale")} htmlFor="locale">
           <Select id="locale" name="locale" defaultValue={initial.locale || "fr"}>

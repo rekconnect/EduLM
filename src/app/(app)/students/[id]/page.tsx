@@ -185,19 +185,33 @@ export default async function StudentDetailPage({
             </CardBody>
           </Card>
 
-          {studentFieldsConfig.fields.length > 0 ? (
-            <Card>
-              <CardHeader title={t("customFieldsTitle")} />
-              <CardBody>
-                <StudentCustomAnswersForm
-                  studentId={student.id}
-                  config={studentFieldsConfig}
-                  initialAnswers={initialStudentAnswers}
-                  extras={{ establishments: establishmentsForRenderer }}
-                />
-              </CardBody>
-            </Card>
-          ) : null}
+          {/* Strip out dossierBoundTo fields — their canonical source is
+              the built-in student edit form above (Student.firstName /
+              lastName / dob / etc.). Showing them here too would
+              duplicate every input. Same rule we apply on the parent
+              profile page for userBoundTo fields. */}
+          {(() => {
+            const filteredConfig = {
+              ...studentFieldsConfig,
+              fields: studentFieldsConfig.fields.filter(
+                (f) => !f.dossierBoundTo,
+              ),
+            };
+            if (filteredConfig.fields.length === 0) return null;
+            return (
+              <Card>
+                <CardHeader title={t("customFieldsTitle")} />
+                <CardBody>
+                  <StudentCustomAnswersForm
+                    studentId={student.id}
+                    config={filteredConfig}
+                    initialAnswers={initialStudentAnswers}
+                    extras={{ establishments: establishmentsForRenderer }}
+                  />
+                </CardBody>
+              </Card>
+            );
+          })()}
 
           <Card>
             <CardHeader title={t("guardiansTitle")} />

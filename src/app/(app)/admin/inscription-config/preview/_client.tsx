@@ -75,6 +75,8 @@ const MOCK_RESPONSABLE = {
   submitterRelation: "pere",
   submitterIsLebanese: true as boolean | null,
   submitterPassportLebanese: "RL 7654321",
+  submitterNationality: "",
+  submitterNationality2: "",
 };
 const MOCK_FOYER = {
   addressCaza: "Baabda",

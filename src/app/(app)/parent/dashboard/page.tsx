@@ -257,12 +257,7 @@ export default async function ParentDashboardPage() {
                               return (
                                 <Link
                                   key={cycle.id}
-                                  href={
-                                    existing.status === "DRAFT" ||
-                                    existing.status === "SUBMITTED"
-                                      ? `/parent/inscriptions/${existing.id}/edit`
-                                      : `/parent/applications/${existing.id}`
-                                  }
+                                  href={`/parent/inscriptions/${existing.id}/edit`}
                                   className="flex items-center justify-between gap-3 rounded-md border border-[color:var(--color-success)]/30 bg-[color:var(--color-success-soft)] px-3 py-2 text-sm text-[color:var(--color-success-soft-fg)] transition-colors hover:bg-[color:var(--color-success-soft)]/80"
                                 >
                                   <span className="flex items-center gap-2">
@@ -373,11 +368,7 @@ async function NoChildrenState({
                   {apps.map((a) => (
                     <li key={a.id}>
                       <Link
-                        href={
-                          a.status === "DRAFT" || a.status === "SUBMITTED"
-                            ? `/parent/inscriptions/${a.id}/edit`
-                            : `/parent/applications/${a.id}`
-                        }
+                        href={`/parent/inscriptions/${a.id}/edit`}
                         className="flex items-center justify-between rounded-md border border-[color:var(--color-border-subtle)] px-3 py-2 transition-colors hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--color-surface-hover)]"
                       >
                         <span>

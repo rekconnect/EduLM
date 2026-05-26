@@ -232,10 +232,22 @@ export default async function DossierEditPage({
     const dossierLocale: DossierLocale =
       localeStr === "en" || localeStr === "ar" ? localeStr : "fr";
 
-    const statusKey = `status${app.status.charAt(0)}${app.status
-      .slice(1)
-      .toLowerCase()
-      .replace(/_(.)/g, (_, c) => c.toUpperCase())}`;
+    // Map ApplicationStatus enum → i18n key. We don't auto-generate
+    // these because the enum name and i18n key don't always match
+    // (e.g. INTERVIEW_SCHEDULED → statusInterview, not
+    // statusInterviewScheduled). Mirrors the explicit STATUS_KEY map
+    // in /admissions-admin/[id]/page.tsx.
+    const STATUS_KEY_MAP: Record<string, string> = {
+      DRAFT: "statusDraft",
+      SUBMITTED: "statusSubmitted",
+      UNDER_REVIEW: "statusUnderReview",
+      INTERVIEW_SCHEDULED: "statusInterview",
+      ACCEPTED: "statusAccepted",
+      WAITLISTED: "statusWaitlisted",
+      DECLINED: "statusDeclined",
+      WITHDRAWN: "statusWithdrawn",
+    };
+    const statusKey = STATUS_KEY_MAP[app.status] ?? "statusSubmitted";
 
     const baseHref = `/parent/inscriptions/${app.id}/edit`;
     const editable = app.status === "DRAFT" || app.status === "SUBMITTED";
@@ -339,6 +351,8 @@ export default async function DossierEditPage({
                 submitterRelation: app.submitterRelation,
                 submitterIsLebanese: app.submitterIsLebanese,
                 submitterPassportLebanese: app.submitterPassportLebanese ?? "",
+                submitterNationality: app.submitterNationality ?? "",
+                submitterNationality2: app.submitterNationality2 ?? "",
               }}
             />
           ) : null}

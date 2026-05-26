@@ -38,6 +38,104 @@ const updateSchema = z.object({
   locale: z.enum(LOCALES).optional(),
 });
 
+const identitySchema = z.object({
+  isLebanese: z.enum(["yes", "no", ""]).optional(),
+  passportLebanese: z.string().trim().max(40).optional(),
+  nationality1: z.string().trim().max(80).optional(),
+  nationality2: z.string().trim().max(80).optional(),
+  monoParental: z.enum(["yes", "no"]).optional(),
+});
+
+export type ParentIdentityFormState = {
+  ok?: boolean;
+  formError?: string;
+};
+
+/**
+ * Update the parent's "Identité du responsable" data — Lebanese Y/N,
+ * Lebanese passport, Nationalité 1/2, Famille monoparentale.
+ *
+ * Canonical storage is on Guardian (parent-level identity facts that
+ * outlive any single application). Admin edits propagate to every
+ * existing Application's submitter* columns so historic dossiers stay
+ * consistent. New parents work too — Guardian is upserted so the
+ * record is created if missing, and createDossier reads from Guardian
+ * to pre-fill the first application.
+ */
+export async function updateParentIdentity(
+  parentId: string,
+  _prev: ParentIdentityFormState,
+  formData: FormData,
+): Promise<ParentIdentityFormState> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { formError: "no-tenant" };
+
+  const parsed = identitySchema.safeParse({
+    isLebanese: String(formData.get("isLebanese") ?? ""),
+    passportLebanese: String(formData.get("passportLebanese") ?? ""),
+    nationality1: String(formData.get("nationality1") ?? ""),
+    nationality2: String(formData.get("nationality2") ?? ""),
+    monoParental: String(formData.get("monoParental") ?? "no") || undefined,
+  });
+  if (!parsed.success) return { formError: "validation" };
+
+  const lebaneseValue =
+    parsed.data.isLebanese === "yes"
+      ? true
+      : parsed.data.isLebanese === "no"
+        ? false
+        : null;
+  const monoValue = parsed.data.monoParental === "yes";
+  // Wipe the Lebanese-passport column when not Lebanese, so we don't
+  // leave stale values from when the radio was "Oui".
+  const persistedPassport =
+    lebaneseValue === true ? parsed.data.passportLebanese || null : null;
+
+  await runWithTenant({ tenantId, slug: null }, async () => {
+    // Guardian is the canonical store — admin can set identity here
+    // even when the parent has no application yet. Upsert (create if
+    // missing) so new parents work as expected.
+    await db.guardian.upsert({
+      where: { userId: parentId },
+      update: {
+        isLebanese: lebaneseValue,
+        passportLebanese: persistedPassport,
+        nationality1: parsed.data.nationality1 || null,
+        nationality2: parsed.data.nationality2 || null,
+        monoParental: monoValue,
+      },
+      create: {
+        tenantId,
+        userId: parentId,
+        isLebanese: lebaneseValue,
+        passportLebanese: persistedPassport,
+        nationality1: parsed.data.nationality1 || null,
+        nationality2: parsed.data.nationality2 || null,
+        monoParental: monoValue,
+      },
+    });
+    // Propagate to existing applications so the dossier-side display
+    // also reflects the change. No-op when there are no apps yet —
+    // that's fine, the Guardian record alone is enough until the
+    // parent creates their first dossier (createDossier reads from
+    // Guardian to pre-fill).
+    await db.application.updateMany({
+      where: { submittedByUserId: parentId },
+      data: {
+        submitterIsLebanese: lebaneseValue,
+        submitterPassportLebanese: persistedPassport,
+        submitterNationality: parsed.data.nationality1 || null,
+        submitterNationality2: parsed.data.nationality2 || null,
+        monoParental: monoValue,
+      },
+    });
+  });
+
+  revalidatePath(`/admin/parents/${parentId}`);
+  return { ok: true };
+}
+
 
 export type ParentFormState = {
   errors?: Record<string, string>;
@@ -226,6 +324,15 @@ export async function updateParent(
         where: { userId: id },
         update: { relation: parsed.data.relation || null },
         create: { tenantId, userId: id, relation: parsed.data.relation || null },
+      });
+      // Sync to the parent's most recent application so the dossier-
+      // side display (Application.submitterRelation) reflects the new
+      // value. Without this, the relation row on /admin/parents/{id}
+      // appears to "not change" because it prefers the dossier value
+      // when both are set.
+      await db.application.updateMany({
+        where: { submittedByUserId: id },
+        data: { submitterRelation: parsed.data.relation || null },
       });
     }
   });

@@ -74,15 +74,15 @@ export default async function ParentApplicationsPage() {
           ) : (
             <StaggerGrid className="space-y-3">
               {apps.map((a) => {
-                // DRAFT/SUBMITTED open in the new tenant-fields wizard so
-                // every application uses the same editing surface. Decided
-                // states (ACCEPTED/DECLINED/...) still route to the read-only
-                // detail view.
+                // ALL statuses route to the 10-tab dossier shell. It
+                // handles read-only mode automatically — sections render
+                // with disabled inputs when status !== DRAFT|SUBMITTED.
+                // Keeps the parent's view consistent across the
+                // application lifecycle (no UI shift after admin
+                // accepts / schedules an interview / etc.).
                 const editable =
                   a.status === "DRAFT" || a.status === "SUBMITTED";
-                const href = editable
-                  ? `/parent/inscriptions/${a.id}/edit`
-                  : `/parent/applications/${a.id}`;
+                const href = `/parent/inscriptions/${a.id}/edit`;
                 return (
                   <SwipeableApplicationCard
                     key={a.id}

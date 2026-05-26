@@ -306,6 +306,16 @@ model Guardian {
   familyId String?
   relation String?
 
+  // Identity columns — admin can set these even when the parent has
+  // no application yet. Mirror to/from Application.submitter* on every
+  // edit (either side). monoParental is a family-level concept; living
+  // on Guardian means it survives across multiple kids' dossiers.
+  isLebanese       Boolean?
+  passportLebanese String?
+  nationality1     String?
+  nationality2     String?
+  monoParental     Boolean  @default(false)
+
   tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   family     Family?           @relation(fields: [familyId], references: [id], onDelete: SetNull)

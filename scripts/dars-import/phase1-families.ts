@@ -413,13 +413,21 @@ async function main() {
     const sid = Number(s.ID_Student);
     // Family via father → root; fall back to mother.
     let familyId: string | null = null;
+    let familyRoot: number | null = null;
     for (const slot of [s.ID_Father, s.ID_Mother, s.ID_Gardian]) {
       const p = slot ? parentById.get(Number(slot)) : undefined;
       if (p) {
-        familyId = familyIdByRoot.get(rootOf(p)) ?? null;
+        familyRoot = rootOf(p);
+        familyId = familyIdByRoot.get(familyRoot) ?? null;
         if (familyId) break;
       }
     }
+    // Mirror the family address onto the student (the student form reads
+    // Student.address/city/country directly).
+    const addr = familyRoot != null ? familyAddress(familyRoot) : null;
+    const studentAddress = addr
+      ? [...new Set([addr.addressStreet, addr.addressHood].filter(Boolean))].join(", ") || null
+      : null;
     const extras: Record<string, unknown> = {};
     if (codes.isLebanese(s.Id_Nation1, s.Id_Nation2)) extras.isLebanese = true;
     const nat2 = codes.label(s.Id_Nation2);
@@ -438,7 +446,9 @@ async function main() {
       gender: toGender(s.Gender),
       placeOfBirth: clean(s.BirthPlace),
       nationality: codes.label(s.Id_Nation1) || null,
-      country: "Liban",
+      address: studentAddress,
+      city: addr?.addressCity ?? null,
+      country: addr?.addressCountry ?? "Liban",
       status: currentSet.has(sid) ? ("ENROLLED" as const) : ("WITHDRAWN" as const),
     };
     const student = await prisma.student.upsert({
@@ -467,7 +477,7 @@ async function main() {
       links.push({ studentId, guardianId, isPrimary: Number(s.ID_Gardian) === pid });
     }
   }
-  await runChunked(links, 50, "links", async (l) => {
+  await runChunked(links, 10, "links", async (l) => {
     await prisma.studentGuardian.upsert({
       where: { studentId_guardianId: { studentId: l.studentId, guardianId: l.guardianId } },
       update: { isPrimary: l.isPrimary },

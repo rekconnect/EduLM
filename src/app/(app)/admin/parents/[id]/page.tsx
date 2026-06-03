@@ -589,23 +589,23 @@ export default async function ParentDetailPage({
                   description="Téléphones, email, et autres coordonnées"
                 />
                 <CardBody>
-                  {(fieldsByCategory.get("Contact") ?? []).length > 0 ? (
-                    <dl>
-                      {(fieldsByCategory.get("Contact") ?? []).map((f) => (
-                        <Row
-                          key={f.id}
-                          label={f.label}
-                          value={resolveFieldValue(f.id)}
-                        />
-                      ))}
-                    </dl>
-                  ) : (
-                    /* Fallback when no custom Contact fields exist —
-                       still show the User email so the tab isn't blank. */
-                    <dl>
-                      <Row label="Email" value={parent.email} />
-                    </dl>
-                  )}
+                  {/* Always show the canonical phone (Guardian.phone) +
+                      email, then any tenant-configured custom Contact
+                      fields. Phone comes from the Dars import / dossier. */}
+                  <dl>
+                    <Row
+                      label="Téléphone"
+                      value={parent.guardianProfile?.phone ?? ""}
+                    />
+                    <Row label="Email" value={parent.email} />
+                    {(fieldsByCategory.get("Contact") ?? []).map((f) => (
+                      <Row
+                        key={f.id}
+                        label={f.label}
+                        value={resolveFieldValue(f.id)}
+                      />
+                    ))}
+                  </dl>
                 </CardBody>
               </Card>
             ) : null}

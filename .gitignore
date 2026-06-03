@@ -50,3 +50,6 @@ yarn-error.log*
 !.vscode/extensions.json
 .idea/
 .claude/worktrees/angry-mclaren-de459a/
+
+# Dars migration — raw .bak and any extracts. Real data, never committed.
+/imports/

@@ -147,6 +147,10 @@ model User {
   archived      Boolean    @default(false)
   archivedAt    DateTime?
   deletedAt     DateTime?
+  // Dars migration external key — the Isc_Parent.ID_Parent this user was
+  // imported from. Lets the importer upsert idempotently (re-run safe).
+  // Null for users created natively in EduLM.
+  darsParentId  Int?       @unique
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
@@ -236,6 +240,10 @@ model Class {
   level          String
   section        String
   name           String
+  // Dars migration external key — Isc_Classes.ID_Class. Used by the
+  // Phase-2 enrollment importer to match Dars enrollments to the
+  // already-seeded EduLM classes. Null for natively-created classes.
+  darsClassId    Int?             @unique
 
   tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   academicYear  AcademicYear     @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
@@ -277,6 +285,9 @@ model Student {
   emergencyContact String?
   internalNotes    String?   // admin-only notes, not shown to parents
   photoUrl         String?
+  // Dars migration external key — Isc_Student.ID_Student. Idempotent
+  // upsert anchor. Null for natively-created students.
+  darsStudentId    Int?          @unique
   status           StudentStatus @default(PROSPECT)
   // Per-tenant custom field answers — populated from inscription forms on
   // accept, edited from the student admin detail page. Schema lives on
@@ -315,6 +326,9 @@ model Guardian {
   nationality1     String?
   nationality2     String?
   monoParental     Boolean  @default(false)
+  // Primary contact phone (Dars Isc_Parent.Mobile / first Isc_ParentPhone).
+  // Mirrored here so admin sees it without an application.
+  phone            String?
 
   tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)

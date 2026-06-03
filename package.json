@@ -64,6 +64,8 @@
     "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.6",
+    "msnodesqlv8": "^5.2.0",
+    "mssql": "^12.5.5",
     "prisma": "^6.19.3",
     "tsx": "^4.22.0",
     "typescript": "^6.0.3"

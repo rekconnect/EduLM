@@ -351,6 +351,10 @@ model Family {
   tenantId  String
   code      String
   name      String?   // optional admin-friendly label, e.g. "Famille El Kady"
+  // Dars migration external key — the Isc_Parent.Id_MainParent (root /
+  // father) this family was grouped from. Idempotent upsert anchor.
+  // Null for families created natively in EduLM.
+  darsRootParentId Int? @unique
 
   // Foyer-level info shared across all the family's children (Page 3 of
   // the Montaigne paper form). When a parent registers a second child

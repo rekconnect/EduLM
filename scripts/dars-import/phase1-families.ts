@@ -134,15 +134,18 @@ async function main() {
   );
   console.log(`Students in scope: ${students.length}`);
 
-  // Currently-enrolled set (the Actual school year) → status ENROLLED
+  // Currently-enrolled set → status ENROLLED. Match the Dars dashboard
+  // exactly: only CONFIRMED registrations (Registered = 1) in the Actual
+  // school year count as currently enrolled. (Registered = 0 rows are
+  // pending/unconfirmed and become WITHDRAWN.)
   const currentRows = await darsQuery<{ ID_Student: number }>(
     `SELECT DISTINCT sc.ID_Student
      FROM Isc_StudentClass sc
      JOIN Isc_SchoolYear sy ON sy.SYear = sc.SYear AND sy.Id_College = sc.Id_College
-     WHERE sc.Id_College = ${DARS_COLLEGE_ID} AND sy.Actual = 1`,
+     WHERE sc.Id_College = ${DARS_COLLEGE_ID} AND sy.Actual = 1 AND sc.Registered = 1`,
   );
   const currentSet = new Set(currentRows.map((r) => Number(r.ID_Student)));
-  console.log(`Currently enrolled (Actual year): ${currentSet.size}`);
+  console.log(`Currently enrolled (Actual year, Registered=1): ${currentSet.size}`);
 
   // 2. Collect referenced parent ids
   const parentIds = new Set<number>();

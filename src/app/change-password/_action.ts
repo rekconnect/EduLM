@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
@@ -55,6 +56,11 @@ export async function changePassword(
     where: { id: session.user.id },
     data: { passwordHash, mustChangePassword: false },
   });
+
+  // Bust the cached (app) layout render — otherwise the router serves the
+  // stale "redirect to /change-password" response it cached while the
+  // flag was still true, and the user is prompted to change a 2nd time.
+  revalidatePath("/", "layout");
 
   redirect(postSignInPath(current.role));
 }

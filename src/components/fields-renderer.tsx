@@ -51,7 +51,41 @@ export type FieldExtras = {
     childDob?: string | null;
     establishment?: string | null;
     niveau?: string | null;
+    childPassportLebanese?: string | null;
   };
+  /**
+   * Guardian row values (parent-level), pre-formatted as display strings.
+   * Mirrored into parent custom fields with `guardianBoundTo` set. Booleans
+   * (isLebanese) should already be rendered as "Oui"/"Non" by the caller.
+   */
+  guardian?: Partial<
+    Record<
+      | "phone"
+      | "nationality1"
+      | "nationality2"
+      | "isLebanese"
+      | "passportLebanese"
+      | "relation",
+      string | null
+    >
+  >;
+  /**
+   * Family row values (household-level), pre-formatted as display strings.
+   * Mirrored into parent custom fields with `familyBoundTo` set.
+   */
+  family?: Partial<
+    Record<
+      | "addressStreet"
+      | "addressHood"
+      | "addressCity"
+      | "addressCountry"
+      | "imageRightsSite"
+      | "imageRightsBook"
+      | "imageRightsSocial"
+      | "imageRightsRadio",
+      string | null
+    >
+  >;
 };
 
 /**
@@ -70,6 +104,16 @@ export function resolveInitialValue(
   // wouldn't propagate to the mirrored field.
   if (field.dossierBoundTo && extras?.dossier) {
     const v = extras.dossier[field.dossierBoundTo];
+    if (typeof v === "string" && v.length > 0) return v;
+  }
+  // Guardian / Family mirrors behave like dossier mirrors: the canonical
+  // column wins over any stale stored answer so the imported value shows.
+  if (field.guardianBoundTo && extras?.guardian) {
+    const v = extras.guardian[field.guardianBoundTo];
+    if (typeof v === "string" && v.length > 0) return v;
+  }
+  if (field.familyBoundTo && extras?.family) {
+    const v = extras.family[field.familyBoundTo];
     if (typeof v === "string" && v.length > 0) return v;
   }
   if (storedValue && storedValue.length > 0) return storedValue;
@@ -170,10 +214,11 @@ function FieldInput({
   allAnswers: FieldAnswers;
   disabled: boolean;
 }) {
-  // Fields bound to dossier identity are read-only — the canonical edit
-  // happens in the Identité section. Force disabled regardless of the
-  // section-level prop.
-  const isMirrored = !!field.dossierBoundTo;
+  // Fields bound to a canonical column (dossier identity, Guardian, or
+  // Family) are read-only — the canonical edit happens on the dedicated
+  // surface. Force disabled regardless of the section-level prop.
+  const isMirrored =
+    !!field.dossierBoundTo || !!field.guardianBoundTo || !!field.familyBoundTo;
   const effectiveDisabled = disabled || isMirrored;
 
   const commonProps = {

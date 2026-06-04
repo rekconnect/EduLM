@@ -18,16 +18,12 @@ const CARD_HOVER =
 export default async function ParentDashboardPage() {
   return withParentSession(async (user, childIds) => {
     const t = await getTranslations("parent");
-    const tAtt = await getTranslations("attendance");
     const tAdm = await getTranslations("admissions");
 
     if (childIds.length === 0) {
       return <NoChildrenState user={user} />;
     }
 
-    const since = new Date();
-    since.setUTCDate(since.getUTCDate() - 30);
-    since.setUTCHours(0, 0, 0, 0);
     const now = new Date();
 
     const [children, openCycles, existingRenewals, openDossiers] = await Promise.all([
@@ -49,10 +45,6 @@ export default async function ParentDashboardPage() {
                 select: { label: true, isActive: true, startDate: true },
               },
             },
-          },
-          attendance: {
-            where: { date: { gte: since } },
-            select: { status: true },
           },
           invoices: {
             select: {
@@ -163,17 +155,6 @@ export default async function ParentDashboardPage() {
             </h2>
             <StaggerGrid className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
               {children.map((c) => {
-                const counts: { PRESENT: number; ABSENT: number; LATE: number; EXCUSED: number } = {
-                  PRESENT: 0,
-                  ABSENT: 0,
-                  LATE: 0,
-                  EXCUSED: 0,
-                };
-                for (const r of c.attendance) {
-                  if (r.status in counts) {
-                    counts[r.status as keyof typeof counts] += 1;
-                  }
-                }
                 // Prefer the active-year enrollment; fall back to an upcoming
                 // year (newly-accepted kids) before showing "—".
                 const nowTs = Date.now();
@@ -220,24 +201,6 @@ export default async function ParentDashboardPage() {
                     </div>
 
                     <CardBody className="space-y-4">
-                      <div className="grid grid-cols-3 gap-2">
-                        <AttStat
-                          label={tAtt("presentCount")}
-                          value={counts.PRESENT}
-                          tone="neutral"
-                        />
-                        <AttStat
-                          label={tAtt("absentCount")}
-                          value={counts.ABSENT}
-                          tone="danger"
-                        />
-                        <AttStat
-                          label={tAtt("lateCount")}
-                          value={counts.LATE}
-                          tone="warning"
-                        />
-                      </div>
-
                       {balanceByCurrency.size > 0 ? (
                         <div className="flex flex-wrap items-center gap-2 rounded-md border border-[color:var(--color-warning)]/30 bg-[color:var(--color-warning-soft)] px-3 py-2 text-sm text-[color:var(--color-warning-soft-fg)]">
                           <span className="font-medium">{t("outstanding")}:</span>
@@ -560,28 +523,3 @@ function InscriptionSection({
   );
 }
 
-function AttStat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: "neutral" | "danger" | "warning";
-}) {
-  const isZero = value === 0;
-  const valueClass = isZero
-    ? "text-[color:var(--color-foreground-subtle)]"
-    : tone === "danger"
-      ? "text-[color:var(--color-danger)]"
-      : tone === "warning"
-        ? "text-[color:var(--color-warning)]"
-        : "text-[color:var(--color-foreground)]";
-
-  return (
-    <div className="rounded-md bg-[color:var(--color-surface-sunken)] py-3 text-center">
-      <p className={cn("text-2xl font-semibold tabular-nums", valueClass)}>{value}</p>
-      <p className="text-xs text-[color:var(--color-foreground-muted)]">{label}</p>
-    </div>
-  );
-}

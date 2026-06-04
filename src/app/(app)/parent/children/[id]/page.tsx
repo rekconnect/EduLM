@@ -3,29 +3,12 @@ import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { ArrowLeft, CalendarClock } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
-import { Card, CardBody, CardHeader, Stat } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
 import { db } from "@/lib/db";
 import { withParentSession } from "@/lib/session";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
-
-const SEVERITY_LABEL: Record<string, string> = {
-  NOTE: "severityNote",
-  WARNING: "severityWarning",
-  DETENTION: "severityDetention",
-  SUSPENSION: "severitySuspension",
-};
-
-const SEVERITY_TONE: Record<string, string> = {
-  NOTE: "bg-[color:var(--color-surface-sunken)] text-[color:var(--color-foreground-muted)]",
-  WARNING:
-    "bg-[color:var(--color-warning-soft)] text-[color:var(--color-warning-soft-fg)]",
-  DETENTION:
-    "bg-[color:var(--color-warning-soft)] text-[color:var(--color-warning-soft-fg)]",
-  SUSPENSION:
-    "bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger-soft-fg)]",
-};
 
 const STATUS_TONE: Record<string, string> = {
   DRAFT:
@@ -62,15 +45,9 @@ export default async function ParentChildPage({
     if (!childIds.includes(id)) notFound();
 
     const tParent = await getTranslations("parent");
-    const tAtt = await getTranslations("attendance");
-    const tDisc = await getTranslations("discipline");
     const tBill = await getTranslations("billing");
 
-    const since = new Date();
-    since.setUTCDate(since.getUTCDate() - 30);
-    since.setUTCHours(0, 0, 0, 0);
-
-    const [child, attendance, discipline, invoices] = await Promise.all([
+    const [child, invoices] = await Promise.all([
       db.student.findUnique({
         where: { id },
         select: {
@@ -93,17 +70,6 @@ export default async function ParentChildPage({
           },
         },
       }),
-      db.attendanceRecord.findMany({
-        where: { studentId: id, date: { gte: since } },
-        orderBy: { date: "desc" },
-        select: { date: true, status: true, lateMinutes: true, note: true },
-      }),
-      db.disciplineEvent.findMany({
-        where: { studentId: id },
-        orderBy: { date: "desc" },
-        take: 20,
-        select: { id: true, type: true, severity: true, description: true, date: true },
-      }),
       db.invoice.findMany({
         where: { studentId: id },
         orderBy: { issuedAt: "desc" },
@@ -112,16 +78,6 @@ export default async function ParentChildPage({
     ]);
 
     if (!child) notFound();
-
-    const counts: Record<string, number> = {
-      PRESENT: 0,
-      ABSENT: 0,
-      LATE: 0,
-      EXCUSED: 0,
-    };
-    for (const r of attendance) {
-      counts[r.status] = (counts[r.status] ?? 0) + 1;
-    }
 
     // Prefer the active year, fall back to the most recent upcoming year.
     const activeEnrollment = child.enrollments.find(
@@ -167,99 +123,11 @@ export default async function ParentChildPage({
                 <span className="font-semibold">
                   {enrollment!.class.name}
                 </span>{" "}
-                pour {enrollment!.academicYear.label} — les présences,
-                disciplines et factures apparaîtront ici dès la rentrée.
+                pour {enrollment!.academicYear.label} — les informations
+                et factures apparaîtront ici dès la rentrée.
               </p>
             </div>
           ) : null}
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Stat label={tAtt("presentCount")} value={counts.PRESENT!} />
-            <Stat label={tAtt("absentCount")} value={counts.ABSENT!} />
-            <Stat label={tAtt("lateCount")} value={counts.LATE!} />
-          </div>
-
-          <Card>
-            <CardHeader title={tParent("tabAttendance")} />
-            <Table>
-              <THead>
-                <tr>
-                  <TH>{tAtt("colNote")}</TH>
-                  <TH>{tAtt("colStatus")}</TH>
-                </tr>
-              </THead>
-              <tbody>
-                {attendance.length === 0 ? (
-                  <EmptyRow colSpan={2}>{tAtt("noRecords")}</EmptyRow>
-                ) : (
-                  attendance.slice(0, 15).map((r, i) => (
-                    <TR key={i}>
-                      <TD className="tabular-nums text-[color:var(--color-foreground-muted)]">
-                        {r.date.toISOString().slice(0, 10)}
-                      </TD>
-                      <TD>
-                        <span className="text-sm text-[color:var(--color-foreground)]">
-                          {r.status}
-                        </span>
-                        {r.lateMinutes ? (
-                          <span className="ms-2 text-xs text-[color:var(--color-foreground-muted)]">
-                            ({r.lateMinutes} min)
-                          </span>
-                        ) : null}
-                        {r.note ? (
-                          <span className="ms-2 text-xs text-[color:var(--color-foreground-muted)]">
-                            — {r.note}
-                          </span>
-                        ) : null}
-                      </TD>
-                    </TR>
-                  ))
-                )}
-              </tbody>
-            </Table>
-          </Card>
-
-          <Card>
-            <CardHeader title={tParent("tabDiscipline")} />
-            <CardBody>
-              {discipline.length === 0 ? (
-                <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                  {tDisc("empty")}
-                </p>
-              ) : (
-                <ul className="space-y-3 text-sm">
-                  {discipline.map((d) => (
-                    <li
-                      key={d.id}
-                      className="border-b border-[color:var(--color-border-subtle)] pb-2 last:border-0"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-[color:var(--color-foreground)]">
-                          {d.type}
-                        </span>
-                        <span className="flex items-center gap-2">
-                          <span
-                            className={cn(
-                              "rounded-full px-2 py-0.5 text-xs font-medium",
-                              SEVERITY_TONE[d.severity],
-                            )}
-                          >
-                            {tDisc(SEVERITY_LABEL[d.severity] ?? "severityNote")}
-                          </span>
-                          <span className="text-xs tabular-nums text-[color:var(--color-foreground-muted)]">
-                            {d.date.toISOString().slice(0, 10)}
-                          </span>
-                        </span>
-                      </div>
-                      <p className="mt-1 text-[color:var(--color-foreground-muted)]">
-                        {d.description}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardBody>
-          </Card>
 
           <Card>
             <CardHeader title={tParent("tabInvoices")} />

@@ -144,6 +144,41 @@ export const DOSSIER_BOUND_PROPS = [
 ] as const;
 export type DossierBoundProp = (typeof DOSSIER_BOUND_PROPS)[number];
 
+/**
+ * Guardian columns a PARENT custom field can mirror. Like dossierBoundTo,
+ * these render read-only — the value comes from the canonical Guardian
+ * row (populated by the Dars import or the dossier's Responsable identity
+ * section). Lets an admin keep a nicely-labelled "Mobile Number" /
+ * "Nationalité" field in their form that auto-fills from the imported data
+ * instead of going stale. Only relevant on parent fields.
+ */
+export const GUARDIAN_BOUND_PROPS = [
+  "phone",
+  "nationality1",
+  "nationality2",
+  "isLebanese",
+  "passportLebanese",
+  "relation",
+] as const;
+export type GuardianBoundProp = (typeof GUARDIAN_BOUND_PROPS)[number];
+
+/**
+ * Family columns a PARENT custom field can mirror (shared household data:
+ * address + photo authorizations). Read-only mirror, same contract as
+ * guardianBoundTo. Only relevant on parent fields.
+ */
+export const FAMILY_BOUND_PROPS = [
+  "addressStreet",
+  "addressHood",
+  "addressCity",
+  "addressCountry",
+  "imageRightsSite",
+  "imageRightsBook",
+  "imageRightsSocial",
+  "imageRightsRadio",
+] as const;
+export type FamilyBoundProp = (typeof FAMILY_BOUND_PROPS)[number];
+
 export type FieldDef = {
   /** Stable client-generated id (used as the answer key). */
   id: string;
@@ -202,6 +237,18 @@ export type FieldDef = {
    * re-enter info already captured at creation.
    */
   dossierBoundTo?: DossierBoundProp;
+  /**
+   * Mirror a value from the parent's Guardian row (phone, nationality,
+   * Lebanese status, …). Read-only display — the canonical edit happens on
+   * the admin Identité tab / dossier Responsable section. Populated by the
+   * Dars import. Parent fields only.
+   */
+  guardianBoundTo?: GuardianBoundProp;
+  /**
+   * Mirror a value from the family's shared Family row (address, photo
+   * authorizations). Read-only display. Parent fields only.
+   */
+  familyBoundTo?: FamilyBoundProp;
 };
 
 export type EntityFieldsConfig = {
@@ -273,6 +320,16 @@ export function parseEntityFieldsConfig(raw: unknown): EntityFieldsConfig {
             typeof f.dossierBoundTo === "string" &&
             (DOSSIER_BOUND_PROPS as readonly string[]).includes(f.dossierBoundTo)
               ? (f.dossierBoundTo as DossierBoundProp)
+              : undefined,
+          guardianBoundTo:
+            typeof f.guardianBoundTo === "string" &&
+            (GUARDIAN_BOUND_PROPS as readonly string[]).includes(f.guardianBoundTo)
+              ? (f.guardianBoundTo as GuardianBoundProp)
+              : undefined,
+          familyBoundTo:
+            typeof f.familyBoundTo === "string" &&
+            (FAMILY_BOUND_PROPS as readonly string[]).includes(f.familyBoundTo)
+              ? (f.familyBoundTo as FamilyBoundProp)
               : undefined,
         }))
       : [],

@@ -250,9 +250,9 @@ async function main() {
       const p = parentById.get(pid);
       const a = p?.Id_Address ? addrById.get(Number(p.Id_Address)) : undefined;
       if (a) {
-        const street = [clean(a.Street), clean(a.Building), clean(a.AddressFloor)]
-          .filter(Boolean)
-          .join(", ");
+        // Rue = Street ONLY. Building / Floor have their own fields
+        // (adresse_immeuble / adresse_etage) populated by the enrichment.
+        const street = clean(a.Street);
         return {
           addressStreet: street || null,
           addressHood: clean(a.PlaceDetails),

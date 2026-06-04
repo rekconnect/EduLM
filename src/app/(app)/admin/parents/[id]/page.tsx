@@ -21,6 +21,7 @@ import {
 import { EditParentForm } from "./_edit-form";
 import { ParentIdentityForm } from "./_identity-form";
 import { ResetPasswordButton } from "./_reset-password";
+import { FamilyFiche, type FicheGuardian, type FicheStudent } from "./_fiche";
 
 const STATUS_KEY: Record<string, string> = {
   ACTIVE: "statusActive",
@@ -126,7 +127,7 @@ export default async function ParentDetailPage({
     const t = await getTranslations("parents");
     const tCommon = await getTranslations("common");
 
-    const [parent, parentFieldsConfig, establishmentsRaw, latestApp] =
+    const [parent, parentFieldsConfig, studentFieldsConfig, establishmentsRaw, latestApp] =
       await Promise.all([
         db.user.findUnique({
           where: { id },
@@ -134,16 +135,47 @@ export default async function ParentDetailPage({
             guardianProfile: {
               include: {
                 family: {
-                  select: {
-                    code: true,
-                    addressStreet: true,
-                    addressHood: true,
-                    addressCity: true,
-                    addressCountry: true,
-                    imageRightsSite: true,
-                    imageRightsBook: true,
-                    imageRightsSocial: true,
-                    imageRightsRadio: true,
+                  include: {
+                    // Both parents of the family — drives the parallel
+                    // père | mère columns on the fiche.
+                    guardians: {
+                      select: {
+                        id: true,
+                        userId: true,
+                        relation: true,
+                        phone: true,
+                        nationality1: true,
+                        nationality2: true,
+                        user: {
+                          select: {
+                            firstName: true,
+                            lastName: true,
+                            name: true,
+                            email: true,
+                            customAnswers: true,
+                          },
+                        },
+                      },
+                    },
+                    students: {
+                      select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        status: true,
+                        customAnswers: true,
+                        enrollments: {
+                          select: {
+                            class: { select: { name: true } },
+                            academicYear: {
+                              select: { label: true, isActive: true, startDate: true },
+                            },
+                          },
+                          orderBy: { academicYear: { startDate: "desc" } },
+                          take: 2,
+                        },
+                      },
+                    },
                   },
                 },
                 childLinks: {
@@ -158,6 +190,7 @@ export default async function ParentDetailPage({
           },
         }),
         loadEntityFieldsConfig("parent"),
+        loadEntityFieldsConfig("student"),
         listEstablishments(),
         db.application.findFirst({
           where: { submittedByUserId: id },
@@ -212,7 +245,9 @@ export default async function ParentDetailPage({
       }
     }
 
-    // Resolve userBoundTo + dossierBoundTo for read-only preview rows.
+    // Resolve userBoundTo + guardianBoundTo + familyBoundTo for read-only
+    // preview rows. Bound fields mirror the canonical column (populated by
+    // the Dars import) instead of the answers JSON.
     function resolveFieldValue(fieldId: string): string {
       const field = parentFieldsConfig.fields.find((f) => f.id === fieldId);
       if (!field) return "";
@@ -222,6 +257,44 @@ export default async function ParentDetailPage({
         if (field.userBoundTo === "lastName") return u!.lastName ?? "";
         if (field.userBoundTo === "name") return u!.name ?? "";
         if (field.userBoundTo === "email") return u!.email ?? "";
+      }
+      const g = parent?.guardianProfile;
+      if (field.guardianBoundTo && g) {
+        switch (field.guardianBoundTo) {
+          case "phone":
+            return g.phone ?? "";
+          case "nationality1":
+            return g.nationality1 ?? "";
+          case "nationality2":
+            return g.nationality2 ?? "";
+          case "isLebanese":
+            return g.isLebanese == null ? "" : g.isLebanese ? "Oui" : "Non";
+          case "passportLebanese":
+            return g.passportLebanese ?? "";
+          case "relation":
+            return g.relation ? (RELATION_LABELS_FR[g.relation] ?? g.relation) : "";
+        }
+      }
+      const famRow = g?.family;
+      if (field.familyBoundTo && famRow) {
+        switch (field.familyBoundTo) {
+          case "addressStreet":
+            return famRow.addressStreet ?? "";
+          case "addressHood":
+            return famRow.addressHood ?? "";
+          case "addressCity":
+            return famRow.addressCity ?? "";
+          case "addressCountry":
+            return famRow.addressCountry ?? "";
+          case "imageRightsSite":
+            return famRow.imageRightsSite == null ? "" : famRow.imageRightsSite ? "Oui" : "Non";
+          case "imageRightsBook":
+            return famRow.imageRightsBook == null ? "" : famRow.imageRightsBook ? "Oui" : "Non";
+          case "imageRightsSocial":
+            return famRow.imageRightsSocial == null ? "" : famRow.imageRightsSocial ? "Oui" : "Non";
+          case "imageRightsRadio":
+            return famRow.imageRightsRadio == null ? "" : famRow.imageRightsRadio ? "Oui" : "Non";
+        }
       }
       return initialAnswers[fieldId] ?? "";
     }
@@ -258,6 +331,81 @@ export default async function ParentDetailPage({
 
     const fam = parent.guardianProfile?.family ?? null;
     const childLinks = parent.guardianProfile?.childLinks ?? [];
+
+    // ── Shape the family fiche (père | mère columns + kids) ──
+    const toAnswers = (ca: unknown): Record<string, string> => {
+      const out: Record<string, string> = {};
+      if (ca && typeof ca === "object") {
+        for (const [k, v] of Object.entries(ca as Record<string, unknown>)) {
+          if (typeof v === "string") out[k] = v;
+          else if (v != null) out[k] = String(v);
+        }
+      }
+      return out;
+    };
+    const relRank = (r: string) => (r === "pere" ? 0 : r === "mere" ? 1 : 2);
+    const ficheGuardians: FicheGuardian[] = (fam?.guardians ?? [])
+      .map((gg) => ({
+        guardianId: gg.id,
+        userId: gg.userId,
+        relationLabel: gg.relation
+          ? (RELATION_LABELS_FR[gg.relation] ?? gg.relation)
+          : "Responsable",
+        _rel: gg.relation ?? "",
+        firstName: gg.user.firstName ?? splitLegacyName(gg.user.name).firstName,
+        lastName: gg.user.lastName ?? splitLegacyName(gg.user.name).lastName,
+        email: gg.user.email,
+        phone: gg.phone,
+        nationality1: gg.nationality1,
+        nationality2: gg.nationality2,
+        answers: toAnswers(gg.user.customAnswers),
+      }))
+      .sort((a, b) => relRank(a._rel) - relRank(b._rel))
+      .map(({ _rel: _drop, ...g }) => g);
+
+    const shapeStudent = (st: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      status: string;
+      customAnswers: unknown;
+      enrollments: Array<{
+        class: { name: string };
+        academicYear: { label: string; isActive: boolean };
+      }>;
+    }): FicheStudent => {
+      const enr =
+        st.enrollments.find((e) => e.academicYear.isActive) ?? st.enrollments[0];
+      return {
+        id: st.id,
+        firstName: st.firstName,
+        lastName: st.lastName,
+        status: st.status,
+        className: enr?.class.name ?? null,
+        yearLabel: enr?.academicYear.label ?? null,
+        answers: toAnswers(st.customAnswers),
+      };
+    };
+    const famStudents = fam?.students ?? [];
+    const ficheCurrent = famStudents
+      .filter((s) => s.status === "ENROLLED")
+      .map(shapeStudent);
+    const fichePast = famStudents
+      .filter((s) => s.status !== "ENROLLED")
+      .map(shapeStudent);
+    const ficheFamily = {
+      code: fam?.code ?? "",
+      addressStreet: fam?.addressStreet ?? null,
+      addressHood: fam?.addressHood ?? null,
+      addressCity: fam?.addressCity ?? null,
+      addressCountry: fam?.addressCountry ?? null,
+      imageRights: {
+        site: fam?.imageRightsSite ?? null,
+        book: fam?.imageRightsBook ?? null,
+        social: fam?.imageRightsSocial ?? null,
+        radio: fam?.imageRightsRadio ?? null,
+      },
+    };
 
     // ─────────────────────────────────────────────────────────────────
     // Edit mode — old forms, plus a "back to preview" link
@@ -358,15 +506,17 @@ export default async function ParentDetailPage({
             </CardBody>
           </Card>
 
-          {/* Strip out userBoundTo fields — those map to User columns
-              (firstName/lastName/email/name) which EditParentForm
-              already provides editable inputs for. Showing them here
-              too would duplicate every input. The bound concept
-              guarantees the value flows from the User row anyway. */}
+          {/* Strip out bound fields — userBoundTo maps to User columns
+              (handled by EditParentForm), and guardianBoundTo/familyBoundTo
+              are read-only mirrors of canonical Guardian/Family columns
+              (populated by the Dars import, edited via the Identité tab).
+              Showing them here would duplicate inputs / show empty mirrors. */}
           {(() => {
             const filteredConfig = {
               ...parentFieldsConfig,
-              fields: parentFieldsConfig.fields.filter((f) => !f.userBoundTo),
+              fields: parentFieldsConfig.fields.filter(
+                (f) => !f.userBoundTo && !f.guardianBoundTo && !f.familyBoundTo,
+              ),
             };
             if (filteredConfig.fields.length === 0) return null;
             return (
@@ -466,7 +616,18 @@ export default async function ParentDetailPage({
           </span>
         </div>
 
-        {/* Two-column layout: left vertical tab nav, right content */}
+        {/* Family fiche — père | mère parallel columns + enfants + historique */}
+        <FamilyFiche
+          parentConfig={parentFieldsConfig}
+          studentConfig={studentFieldsConfig}
+          guardians={ficheGuardians}
+          family={ficheFamily}
+          currentStudents={ficheCurrent}
+          pastStudents={fichePast}
+        />
+
+        {/* legacy tabbed view — retained (hidden) during the fiche rollout */}
+        <div className="hidden">
         <div className="grid gap-6 md:grid-cols-[200px_1fr]">
           <nav
             aria-label="Sections du profil"
@@ -589,23 +750,30 @@ export default async function ParentDetailPage({
                   description="Téléphones, email, et autres coordonnées"
                 />
                 <CardBody>
-                  {/* Always show the canonical phone (Guardian.phone) +
-                      email, then any tenant-configured custom Contact
-                      fields. Phone comes from the Dars import / dossier. */}
-                  <dl>
-                    <Row
-                      label="Téléphone"
-                      value={parent.guardianProfile?.phone ?? ""}
-                    />
-                    <Row label="Email" value={parent.email} />
-                    {(fieldsByCategory.get("Contact") ?? []).map((f) => (
+                  {(fieldsByCategory.get("Contact") ?? []).length > 0 ? (
+                    /* Custom Contact fields (e.g. "Mobile Number" bound to
+                       Guardian.phone, "Email Address" bound to User.email)
+                       render the canonical values via resolveFieldValue. */
+                    <dl>
+                      {(fieldsByCategory.get("Contact") ?? []).map((f) => (
+                        <Row
+                          key={f.id}
+                          label={f.label}
+                          value={resolveFieldValue(f.id)}
+                        />
+                      ))}
+                    </dl>
+                  ) : (
+                    /* No custom Contact fields — fall back to canonical
+                       phone + email so the tab isn't blank. */
+                    <dl>
                       <Row
-                        key={f.id}
-                        label={f.label}
-                        value={resolveFieldValue(f.id)}
+                        label="Téléphone"
+                        value={parent.guardianProfile?.phone ?? ""}
                       />
-                    ))}
-                  </dl>
+                      <Row label="Email" value={parent.email} />
+                    </dl>
+                  )}
                 </CardBody>
               </Card>
             ) : null}
@@ -721,6 +889,7 @@ export default async function ParentDetailPage({
               </Card>
             ) : null}
           </div>
+        </div>
         </div>
 
         {/* unlink action still available, just hidden until needed */}

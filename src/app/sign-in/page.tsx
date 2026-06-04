@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { AuthError } from "next-auth";
 import { getTranslations } from "next-intl/server";
 import { auth, signIn } from "@/lib/auth";
 import { postSignInPath } from "@/lib/post-signin-redirect";
@@ -32,7 +33,21 @@ export default async function SignInPage({
     if (typeof slug === "string" && slug.length > 0) {
       credentials.tenantSlug = slug;
     }
-    await signIn("credentials", { ...credentials, redirectTo: "/post-signin" });
+    try {
+      await signIn("credentials", { ...credentials, redirectTo: "/post-signin" });
+    } catch (err) {
+      // Auth.js v5 throws AuthError (CredentialsSignin) on a bad
+      // email/password. Catch it and re-render sign-in with a friendly
+      // message instead of letting it bubble up as a crash page. A
+      // successful sign-in throws NEXT_REDIRECT (not an AuthError) — that
+      // must be re-thrown so Next performs the redirect.
+      if (err instanceof AuthError) {
+        const qs = new URLSearchParams({ error: "CredentialsSignin" });
+        if (typeof slug === "string" && slug.length > 0) qs.set("tenant", slug);
+        redirect(`/sign-in?${qs.toString()}`);
+      }
+      throw err;
+    }
   }
 
   return (

@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Sidebar } from "@/components/shell/sidebar";
 import { navSectionsForRole } from "@/components/shell/nav-sections";
@@ -20,6 +21,17 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const user = await requireUser();
+
+  // Force users flagged for a password reset (e.g. bulk-onboarded parents
+  // on the shared initial password) to set their own password before they
+  // can use any authenticated page. /change-password lives OUTSIDE this
+  // (app) group, so redirecting there does not loop.
+  const acct = await unscopedDb().user.findUnique({
+    where: { id: user.id },
+    select: { mustChangePassword: true },
+  });
+  if (acct?.mustChangePassword) redirect("/change-password");
+
   const tNav = await getTranslations("nav");
 
   // One query for everything the shell needs: brand colors, logo, tenant name.

@@ -128,6 +128,10 @@ model User {
   role          Role
   locale        String?
   status        UserStatus @default(INVITED)
+  // When true, the user is forced to set a new password on next login
+  // (the (app) layout redirects them to /change-password until cleared).
+  // Set for bulk-onboarded parents who start on a shared default password.
+  mustChangePassword Boolean @default(false)
   emailVerified DateTime?
   // `name` is kept as the legacy/display fallback (used by NextAuth session
   // and old code paths). firstName/lastName are the editable canonical fields

@@ -54,6 +54,8 @@ export type SeedField = {
     | "childPassportLebanese";
   /** Seed dropdown options from this Dars Isc_Codes CodeType. */
   codeType?: string;
+  /** Explicit dropdown options (when not from Isc_Codes). */
+  options?: string[];
 };
 
 export const PARENT_CATEGORIES = [
@@ -69,12 +71,14 @@ export const PARENT_FIELDS: SeedField[] = [
   { key: "prenom", label: "Prénom", type: "short_text", category: "Info générale", userBoundTo: "firstName" },
   { key: "nom", label: "Nom", type: "short_text", category: "Info générale", userBoundTo: "lastName" },
   { key: "situation_famille", label: "Situation", type: "select", category: "Info générale", codeType: "SIT" },
+  { key: "decede", label: "Décédé(e)", type: "yes_no", category: "Info générale" },
+  { key: "second_mariage", label: "Second mariage", type: "yes_no", category: "Info générale" },
   { key: "ancien_eleve", label: "Ancien(ne) élève", type: "yes_no", category: "Info générale" },
   { key: "numero_registre", label: "Registre", type: "short_text", category: "Info générale" },
   { key: "nationalite1", label: "Nationalité 1", type: "select", category: "Info générale", guardianBoundTo: "nationality1", codeType: "NAT" },
   { key: "nationalite2", label: "Nationalité 2", type: "select", category: "Info générale", guardianBoundTo: "nationality2", codeType: "NAT" },
   { key: "communaute", label: "Communauté", type: "select", category: "Info générale", codeType: "REL" },
-  { key: "type_famille", label: "Type famille", type: "short_text", category: "Info générale" },
+  { key: "type_famille", label: "Type famille", type: "select", category: "Info générale", options: ["Ordinaire", "Parents Cadrés", "Parents Empl", "Parents Non-cadrés", "Parents boursiers"] },
   { key: "auth_site", label: "Autorisation Site Internet", type: "yes_no", category: "Info générale", familyBoundTo: "imageRightsSite" },
   { key: "auth_livre", label: "Autorisation Livre Souvenir", type: "yes_no", category: "Info générale", familyBoundTo: "imageRightsBook" },
   { key: "auth_reseaux", label: "Autorisation Réseaux Sociaux", type: "yes_no", category: "Info générale", familyBoundTo: "imageRightsSocial" },
@@ -131,7 +135,8 @@ export const STUDENT_FIELDS: SeedField[] = [
   { key: "date_naissance", label: "Date de naissance", type: "date", category: "Info générale", dossierBoundTo: "childDob" },
   { key: "pays_naissance", label: "Pays de naissance", type: "short_text", category: "Info générale" },
   { key: "lieu_naissance", label: "Lieu de naissance", type: "short_text", category: "Info générale" },
-  { key: "nationalite", label: "Nationalité", type: "select", category: "Info générale", codeType: "NAT" },
+  { key: "nationalite", label: "Nationalité 1", type: "select", category: "Info générale", codeType: "NAT" },
+  { key: "nationalite2", label: "Nationalité 2", type: "select", category: "Info générale", codeType: "NAT" },
   { key: "communaute_eleve", label: "Communauté", type: "select", category: "Info générale", codeType: "REL" },
   { key: "numero_identite", label: "N° d'identité", type: "short_text", category: "Info générale" },
   { key: "email_eleve", label: "Email", type: "email", category: "Info générale" },

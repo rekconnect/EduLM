@@ -31,6 +31,7 @@ export type FicheStudent = {
   yearLabel: string | null;
   status: string;
   answers: Record<string, string>;
+  parcours: Array<{ year: string; className: string; services: string }>;
 };
 export type FicheFamily = {
   code: string;
@@ -243,6 +244,35 @@ export function FamilyFiche({
                     onSave={saveStudentFiche.bind(null, s.id)}
                   />
                 ))}
+
+                {s.parcours.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-[0.7rem] font-semibold uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
+                      Parcours scolaire
+                    </h4>
+                    <ul className="overflow-hidden rounded-md border border-[color:var(--color-border-subtle)]">
+                      {s.parcours.map((y, idx) => (
+                        <li
+                          key={y.year}
+                          className={
+                            "grid grid-cols-[5.5rem_1fr_auto] items-center gap-3 px-3 py-2 text-sm " +
+                            (idx % 2 ? "bg-[color:var(--color-surface-sunken)]/40" : "")
+                          }
+                        >
+                          <span className="tabular-nums text-[color:var(--color-foreground-muted)]">
+                            {y.year}
+                          </span>
+                          <span className="font-medium text-[color:var(--color-foreground)]">
+                            {y.className}
+                          </span>
+                          <span className="text-xs text-[color:var(--color-foreground-subtle)]">
+                            {y.services || "—"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </Panel>
             ))}
           </div>

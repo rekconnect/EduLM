@@ -172,7 +172,7 @@ export default async function ParentDetailPage({
                             },
                           },
                           orderBy: { academicYear: { startDate: "desc" } },
-                          take: 2,
+                          take: 12,
                         },
                       },
                     },
@@ -376,6 +376,21 @@ export default async function ParentDetailPage({
     }): FicheStudent => {
       const enr =
         st.enrollments.find((e) => e.academicYear.isActive) ?? st.enrollments[0];
+      const answers = toAnswers(st.customAnswers);
+      // Per-year services map (from billing) keyed by academic-year label.
+      let servicesByYear: Record<string, string> = {};
+      try {
+        if (answers.services_by_year)
+          servicesByYear = JSON.parse(answers.services_by_year) as Record<string, string>;
+      } catch {
+        /* ignore malformed */
+      }
+      // Full parcours: each enrolled year → class → services (newest first).
+      const parcours = st.enrollments.map((e) => ({
+        year: e.academicYear.label,
+        className: e.class.name,
+        services: servicesByYear[e.academicYear.label] ?? "",
+      }));
       return {
         id: st.id,
         firstName: st.firstName,
@@ -383,7 +398,8 @@ export default async function ParentDetailPage({
         status: st.status,
         className: enr?.class.name ?? null,
         yearLabel: enr?.academicYear.label ?? null,
-        answers: toAnswers(st.customAnswers),
+        answers,
+        parcours,
       };
     };
     const famStudents = fam?.students ?? [];

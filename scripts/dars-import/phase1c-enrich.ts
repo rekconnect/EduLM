@@ -66,6 +66,10 @@ async function main() {
       return [Number(c.ID_Class), `${clean(c.ClassName)}${sec && sec !== "--" ? " " + sec : ""}`.trim()];
     }),
   );
+  const ftRows = await darsQuery<{ ID: number; FamilyType: string | null }>(
+    `SELECT ID, FamilyType FROM Isc_FamilyType WHERE Id_College = ${C}`,
+  );
+  const familyTypeById = new Map(ftRows.map((f) => [Number(f.ID), clean(f.FamilyType)]));
 
   // ── PARENTS ──
   const eduParents = await prisma.user.findMany({
@@ -79,7 +83,7 @@ async function main() {
     `SELECT ID_Parent, Id_Religion, Id_FamilySituation, Id_FamilyType, isAlumni, RegisterNum,
             Id_WorkStatus, Id_Occupation, Id_SubOccupation, OccupationDetails, WorkCompany,
             WorkPosition, WorkAddress, FirstNameAr, LastNameAr, MiddleNameAr, RegisterTown,
-            RegisterTownAR, Id_RegisterQaza, Id_Address
+            RegisterTownAR, Id_RegisterQaza, Id_Address, IsDead, SecondMarriage, Actual
      FROM Isc_Parent WHERE Id_College = ${C} AND ID_Parent IN (${inList(parentIds)})`,
   );
   const parentById = new Map(dParents.map((p) => [Number(p.ID_Parent), p]));
@@ -120,7 +124,7 @@ async function main() {
       ancien_eleve: yn(p.isAlumni as boolean),
       numero_registre: clean(p.RegisterNum as string),
       communaute: codes.label(p.Id_Religion as number),
-      type_famille: clean(p.Id_FamilyType ? String(p.Id_FamilyType) : ""),
+      type_famille: familyTypeById.get(Number(p.Id_FamilyType)) ?? "",
       telephones: (phonesByParent.get(pid) ?? []).join("\n"),
       statut_travail: codes.label(p.Id_WorkStatus as number),
       secteur_activite: codes.label(p.Id_Occupation as number),
@@ -134,6 +138,9 @@ async function main() {
       nom_pere_ar: clean(p.MiddleNameAr as string),
       lieu_registre: clean((p.RegisterTownAR as string) || (p.RegisterTown as string)),
       caza_registre: qazaFr.get(Number(p.Id_RegisterQaza)) ?? "",
+      // Per-parent flags (checkboxes next to Situation).
+      ...(p.IsDead ? { decede: "yes" } : {}),
+      ...(p.SecondMarriage ? { second_mariage: "yes" } : {}),
     };
     if (a) {
       out.adresse_immeuble = clean(a.Building as string);
@@ -159,7 +166,7 @@ async function main() {
   console.log(`Imported students to enrich: ${eduStudents.length}`);
 
   const dStudents = await darsQuery<Record<string, unknown>>(
-    `SELECT ID_Student, StudentCode, CountryOfBirth, BirthPlace, BirthPlaceAr, Id_Nation1, Id_Religion,
+    `SELECT ID_Student, StudentCode, CountryOfBirth, BirthPlace, BirthPlaceAr, Id_Nation1, Id_Nation2, Id_Religion,
             IdNumber, Email, CollegeEmail, StudentMobile, EntryDate, FirstNameAr, LastNameAr
      FROM Isc_Student WHERE Id_College = ${C} AND ID_Student IN (${inList(studentIds)})`,
   );
@@ -196,6 +203,7 @@ async function main() {
       pays_naissance: clean(s.CountryOfBirth as string),
       lieu_naissance: clean(s.BirthPlace as string),
       nationalite: codes.label(s.Id_Nation1 as number),
+      nationalite2: codes.label(s.Id_Nation2 as number),
       communaute_eleve: codes.label(s.Id_Religion as number),
       numero_identite: clean(s.IdNumber as string),
       email_eleve: clean(s.Email as string),
@@ -213,10 +221,10 @@ async function main() {
       out.date_depart = dstr(sc.LeftDate as Date);
     }
     if (mod) {
-      out.collations = yn(mod.HasSnack as boolean);
-      out.repas_chaud = yn(mod.HasHotMeal as boolean);
+      // NOTE: autocar / cantine (repas_chaud) / collations come from BILLING
+      // (backfill-billed-services + backfill-history-services), not this
+      // registration form. Only consent-type flags are sourced here.
       out.quitter_seul = yn(mod.AllowLeaveAlone as boolean);
-      out.autocar = yn(mod.BusRegistered as boolean);
       const trj: string[] = [];
       if (mod.Transportation_BusMorning) trj.push("Aller bus");
       if (mod.Transportation_BusEvening) trj.push("Retour bus");

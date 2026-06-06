@@ -61,7 +61,7 @@ async function buildConfig(categories: string[], fields: SeedField[]) {
     active: true,
     categoryId: catId(f.category),
     order: i,
-    ...(f.codeType ? { options: optsByType.get(f.codeType) ?? [] } : {}),
+    ...(f.options ? { options: f.options } : f.codeType ? { options: optsByType.get(f.codeType) ?? [] } : {}),
     ...(f.optionsSourceKey ? { optionsSource: { fieldId: f.optionsSourceKey } } : {}),
     ...(f.userBoundTo ? { userBoundTo: f.userBoundTo } : {}),
     ...(f.guardianBoundTo ? { guardianBoundTo: f.guardianBoundTo } : {}),

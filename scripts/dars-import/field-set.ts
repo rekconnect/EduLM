@@ -56,6 +56,18 @@ export type SeedField = {
   codeType?: string;
   /** Explicit dropdown options (when not from Isc_Codes). */
   options?: string[];
+  /**
+   * Conditional visibility — mirrors entity-fields `ConditionalRule`. Since
+   * seeded fields use id === key, `fieldId` references another field's key.
+   * The field shows only when the rule matches (e.g. show Aller/Retour only
+   * when Transport = "yes").
+   */
+  showIf?: {
+    fieldId: string;
+    equals?: string;
+    equalsAny?: string[];
+    anyValue?: boolean;
+  };
 };
 
 export const PARENT_CATEGORIES = [
@@ -158,8 +170,20 @@ export const STUDENT_FIELDS: SeedField[] = [
   // ── Services ──
   { key: "collations", label: "Collations", type: "yes_no", category: "Services" },
   { key: "repas_chaud", label: "Repas chaud", type: "yes_no", category: "Services" },
-  { key: "autocar", label: "Autocar (aller-retour)", type: "yes_no", category: "Services" },
-  { key: "autocar_details", label: "Autocar — détails", type: "long_text", category: "Services" },
+  // Root transport flag. When "no", the Aller/Retour + alternate address
+  // fields below stay hidden (showIf chained off this key).
+  { key: "autocar", label: "Transport (autocar)", type: "yes_no", category: "Services" },
+  { key: "transport_aller", label: "Aller", type: "select", category: "Services", options: ["Avec bus", "Avec parent"], showIf: { fieldId: "autocar", equals: "yes" } },
+  { key: "transport_retour", label: "Retour", type: "select", category: "Services", options: ["Avec bus", "Avec parent"], showIf: { fieldId: "autocar", equals: "yes" } },
+  { key: "transport_adresse_diff", label: "Adresse de transport (différente du domicile)", type: "yes_no", category: "Services", showIf: { fieldId: "autocar", equals: "yes" } },
+  // Alternate pickup/drop-off address — only when the toggle above is "yes".
+  { key: "transport_caza", label: "Transport — Caza", type: "short_text", category: "Services", showIf: { fieldId: "transport_adresse_diff", equals: "yes" } },
+  { key: "transport_village", label: "Transport — Village", type: "short_text", category: "Services", showIf: { fieldId: "transport_adresse_diff", equals: "yes" } },
+  { key: "transport_rue", label: "Transport — Rue", type: "short_text", category: "Services", showIf: { fieldId: "transport_adresse_diff", equals: "yes" } },
+  { key: "transport_immeuble", label: "Transport — Immeuble", type: "short_text", category: "Services", showIf: { fieldId: "transport_adresse_diff", equals: "yes" } },
+  { key: "transport_etage", label: "Transport — Étage", type: "short_text", category: "Services", showIf: { fieldId: "transport_adresse_diff", equals: "yes" } },
+  { key: "transport_place", label: "Transport — Place détails", type: "short_text", category: "Services", showIf: { fieldId: "transport_adresse_diff", equals: "yes" } },
+  { key: "transport_remarque", label: "Transport — Remarques", type: "long_text", category: "Services", showIf: { fieldId: "transport_adresse_diff", equals: "yes" } },
 
   // ── Autorisations ──
   { key: "quitter_seul", label: "Autorisé à quitter seul", type: "yes_no", category: "Autorisations" },

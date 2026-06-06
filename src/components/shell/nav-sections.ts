@@ -19,6 +19,7 @@ export type IconName =
   | "contact"
   | "tenants"
   | "settings"
+  | "reports"
   | "inscriptionForm";
 
 export type NavItem = {
@@ -49,6 +50,7 @@ type Labels = {
   billing: string;
   contact: string;
   settings: string;
+  reports: string;
   inscriptionForm: string;
   myApplications: string;
   myAnnouncements: string;
@@ -97,6 +99,7 @@ export function navSectionsForRole(role: Role, l: Labels): NavSection[] {
             { label: l.attendance, href: "/attendance", icon: "attendance" },
             { label: l.discipline, href: "/discipline", icon: "discipline" },
             { label: l.billing, href: "/billing", icon: "billing" },
+            { label: l.reports, href: "/reports", icon: "reports" },
           ],
         },
         {

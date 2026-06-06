@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Pencil, Check, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Input, Select, Textarea } from "@/components/ui/input";
-import type { FieldDef } from "@/lib/entity-fields";
+import { evaluateShowIf, type FieldDef } from "@/lib/entity-fields";
 
 const YESNO = (v: string) =>
   v === "yes" || v === "Oui" || v === "true"
@@ -106,6 +106,12 @@ export function EditableGroup({
 
   const set = (k: string, v: string) => setValues((p) => ({ ...p, [k]: v }));
 
+  // Honor conditional visibility (showIf / hideIf). Recomputes from `values`,
+  // so toggling e.g. Transport = Non hides Aller/Retour live while editing.
+  // Answers are keyed by field key, which equals the field id for our config,
+  // so the rules' fieldId references resolve correctly.
+  const visible = fields.filter((f) => evaluateShowIf(f, values));
+
   function save() {
     start(async () => {
       const r = await onSave(values);
@@ -122,7 +128,7 @@ export function EditableGroup({
     setEditing(false);
   }
 
-  const readRows = fields
+  const readRows = visible
     .map((f) => [f.label, f.type === "yes_no" ? YESNO(values[f.key] ?? "") : values[f.key] ?? ""] as [string, string])
     .filter(([, v]) => v && v.trim().length > 0);
 
@@ -167,7 +173,7 @@ export function EditableGroup({
 
       {editing ? (
         <div dir={rtl ? "rtl" : undefined} className="grid gap-3 sm:grid-cols-2">
-          {fields.map((f) => (
+          {visible.map((f) => (
             <EditField key={f.key} field={f} value={values[f.key] ?? ""} onChange={(v) => set(f.key, v)} />
           ))}
         </div>

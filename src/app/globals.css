@@ -305,3 +305,21 @@ input,
 textarea {
   color: var(--color-foreground);
 }
+
+/* ───────────────────────── Print ─────────────────────────
+   Used by the report print/PDF views (/reports/print/*). The app sidebar
+   and any element tagged `.no-print` are dropped so the printout is just the
+   report content at full width. Safe globally — no in-app page is designed to
+   be printed with its chrome. */
+@media print {
+  .tenant-scope > aside,
+  .tenant-scope > div.sticky {
+    display: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+  }
+}

@@ -7,6 +7,7 @@ import { LinkButton } from "@/components/ui/button";
 import { Table, THead, TR, TH, TD } from "@/components/ui/table";
 import { SortableTH, type SortDir } from "@/components/ui/sortable-th";
 import { FilterPill } from "@/components/ui/filter-pill";
+import { YearPicker, UrlSelect } from "@/components/shell/year-picker";
 import {
   BulkHeaderCheckbox,
   BulkRowCheckbox,
@@ -86,9 +87,21 @@ export default async function ParentsListPage({
     sort?: string;
     dir?: string;
     view?: string;
+    yearId?: string;
+    scope?: string;
+    page?: string;
   }>;
 }) {
-  const { q = "", status, sort, dir, view } = await searchParams;
+  const {
+    q = "",
+    status,
+    sort,
+    dir,
+    view,
+    yearId: yearIdParam,
+    scope = "year",
+    page: pageParam,
+  } = await searchParams;
   const currentView: View = parseView(view);
   const user = await requireRole("SCHOOL_ADMIN");
   const tenantId = user.tenantId;
@@ -111,6 +124,20 @@ export default async function ParentsListPage({
       ? (status as UserStatus)
       : undefined;
 
+    // Academic-year scope (mirrors the students page): show the families with
+    // a child enrolled in the chosen year. scope=all lifts the year filter.
+    const years = await db.academicYear.findMany({
+      orderBy: { startDate: "desc" },
+      select: { id: true, label: true, isActive: true },
+    });
+    const activeYear = years.find((y) => y.isActive) ?? years[0];
+    const selectedYearId =
+      yearIdParam && years.some((y) => y.id === yearIdParam)
+        ? yearIdParam
+        : activeYear?.id;
+    const selectedYear = years.find((y) => y.id === selectedYearId);
+    const restrictToYear = scope !== "all" && years.length > 0;
+
     // Three mutually-exclusive lifecycle buckets. Status filter still
     // applies on top — e.g. "Archived parents who are also DISABLED".
     // Typed as a loose record because `archived` / `deletedAt` are new
@@ -123,41 +150,66 @@ export default async function ParentsListPage({
           ? { archived: true, deletedAt: null }
           : { deletedAt: { not: null } as const };
 
-    const parents = await db.user.findMany({
-      where: {
-        role: "PARENT",
-        ...lifecycleWhere,
-        ...(statusFilter ? { status: statusFilter } : {}),
-        ...(query
-          ? {
-              OR: [
-                { email: { contains: query, mode: "insensitive" } },
-                { name: { contains: query, mode: "insensitive" } },
-                {
-                  guardianProfile: {
-                    childLinks: {
-                      some: {
-                        student: {
-                          OR: [
-                            { firstName: { contains: query, mode: "insensitive" } },
-                            { lastName: { contains: query, mode: "insensitive" } },
-                          ],
-                        },
+    const whereClause: Prisma.UserWhereInput = {
+      role: "PARENT",
+      ...lifecycleWhere,
+      ...(statusFilter ? { status: statusFilter } : {}),
+      ...(restrictToYear && selectedYearId
+        ? {
+            guardianProfile: {
+              childLinks: {
+                some: {
+                  student: {
+                    enrollments: { some: { academicYearId: selectedYearId } },
+                  },
+                },
+              },
+            },
+          }
+        : {}),
+      ...(query
+        ? {
+            OR: [
+              { email: { contains: query, mode: "insensitive" } },
+              { name: { contains: query, mode: "insensitive" } },
+              {
+                guardianProfile: {
+                  childLinks: {
+                    some: {
+                      student: {
+                        OR: [
+                          { firstName: { contains: query, mode: "insensitive" } },
+                          { lastName: { contains: query, mode: "insensitive" } },
+                        ],
                       },
                     },
                   },
                 },
-                {
-                  guardianProfile: {
-                    relation: { contains: query, mode: "insensitive" },
-                  },
+              },
+              {
+                guardianProfile: {
+                  relation: { contains: query, mode: "insensitive" },
                 },
-              ],
-            }
-          : {}),
-      },
+              },
+            ],
+          }
+        : {}),
+    };
+
+    // Pagination — 50 rows per page, the rest spill onto next pages.
+    const PAGE_SIZE = 50;
+    const totalMatching = await db.user.count({ where: whereClause });
+    const pageCount = Math.max(1, Math.ceil(totalMatching / PAGE_SIZE));
+    const pageNum = (() => {
+      const n = Number(pageParam);
+      return Number.isInteger(n) && n > 0 ? Math.min(n, pageCount) : 1;
+    })();
+
+    const parents = await db.user.findMany({
+      where: whereClause,
       orderBy: orderByFor(sortKey, sortDir),
-      take: 200,
+      skip: (pageNum - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
       select: {
         id: true,
         name: true,
@@ -197,35 +249,54 @@ export default async function ParentsListPage({
       }),
     ]);
 
-    const count = parents.length;
+    const count = totalMatching;
     const countLabel = query
       ? t("countWithQuery", { count, query })
       : t("countAll", { count });
 
-    // Preserve other params when navigating via sort/filter links.
+    // Preserve other params when navigating via sort/filter links. `page` is
+    // intentionally NOT preserved on sort/filter/view changes so they reset to
+    // page 1; pagination links use `pagePreserve` (which keeps every filter).
     const viewParam = currentView === "active" ? undefined : currentView;
+    const yearParam = selectedYearId;
+    const scopeParam = scope === "all" ? "all" : undefined;
     const preserve: Record<string, string | undefined> = {
       q: query || undefined,
       status: statusFilter,
       sort: sortKey,
       dir: sortDir,
       view: viewParam,
+      yearId: yearParam,
+      scope: scopeParam,
     };
     const filterPreserve: Record<string, string | undefined> = {
       q: preserve.q,
       sort: preserve.sort,
       dir: preserve.dir,
       view: preserve.view,
+      yearId: yearParam,
+      scope: scopeParam,
     };
     const viewPreserve: Record<string, string | undefined> = {
       q: preserve.q,
       sort: preserve.sort,
       dir: preserve.dir,
+      yearId: yearParam,
+      scope: scopeParam,
+    };
+    const pagePreserve: Record<string, string | undefined> = {
+      q: preserve.q,
+      status: statusFilter,
+      sort: sortKey,
+      dir: sortDir,
+      view: viewParam,
+      yearId: yearParam,
+      scope: scopeParam,
     };
     const allVisibleIds = parents.map((p) => p.id);
 
     return (
-        <main className="mx-auto max-w-5xl space-y-6 px-6 py-10">
+        <main className="mx-auto max-w-6xl space-y-6 px-6 py-10">
           <PageHeader
             title={t("title")}
             description={t("lead")}
@@ -260,16 +331,41 @@ export default async function ParentsListPage({
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="w-full sm:max-w-sm">
-              <ParentsSearchBox />
+            <div className="flex w-full flex-wrap items-center gap-3">
+              <div className="w-full sm:w-64">
+                <ParentsSearchBox />
+              </div>
+              {years.length > 0 ? (
+                <>
+                  <YearPicker years={years} selectedId={selectedYearId ?? ""} />
+                  <UrlSelect
+                    name="scope"
+                    value={restrictToYear ? "year" : "all"}
+                    options={[
+                      { value: "year", label: "Familles de l'année" },
+                      { value: "all", label: "Tous les parents" },
+                    ]}
+                  />
+                </>
+              ) : null}
             </div>
             <p
               aria-live="polite"
-              className="text-xs text-[color:var(--color-foreground-muted)]"
+              className="shrink-0 text-xs text-[color:var(--color-foreground-muted)]"
             >
               {countLabel}
             </p>
           </div>
+
+          {restrictToYear && selectedYear ? (
+            <p className="text-xs text-[color:var(--color-foreground-muted)]">
+              <span className="font-medium text-[color:var(--color-foreground)]">
+                {totalMatching}
+              </span>{" "}
+              · Familles avec un enfant inscrit en {selectedYear.label}
+              {!selectedYear.isActive ? " · année non active" : ""}
+            </p>
+          ) : null}
 
           {/* Status filter pills */}
           <div className="flex flex-wrap items-center gap-2">
@@ -473,6 +569,14 @@ export default async function ParentsListPage({
                 })}
               </tbody>
             </Table>
+            <Pagination
+              base={BASE}
+              params={pagePreserve}
+              page={pageNum}
+              pageCount={pageCount}
+              total={totalMatching}
+              pageSize={PAGE_SIZE}
+            />
             </BulkSelectionProvider>
           )}
         </main>

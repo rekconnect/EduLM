@@ -24,6 +24,7 @@ import {
   MessageSquare,
   Building2,
   Settings,
+  BarChart3,
   ClipboardEdit,
   Search,
   PanelLeftClose,
@@ -60,6 +61,7 @@ const ICONS: Record<IconName, LucideIcon> = {
   contact: MessageSquare,
   tenants: Building2,
   settings: Settings,
+  reports: BarChart3,
   inscriptionForm: ClipboardEdit,
 };
 void FileText;

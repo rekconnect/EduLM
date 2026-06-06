@@ -186,6 +186,10 @@ async function main() {
   const modRows = await darsQuery<Record<string, unknown>>(
     `SELECT ms.Id_Student, ms.HasSnack, ms.HasHotMeal, ms.AllowLeaveAlone, ms.BusRegistered,
             ms.Transportation_BusMorning, ms.Transportation_BusEvening,
+            ms.Transportation_ParentsMorning, ms.Transportation_ParentsEvening,
+            ms.transOtherAddress, ms.transOtherAddressQaza, ms.transOtherAddressTown,
+            ms.transOtherAddressStreet, ms.transOtherAddressBuilding, ms.transOtherAddressAddressFloor,
+            ms.transOtherAddressPlaceDetails, ms.transOtherAddressRemark,
             ms.AllowPublishImages, ms.AllowPublishToSouvenirBook, ms.AllowPublishToSocialMedia, ms.AllowPublishAudio
      FROM Isc_ModifStudents ms
      JOIN (SELECT Id_Student, MAX(SYear) AS mx FROM Isc_ModifStudents WHERE Id_College = ${C} GROUP BY Id_Student) m
@@ -225,10 +229,30 @@ async function main() {
       // (backfill-billed-services + backfill-history-services), not this
       // registration form. Only consent-type flags are sourced here.
       out.quitter_seul = yn(mod.AllowLeaveAlone as boolean);
-      const trj: string[] = [];
-      if (mod.Transportation_BusMorning) trj.push("Aller bus");
-      if (mod.Transportation_BusEvening) trj.push("Retour bus");
-      out.autocar_details = trj.join(" + ");
+      // Transport registration — Aller / Retour mode (bus vs parent) and the
+      // alternate pickup/drop-off address (when different from the home one).
+      const qazaLabel = (v: unknown) => {
+        const n = Number(v);
+        return Number.isFinite(n) && n > 0 ? (qazaFr.get(n) ?? "") : clean(v as string);
+      };
+      const townLabel = (v: unknown) => {
+        const n = Number(v);
+        return Number.isFinite(n) && n > 0 ? (townName.get(n) ?? "") : clean(v as string);
+      };
+      if (mod.Transportation_BusMorning) out.transport_aller = "Avec bus";
+      else if (mod.Transportation_ParentsMorning) out.transport_aller = "Avec parent";
+      if (mod.Transportation_BusEvening) out.transport_retour = "Avec bus";
+      else if (mod.Transportation_ParentsEvening) out.transport_retour = "Avec parent";
+      if (mod.transOtherAddress) {
+        out.transport_adresse_diff = "yes";
+        out.transport_caza = qazaLabel(mod.transOtherAddressQaza);
+        out.transport_village = townLabel(mod.transOtherAddressTown);
+        out.transport_rue = clean(mod.transOtherAddressStreet as string);
+        out.transport_immeuble = clean(mod.transOtherAddressBuilding as string);
+        out.transport_etage = clean(mod.transOtherAddressAddressFloor as string);
+        out.transport_place = clean(mod.transOtherAddressPlaceDetails as string);
+        out.transport_remarque = clean(mod.transOtherAddressRemark as string);
+      }
       out.auth_site = yn(mod.AllowPublishImages as boolean);
       out.auth_livre = yn(mod.AllowPublishToSouvenirBook as boolean);
       out.auth_reseaux = yn(mod.AllowPublishToSocialMedia as boolean);

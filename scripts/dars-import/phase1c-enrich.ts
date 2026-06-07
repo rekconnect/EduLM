@@ -183,9 +183,12 @@ async function main() {
   );
   const scById = new Map(scRows.map((r) => [Number(r.ID_Student), r]));
 
-  // Latest Isc_ModifStudents per student
+  // ALL Isc_ModifStudents rows per student (every SYear) — registration is
+  // year-specific (the form that opened in 2024 fills the current year; the
+  // re-registration open now fills next year). We keep each year so imports
+  // land in the right year. Grouped: studentId → SYear → row.
   const modRows = await darsQuery<Record<string, unknown>>(
-    `SELECT ms.Id_Student, ms.HasSnack, ms.HasHotMeal, ms.AllowLeaveAlone, ms.BusRegistered,
+    `SELECT ms.Id_Student, ms.SYear, ms.HasSnack, ms.HasHotMeal, ms.AllowLeaveAlone, ms.BusRegistered,
             ms.Transportation_BusMorning, ms.Transportation_BusEvening,
             ms.Transportation_ParentsMorning, ms.Transportation_ParentsEvening,
             ms.transOtherAddress, ms.transOtherAddressQaza, ms.transOtherAddressTown,
@@ -193,16 +196,67 @@ async function main() {
             ms.transOtherAddressPlaceDetails, ms.transOtherAddressRemark,
             ms.AllowPublishImages, ms.AllowPublishToSouvenirBook, ms.AllowPublishToSocialMedia, ms.AllowPublishAudio
      FROM Isc_ModifStudents ms
-     JOIN (SELECT Id_Student, MAX(SYear) AS mx FROM Isc_ModifStudents WHERE Id_College = ${C} GROUP BY Id_Student) m
-       ON m.Id_Student = ms.Id_Student AND m.mx = ms.SYear
      WHERE ms.Id_College = ${C} AND ms.Id_Student IN (${inList(studentIds)})`,
   );
-  const modById = new Map(modRows.map((r) => [Number(r.Id_Student), r]));
+  const modsByStudent = new Map<number, Map<number, Record<string, unknown>>>();
+  for (const r of modRows) {
+    const sid = Number(r.Id_Student);
+    let m = modsByStudent.get(sid);
+    if (!m) {
+      m = new Map();
+      modsByStudent.set(sid, m);
+    }
+    m.set(Number(r.SYear), r);
+  }
+  const latestModFor = (sid: number) => {
+    const m = modsByStudent.get(sid);
+    if (!m || m.size === 0) return undefined;
+    return m.get(Math.max(...m.keys()));
+  };
+
+  // Qaza / Town id → label (used by the transport alternate address).
+  const qazaLabel = (v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? (qazaFr.get(n) ?? "") : clean(v as string);
+  };
+  const townLabel = (v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? (townName.get(n) ?? "") : clean(v as string);
+  };
+
+  // One Isc_ModifStudents row → the registration fields for that year.
+  function regForRow(m: Record<string, unknown>): Record<string, string> {
+    const r: Record<string, string> = {};
+    if (m.HasSnack != null) r.collations = yn(m.HasSnack as boolean);
+    if (m.HasHotMeal != null) r.repas_chaud = yn(m.HasHotMeal as boolean);
+    if (m.BusRegistered != null) r.autocar = yn(m.BusRegistered as boolean);
+    if (m.Transportation_BusMorning) r.transport_aller = "Avec bus";
+    else if (m.Transportation_ParentsMorning) r.transport_aller = "Avec parent";
+    if (m.Transportation_BusEvening) r.transport_retour = "Avec bus";
+    else if (m.Transportation_ParentsEvening) r.transport_retour = "Avec parent";
+    if (m.transOtherAddress) {
+      r.transport_adresse_diff = "yes";
+      r.transport_caza = qazaLabel(m.transOtherAddressQaza);
+      r.transport_village = townLabel(m.transOtherAddressTown);
+      r.transport_rue = clean(m.transOtherAddressStreet as string);
+      r.transport_immeuble = clean(m.transOtherAddressBuilding as string);
+      r.transport_etage = clean(m.transOtherAddressAddressFloor as string);
+      r.transport_place = clean(m.transOtherAddressPlaceDetails as string);
+      r.transport_remarque = clean(m.transOtherAddressRemark as string);
+    }
+    if (m.AllowLeaveAlone != null) r.quitter_seul = yn(m.AllowLeaveAlone as boolean);
+    if (m.AllowPublishImages != null) r.auth_site = yn(m.AllowPublishImages as boolean);
+    if (m.AllowPublishToSouvenirBook != null) r.auth_livre = yn(m.AllowPublishToSouvenirBook as boolean);
+    if (m.AllowPublishToSocialMedia != null) r.auth_reseaux = yn(m.AllowPublishToSocialMedia as boolean);
+    if (m.AllowPublishAudio != null) r.auth_radio = yn(m.AllowPublishAudio as boolean);
+    for (const k of Object.keys(r)) if (!r[k]) delete r[k];
+    return r;
+  }
 
   function studentAnswers(s: Record<string, unknown>): Record<string, string> {
     const sid = Number(s.ID_Student);
     const sc = scById.get(sid);
-    const mod = modById.get(sid);
+    const mod = latestModFor(sid);
     const out: Record<string, string> = {
       dars_student_code: clean(s.StudentCode as string),
       pays_naissance: clean(s.CountryOfBirth as string),
@@ -225,40 +279,26 @@ async function main() {
       out.raison_depart = clean(sc.LeavingReason as string);
       out.date_depart = dstr(sc.LeftDate as Date);
     }
-    if (mod) {
-      // NOTE: autocar / cantine (repas_chaud) / collations come from BILLING
-      // (backfill-billed-services + backfill-history-services), not this
-      // registration form. Only consent-type flags are sourced here.
-      out.quitter_seul = yn(mod.AllowLeaveAlone as boolean);
-      // Transport registration — Aller / Retour mode (bus vs parent) and the
-      // alternate pickup/drop-off address (when different from the home one).
-      const qazaLabel = (v: unknown) => {
-        const n = Number(v);
-        return Number.isFinite(n) && n > 0 ? (qazaFr.get(n) ?? "") : clean(v as string);
-      };
-      const townLabel = (v: unknown) => {
-        const n = Number(v);
-        return Number.isFinite(n) && n > 0 ? (townName.get(n) ?? "") : clean(v as string);
-      };
-      if (mod.Transportation_BusMorning) out.transport_aller = "Avec bus";
-      else if (mod.Transportation_ParentsMorning) out.transport_aller = "Avec parent";
-      if (mod.Transportation_BusEvening) out.transport_retour = "Avec bus";
-      else if (mod.Transportation_ParentsEvening) out.transport_retour = "Avec parent";
-      if (mod.transOtherAddress) {
-        out.transport_adresse_diff = "yes";
-        out.transport_caza = qazaLabel(mod.transOtherAddressQaza);
-        out.transport_village = townLabel(mod.transOtherAddressTown);
-        out.transport_rue = clean(mod.transOtherAddressStreet as string);
-        out.transport_immeuble = clean(mod.transOtherAddressBuilding as string);
-        out.transport_etage = clean(mod.transOtherAddressAddressFloor as string);
-        out.transport_place = clean(mod.transOtherAddressPlaceDetails as string);
-        out.transport_remarque = clean(mod.transOtherAddressRemark as string);
+    // Single-value fields = the latest registration on file (quitter_seul,
+    // transport mode/address, authorizations). NOTE: collation / cantine /
+    // autocar for the CURRENT year come from BILLING (backfill-*-services);
+    // these registration values are the opt-in form, surfaced per-year below.
+    if (mod) Object.assign(out, regForRow(mod));
+
+    // Per-year registration snapshot — one entry per SYear the student has a
+    // Isc_ModifStudents row for. Drives the year-aware fiche: the form that
+    // opened in 2024 → current year; the re-registration open now → next year.
+    const studentMods = modsByStudent.get(sid);
+    if (studentMods) {
+      const byYear: Record<string, Record<string, string>> = {};
+      for (const [syear, m] of studentMods) {
+        const r = regForRow(m);
+        if (Object.keys(r).length) byYear[`${syear - 1}-${syear}`] = r;
       }
-      out.auth_site = yn(mod.AllowPublishImages as boolean);
-      out.auth_livre = yn(mod.AllowPublishToSouvenirBook as boolean);
-      out.auth_reseaux = yn(mod.AllowPublishToSocialMedia as boolean);
-      out.auth_radio = yn(mod.AllowPublishAudio as boolean);
+      if (Object.keys(byYear).length)
+        out.registration_by_year = JSON.stringify(byYear);
     }
+
     for (const k of Object.keys(out)) if (!out[k]) delete out[k];
     return out;
   }

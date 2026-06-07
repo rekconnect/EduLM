@@ -348,10 +348,10 @@ export default async function ParentDetailPage({
       .map((gg) => ({
         guardianId: gg.id,
         userId: gg.userId,
+        relation: gg.relation ?? "",
         relationLabel: gg.relation
           ? (RELATION_LABELS_FR[gg.relation] ?? gg.relation)
           : "Responsable",
-        _rel: gg.relation ?? "",
         firstName: gg.user.firstName ?? splitLegacyName(gg.user.name).firstName,
         lastName: gg.user.lastName ?? splitLegacyName(gg.user.name).lastName,
         email: gg.user.email,
@@ -360,8 +360,7 @@ export default async function ParentDetailPage({
         nationality2: gg.nationality2,
         answers: toAnswers(gg.user.customAnswers),
       }))
-      .sort((a, b) => relRank(a._rel) - relRank(b._rel))
-      .map(({ _rel: _drop, ...g }) => g);
+      .sort((a, b) => relRank(a.relation) - relRank(b.relation));
 
     const shapeStudent = (st: {
       id: string;

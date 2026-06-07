@@ -85,16 +85,19 @@ export const PARENT_FIELDS: SeedField[] = [
   { key: "situation_famille", label: "Situation", type: "select", category: "Info générale", codeType: "SIT" },
   { key: "decede", label: "Décédé(e)", type: "yes_no", category: "Info générale" },
   { key: "second_mariage", label: "Second mariage", type: "yes_no", category: "Info générale" },
+  // "Actuel" = the current/active parent (vs a previous spouse). Dars
+  // Isc_Parent.Actual — meaningful especially for the mother in blended
+  // families. Lives on the parent section (shows per père / mère).
+  { key: "actuel", label: "Actuel(le)", type: "yes_no", category: "Info générale" },
   { key: "ancien_eleve", label: "Ancien(ne) élève", type: "yes_no", category: "Info générale" },
   { key: "numero_registre", label: "Registre", type: "short_text", category: "Info générale" },
   { key: "nationalite1", label: "Nationalité 1", type: "select", category: "Info générale", guardianBoundTo: "nationality1", codeType: "NAT" },
   { key: "nationalite2", label: "Nationalité 2", type: "select", category: "Info générale", guardianBoundTo: "nationality2", codeType: "NAT" },
   { key: "communaute", label: "Communauté", type: "select", category: "Info générale", codeType: "REL" },
   { key: "type_famille", label: "Type famille", type: "select", category: "Info générale", options: ["Ordinaire", "Parents Cadrés", "Parents Empl", "Parents Non-cadrés", "Parents boursiers"] },
-  { key: "auth_site", label: "Autorisation Site Internet", type: "yes_no", category: "Info générale", familyBoundTo: "imageRightsSite" },
-  { key: "auth_livre", label: "Autorisation Livre Souvenir", type: "yes_no", category: "Info générale", familyBoundTo: "imageRightsBook" },
-  { key: "auth_reseaux", label: "Autorisation Réseaux Sociaux", type: "yes_no", category: "Info générale", familyBoundTo: "imageRightsSocial" },
-  { key: "auth_radio", label: "Autorisation Web Radio", type: "yes_no", category: "Info générale", familyBoundTo: "imageRightsRadio" },
+  // Photo authorizations are NOT shown on the parent section — in Dars they
+  // are always "non" at the parent level. They live on the STUDENT section
+  // (sourced per-student from Isc_ModifStudents). See STUDENT_FIELDS below.
 
   // ── Contact ──
   { key: "email", label: "Email", type: "email", category: "Contact", userBoundTo: "email" },

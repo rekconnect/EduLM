@@ -141,6 +141,7 @@ async function main() {
       // Per-parent flags (checkboxes next to Situation).
       ...(p.IsDead ? { decede: "yes" } : {}),
       ...(p.SecondMarriage ? { second_mariage: "yes" } : {}),
+      ...(p.Actual != null ? { actuel: yn(p.Actual as boolean) } : {}),
     };
     if (a) {
       out.adresse_immeuble = clean(a.Building as string);

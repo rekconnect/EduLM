@@ -14,6 +14,8 @@ import { saveGuardianFiche, saveStudentFiche } from "./_fiche-actions";
 export type FicheGuardian = {
   guardianId: string;
   userId: string;
+  /** Raw relation key (e.g. "pere" / "mere") — drives mother-only fields. */
+  relation: string;
   relationLabel: string;
   firstName: string;
   lastName: string;
@@ -161,6 +163,9 @@ export function FamilyFiche({
         <div className="grid items-start gap-4 lg:grid-cols-2">
           {guardians.map((g) => {
             const vals = buildParentValues(g);
+            // "Actuel(le)" is a mother-only field in Dars (marks the current
+            // mother vs a previous spouse). Hide it for the father / others.
+            const isMother = g.relation === "mere";
             return (
               <Panel key={g.guardianId} className="space-y-5">
                 <div className="flex items-center gap-3 border-b border-[color:var(--color-border-subtle)] pb-4">
@@ -178,7 +183,11 @@ export function FamilyFiche({
                   <EditableGroup
                     key={grp.title}
                     title={grp.title}
-                    fields={grp.fields}
+                    fields={
+                      isMother
+                        ? grp.fields
+                        : grp.fields.filter((f) => f.key !== "actuel")
+                    }
                     rtl={grp.rtl}
                     initialValues={vals}
                     onSave={saveGuardianFiche.bind(null, g.userId)}

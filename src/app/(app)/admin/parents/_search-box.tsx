@@ -24,6 +24,7 @@ export function ParentsSearchBox() {
       const sp = new URLSearchParams(params.toString());
       if (value.trim() === "") sp.delete("q");
       else sp.set("q", value.trim());
+      sp.delete("page"); // new search → back to first page
       const next = sp.toString();
       startTransition(() => {
         router.replace(next ? `${pathname}?${next}` : pathname);

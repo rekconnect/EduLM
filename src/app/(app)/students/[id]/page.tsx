@@ -1,30 +1,57 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
+import {
+  IdCard,
+  User,
+  BookOpen,
+  Bus,
+  Languages,
+  Users,
+  Baby,
+  CalendarDays,
+  ArrowRight,
+} from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
-import { Button, LinkButton } from "@/components/ui/button";
-import { Card, CardBody, CardHeader, Stat } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardBody } from "@/components/ui/card";
+import { FicheTabs, type FicheTab } from "@/components/fiche/fiche-tabs";
+import { EditableGroup } from "@/components/fiche/editable-group";
+import { StudentYearView } from "@/components/fiche/student-year-view";
+import type { EntityFieldsConfig, FieldDef } from "@/lib/entity-fields";
 import { db } from "@/lib/db";
 import { withTenantSession } from "@/lib/session";
-import { deleteStudent, updateStudent } from "../_actions";
-import { StudentForm } from "../_form";
+import {
+  deleteStudent,
+  saveStudentFicheFields,
+  saveStudentIdentity,
+} from "../_actions";
+import { StudentIdentitySection, type StudentIdentity } from "./_identity-card";
 import { GuardianManager, type ParentOption } from "./_guardian-link";
-import { listEstablishments, loadEntityFieldsConfig } from "../../settings/_actions";
-import { StudentCustomAnswersForm } from "./_custom-answers";
+import { loadEntityFieldsConfig } from "../../settings/_actions";
+import { ArabicFicheView, type ArabicSection } from "./_arabic-view";
 
-const SEVERITY_LABEL: Record<string, string> = {
-  NOTE: "severityNote",
-  WARNING: "severityWarning",
-  DETENTION: "severityDetention",
-  SUSPENSION: "severitySuspension",
-};
+/** Custom student fields for one category (excludes dossier-bound mirrors). */
+function fieldsInCat(config: EntityFieldsConfig, name: string): FieldDef[] {
+  const cat = config.categories.find((c) => c.name === name);
+  if (!cat) return [];
+  return config.fields
+    .filter(
+      (f) => f.categoryId === cat.id && f.active !== false && !f.dossierBoundTo,
+    )
+    .sort((a, b) => a.order - b.order);
+}
 
-const SEVERITY_TONE: Record<string, string> = {
-  NOTE: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
-  WARNING: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
-  DETENTION: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200",
-  SUSPENSION: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200",
-};
+function toAnswers(ca: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (ca && typeof ca === "object") {
+    for (const [k, v] of Object.entries(ca as Record<string, unknown>)) {
+      if (typeof v === "string") out[k] = v;
+      else if (v != null) out[k] = String(v);
+    }
+  }
+  return out;
+}
 
 export default async function StudentDetailPage({
   params,
@@ -36,25 +63,9 @@ export default async function StudentDetailPage({
   return withTenantSession(async (user) => {
     const t = await getTranslations("students");
     const tCommon = await getTranslations("common");
-    const tAtt = await getTranslations("attendance");
-    const tDisc = await getTranslations("discipline");
 
-    // 30-day attendance window for the summary stats.
-    const since = new Date();
-    since.setUTCDate(since.getUTCDate() - 30);
-    since.setUTCHours(0, 0, 0, 0);
-
-    // All queries only need the URL `id` (or no input at all) — fire in
-    // parallel. Cuts wall time substantially on this page. On a 404 we
-    // waste a few extra queries; rare enough to ignore.
-    const [
-      student,
-      availableParentsRaw,
-      attendanceCounts,
-      discipline,
-      studentFieldsConfig,
-      establishmentsRaw,
-    ] = await Promise.all([
+    const [student, availableParentsRaw, studentFieldsConfig] =
+      await Promise.all([
         db.student.findUnique({
           where: { id },
           include: {
@@ -65,17 +76,22 @@ export default async function StudentDetailPage({
                   select: {
                     id: true,
                     userId: true,
-                    user: { select: { email: true, name: true } },
+                    relation: true,
+                    user: {
+                      select: { email: true, name: true, customAnswers: true },
+                    },
                   },
                 },
               },
             },
             enrollments: {
               include: {
-                class: { select: { name: true } },
-                academicYear: { select: { label: true, isActive: true } },
+                class: { select: { name: true, level: true } },
+                academicYear: {
+                  select: { label: true, isActive: true, startDate: true },
+                },
               },
-              orderBy: { enrolledAt: "desc" },
+              orderBy: { academicYear: { startDate: "desc" } },
             },
           },
         }),
@@ -84,228 +100,336 @@ export default async function StudentDetailPage({
           orderBy: { name: "asc" },
           select: { id: true, name: true, email: true },
         }),
-        db.attendanceRecord.groupBy({
-          by: ["status"],
-          where: { studentId: id, date: { gte: since } },
-          _count: { status: true },
-        }),
-        db.disciplineEvent.findMany({
-          where: { studentId: id },
-          orderBy: { date: "desc" },
-          take: 10,
-          include: { reportedBy: { select: { name: true, email: true } } },
-        }),
         loadEntityFieldsConfig("student"),
-        listEstablishments(),
       ]);
 
     if (!student) notFound();
 
-    const establishmentsForRenderer = establishmentsRaw
-      .filter((e) => e.isActive)
-      .map((e) => ({
-        id: e.id,
-        name: e.name,
-        levels: Array.isArray(e.levels)
-          ? (e.levels.filter((x) => typeof x === "string") as string[])
-          : [],
-      }));
+    // Siblings = other students in the same family.
+    const siblings = student.familyId
+      ? await db.student.findMany({
+          where: { familyId: student.familyId, NOT: { id } },
+          orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            status: true,
+            enrollments: {
+              where: { academicYear: { isActive: true } },
+              select: { class: { select: { name: true } } },
+              take: 1,
+            },
+          },
+        })
+      : [];
 
-    // Coerce Student.customAnswers (Json) into a flat string map.
-    const initialStudentAnswers: Record<string, string> = {};
-    if (student.customAnswers && typeof student.customAnswers === "object") {
-      for (const [k, v] of Object.entries(
-        student.customAnswers as Record<string, unknown>,
-      )) {
-        if (typeof v === "string") initialStudentAnswers[k] = v;
-        else if (v != null) initialStudentAnswers[k] = String(v);
-      }
+    const initialStudentAnswers = toAnswers(student.customAnswers);
+
+    // Per-year billing services + registration snapshots → year-aware view.
+    let servicesByYear: Record<string, string> = {};
+    let registrationByYear: Record<string, Record<string, string>> = {};
+    try {
+      if (initialStudentAnswers.services_by_year)
+        servicesByYear = JSON.parse(initialStudentAnswers.services_by_year);
+    } catch {
+      /* ignore */
     }
+    try {
+      if (initialStudentAnswers.registration_by_year)
+        registrationByYear = JSON.parse(
+          initialStudentAnswers.registration_by_year,
+        );
+    } catch {
+      /* ignore */
+    }
+    const parcours = student.enrollments.map((e) => ({
+      year: e.academicYear.label,
+      className: e.class.name,
+      level: e.class.level,
+      services: servicesByYear[e.academicYear.label] ?? "",
+    }));
 
-    // Parents available to link (anyone with role=PARENT in this tenant who isn't
-    // already linked to this student).
-    const linkedParentUserIds = new Set(student.guardianLinks.map((l) => l.guardian.userId));
+    const generalFields = fieldsInCat(studentFieldsConfig, "Info générale");
+    const scolariteFields = fieldsInCat(studentFieldsConfig, "Scolarité");
+    const servicesFields = fieldsInCat(studentFieldsConfig, "Services");
+    const autorisationsFields = fieldsInCat(studentFieldsConfig, "Autorisations");
+    const arabeFields = fieldsInCat(studentFieldsConfig, "Info Arabe");
+
+    const saveFiche = saveStudentFicheFields.bind(null, student.id);
+    const saveIdentity = saveStudentIdentity.bind(null, student.id);
+    const studentIdentity: StudentIdentity = {
+      firstName: student.firstName,
+      lastName: student.lastName,
+      dob: student.dob ? student.dob.toISOString().slice(0, 10) : "",
+      status: student.status,
+      gender: student.gender ?? "",
+      nationality: student.nationality ?? "",
+      placeOfBirth: student.placeOfBirth ?? "",
+      address: student.address ?? "",
+      city: student.city ?? "",
+      postalCode: student.postalCode ?? "",
+      country: student.country ?? "",
+      previousSchool: student.previousSchool ?? "",
+      emergencyContact: student.emergencyContact ?? "",
+      internalNotes: student.internalNotes ?? "",
+    };
+
+    // Arabic "Info Arabe" — aggregated from the father guardian + family.
+    const fatherCa = toAnswers(
+      student.guardianLinks.find((l) => l.guardian.relation === "pere")
+        ?.guardian.user.customAnswers,
+    );
+    const arabicSections: ArabicSection[] = [
+      {
+        title: "معلومات الأب والقيد",
+        rows: [
+          {
+            label: "اسم الأب",
+            value: [fatherCa.prenom_ar, fatherCa.nom_ar]
+              .filter(Boolean)
+              .join(" "),
+          },
+          { label: "اسم الجدّ", value: fatherCa.nom_pere_ar ?? "" },
+          { label: "قضاء القيد", value: fatherCa.caza_registre ?? "" },
+          { label: "مكان القيد", value: fatherCa.lieu_registre ?? "" },
+        ],
+      },
+      {
+        title: "العنوان",
+        rows: [
+          { label: "المبنى", value: fatherCa.adresse_immeuble_ar ?? "" },
+          { label: "الشارع", value: fatherCa.adresse_rue_ar ?? "" },
+          { label: "تفاصيل المكان", value: fatherCa.adresse_place_ar ?? "" },
+          { label: "البلدة", value: fatherCa.adresse_village ?? "" },
+          { label: "القضاء", value: fatherCa.adresse_qaza ?? "" },
+          { label: "العنوان البريدي", value: fatherCa.adresse_bp ?? "" },
+        ],
+      },
+    ];
+
+    // Parents available to link.
+    const linkedParentUserIds = new Set(
+      student.guardianLinks.map((l) => l.guardian.userId),
+    );
     const availableParents: ParentOption[] = availableParentsRaw.filter(
       (p) => !linkedParentUserIds.has(p.id),
     );
 
-    const counts = { PRESENT: 0, ABSENT: 0, LATE: 0, EXCUSED: 0 } as Record<string, number>;
-    for (const row of attendanceCounts) counts[row.status] = row._count.status;
-
-    const boundUpdate = updateStudent.bind(null, id);
     const boundDelete = deleteStudent.bind(null, id);
 
-    return (
-        <main className="mx-auto max-w-4xl space-y-6 px-6 py-10">
-          <PageHeader
-            title={`${student.lastName} ${student.firstName}`}
-            description={
-              student.family?.code
-                ? `${t("editTitle")} · Code famille ${student.family.code}`
-                : t("editTitle")
-            }
-            action={
-              <Link
-                href="/students"
-                className="text-sm text-[color:var(--muted-fg)] hover:underline"
-              >
-                ← {tCommon("back")}
-              </Link>
-            }
-          />
+    const card = (children: React.ReactNode) => (
+      <Card>
+        <CardBody>{children}</CardBody>
+      </Card>
+    );
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Stat label={tAtt("presentCount")} value={counts.PRESENT!} />
-            <Stat label={tAtt("absentCount")} value={counts.ABSENT!} />
-            <Stat label={tAtt("lateCount")} value={counts.LATE!} />
-          </div>
-
-          <Card>
-            <CardBody>
-              <StudentForm
-                action={boundUpdate}
-                initial={{
-                  firstName: student.firstName,
-                  lastName: student.lastName,
-                  dob: student.dob ? student.dob.toISOString().slice(0, 10) : "",
-                  status: student.status,
-                  gender: student.gender ?? "",
-                  nationality: student.nationality,
-                  placeOfBirth: student.placeOfBirth,
-                  address: student.address,
-                  city: student.city,
-                  postalCode: student.postalCode,
-                  country: student.country,
-                  previousSchool: student.previousSchool,
-                  emergencyContact: student.emergencyContact,
-                  internalNotes: student.internalNotes,
-                }}
-                submitLabel={tCommon("save")}
-              />
-            </CardBody>
-          </Card>
-
-          {/* Strip out dossierBoundTo fields — their canonical source is
-              the built-in student edit form above (Student.firstName /
-              lastName / dob / etc.). Showing them here too would
-              duplicate every input. Same rule we apply on the parent
-              profile page for userBoundTo fields. */}
-          {(() => {
-            const filteredConfig = {
-              ...studentFieldsConfig,
-              fields: studentFieldsConfig.fields.filter(
-                (f) => !f.dossierBoundTo,
-              ),
-            };
-            if (filteredConfig.fields.length === 0) return null;
-            return (
-              <Card>
-                <CardHeader title={t("customFieldsTitle")} />
-                <CardBody>
-                  <StudentCustomAnswersForm
-                    studentId={student.id}
-                    config={filteredConfig}
-                    initialAnswers={initialStudentAnswers}
-                    extras={{ establishments: establishmentsForRenderer }}
-                  />
-                </CardBody>
-              </Card>
-            );
-          })()}
-
-          <Card>
-            <CardHeader title={t("guardiansTitle")} />
-            <CardBody>
-              <GuardianManager
-                studentId={id}
-                guardians={student.guardianLinks.map((l) => ({
-                  guardianId: l.guardianId,
-                  parentUserId: l.guardian.userId,
-                  name: l.guardian.user.name,
-                  email: l.guardian.user.email,
-                  isPrimary: l.isPrimary,
-                }))}
-                availableParents={availableParents}
-                canEdit={user.role === "SCHOOL_ADMIN"}
-              />
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardHeader title={t("enrollmentsTitle")} />
-            <CardBody>
-              {student.enrollments.length === 0 ? (
-                <p className="text-sm text-[color:var(--muted-fg)]">{t("noEnrollments")}</p>
-              ) : (
-                <ul className="space-y-2 text-sm">
-                  {student.enrollments.map((e) => (
-                    <li key={e.id} className="flex items-center justify-between">
-                      <span>
-                        <span className="font-medium">{e.class.name}</span>{" "}
-                        <span className="text-[color:var(--muted-fg)]">{e.academicYear.label}</span>
-                      </span>
-                      {e.academicYear.isActive ? (
-                        <span className="rounded-full border border-[color:var(--border)] px-2 py-0.5 text-xs">
-                          Active
-                        </span>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardHeader
-              title={tDisc("summaryTitle")}
-              action={
-                <LinkButton href={`/discipline/new?studentId=${id}`} size="sm" variant="secondary">
-                  {tDisc("createCta")}
-                </LinkButton>
-              }
+    const tabs: FicheTab[] = [
+      {
+        id: "identite",
+        label: "Identité",
+        icon: <IdCard className="size-4" />,
+        content: card(
+          <StudentIdentitySection initial={studentIdentity} onSave={saveIdentity} />,
+        ),
+      },
+    ];
+    if (generalFields.length > 0)
+      tabs.push({
+        id: "general",
+        label: "Info générale",
+        icon: <User className="size-4" />,
+        content: card(
+          <EditableGroup
+            title="Info générale"
+            fields={generalFields}
+            initialValues={initialStudentAnswers}
+            onSave={saveFiche}
+          />,
+        ),
+      });
+    if (scolariteFields.length > 0)
+      tabs.push({
+        id: "scolarite",
+        label: "Scolarité",
+        icon: <BookOpen className="size-4" />,
+        content: card(
+          <EditableGroup
+            title="Scolarité"
+            fields={scolariteFields}
+            initialValues={initialStudentAnswers}
+            onSave={saveFiche}
+          />,
+        ),
+      });
+    tabs.push({
+      id: "services",
+      label: "Services & autorisations",
+      icon: <Bus className="size-4" />,
+      content: card(
+        <div className="space-y-6">
+          {servicesFields.length > 0 ? (
+            <EditableGroup
+              title="Services"
+              fields={servicesFields}
+              initialValues={initialStudentAnswers}
+              onSave={saveFiche}
             />
-            <CardBody>
-              {discipline.length === 0 ? (
-                <p className="text-sm text-[color:var(--muted-fg)]">{tDisc("empty")}</p>
-              ) : (
-                <ul className="space-y-3 text-sm">
-                  {discipline.map((d) => (
-                    <li key={d.id} className="border-b border-[color:var(--border)] pb-2 last:border-0 last:pb-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{d.type}</span>
-                          <span
-                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                              SEVERITY_TONE[d.severity]
-                            }`}
-                          >
-                            {tDisc(SEVERITY_LABEL[d.severity] ?? "severityNote")}
-                          </span>
-                        </div>
-                        <span className="text-xs text-[color:var(--muted-fg)]">
-                          {d.date.toISOString().slice(0, 10)}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-[color:var(--muted-fg)]">{d.description}</p>
-                      <p className="mt-0.5 text-xs text-[color:var(--muted-fg)]">
-                        — {d.reportedBy.name ?? d.reportedBy.email}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardBody>
-          </Card>
-
-          {user.role === "SCHOOL_ADMIN" ? (
-            <form action={boundDelete} className="flex justify-end">
-              <Button variant="danger" size="sm" type="submit">
-                {tCommon("delete")}
-              </Button>
-            </form>
           ) : null}
-        </main>
+          {autorisationsFields.length > 0 ? (
+            <EditableGroup
+              title="Autorisations"
+              fields={autorisationsFields}
+              initialValues={initialStudentAnswers}
+              onSave={saveFiche}
+            />
+          ) : null}
+          {parcours.length > 0 ||
+          Object.keys(registrationByYear).length > 0 ? (
+            <div className="border-t border-[color:var(--color-border-subtle)] pt-5">
+              <StudentYearView
+                parcours={parcours}
+                registrationByYear={registrationByYear}
+              />
+            </div>
+          ) : null}
+        </div>,
+      ),
+    });
+    tabs.push({
+      id: "arabe",
+      label: "Info Arabe",
+      icon: <Languages className="size-4" />,
+      content: card(
+        <div className="space-y-6">
+          {arabeFields.length > 0 ? (
+            <EditableGroup
+              title="معلومات التلميذ"
+              fields={arabeFields}
+              initialValues={initialStudentAnswers}
+              onSave={saveFiche}
+              rtl
+            />
+          ) : null}
+          <ArabicFicheView sections={arabicSections} />
+        </div>,
+      ),
+    });
+    tabs.push({
+      id: "parents",
+      label: "Parents",
+      icon: <Users className="size-4" />,
+      badge: student.guardianLinks.length,
+      content: card(
+        <GuardianManager
+          studentId={id}
+          guardians={student.guardianLinks.map((l) => ({
+            guardianId: l.guardianId,
+            parentUserId: l.guardian.userId,
+            name: l.guardian.user.name,
+            email: l.guardian.user.email,
+            isPrimary: l.isPrimary,
+          }))}
+          availableParents={availableParents}
+          canEdit={user.role === "SCHOOL_ADMIN"}
+        />,
+      ),
+    });
+    tabs.push({
+      id: "freres",
+      label: "Frères / sœurs",
+      icon: <Baby className="size-4" />,
+      badge: siblings.length,
+      content: card(
+        siblings.length === 0 ? (
+          <p className="text-sm text-[color:var(--color-foreground-subtle)]">
+            Aucun frère ou sœur dans la même famille.
+          </p>
+        ) : (
+          <ul className="space-y-1">
+            {siblings.map((s) => (
+              <li key={s.id}>
+                <Link
+                  href={`/students/${s.id}`}
+                  className="group flex items-center justify-between gap-3 rounded-md px-2 py-2 transition-colors hover:bg-[color:var(--color-surface-hover)]"
+                >
+                  <span className="font-medium text-[color:var(--color-foreground)]">
+                    {s.lastName} {s.firstName}
+                  </span>
+                  <span className="flex items-center gap-2 text-xs text-[color:var(--color-foreground-muted)]">
+                    {s.enrollments[0]?.class.name ?? "—"}
+                    <ArrowRight
+                      className="size-3.5 text-[color:var(--color-foreground-subtle)] transition-transform group-hover:translate-x-0.5 group-hover:text-[color:var(--color-brand-600)]"
+                      aria-hidden
+                    />
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ),
+      ),
+    });
+    tabs.push({
+      id: "inscriptions",
+      label: "Inscriptions",
+      icon: <CalendarDays className="size-4" />,
+      content: card(
+        student.enrollments.length === 0 ? (
+          <p className="text-sm text-[color:var(--color-foreground-subtle)]">
+            {t("noEnrollments")}
+          </p>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {student.enrollments.map((e) => (
+              <li key={e.id} className="flex items-center justify-between">
+                <span>
+                  <span className="font-medium">{e.class.name}</span>{" "}
+                  <span className="text-[color:var(--color-foreground-muted)]">
+                    {e.academicYear.label}
+                  </span>
+                </span>
+                {e.academicYear.isActive ? (
+                  <span className="rounded-full border border-[color:var(--color-border-subtle)] px-2 py-0.5 text-xs">
+                    Active
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ),
+      ),
+    });
+
+    return (
+      <main className="mx-auto max-w-5xl space-y-6 px-6 py-10">
+        <PageHeader
+          title={`${student.lastName} ${student.firstName}`}
+          description={
+            student.family?.code
+              ? `${t("editTitle")} · Code famille ${student.family.code}`
+              : t("editTitle")
+          }
+          action={
+            <Link
+              href="/students"
+              className="text-sm text-[color:var(--color-foreground-muted)] hover:underline"
+            >
+              ← {tCommon("back")}
+            </Link>
+          }
+        />
+
+        <FicheTabs tabs={tabs} />
+
+        {user.role === "SCHOOL_ADMIN" ? (
+          <form action={boundDelete} className="flex justify-end">
+            <Button variant="danger" size="sm" type="submit">
+              {tCommon("delete")}
+            </Button>
+          </form>
+        ) : null}
+      </main>
     );
   });
 }

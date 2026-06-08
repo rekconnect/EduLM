@@ -1,7 +1,8 @@
 import { Users, Home, Baby, History } from "lucide-react";
 import type { EntityFieldsConfig, FieldDef } from "@/lib/entity-fields";
-import { EditableGroup } from "./_fiche-client";
-import { StudentYearView } from "./_student-year-view";
+import { EditableGroup } from "@/components/fiche/editable-group";
+import { StudentYearView } from "@/components/fiche/student-year-view";
+import { SectionTitle } from "@/components/fiche/section-title";
 import { saveGuardianFiche, saveStudentFiche } from "./_fiche-actions";
 
 /**
@@ -53,17 +54,6 @@ function fieldsIn(config: EntityFieldsConfig, categoryName: string): FieldDef[] 
   return config.fields
     .filter((f) => f.categoryId === cat.id && f.active !== false)
     .sort((a, b) => a.order - b.order);
-}
-
-function SectionTitle({ icon: Icon, children }: { icon: typeof Users; children: React.ReactNode }) {
-  return (
-    <div className="mb-3 flex items-center gap-2">
-      <Icon className="size-4 text-[color:var(--color-brand-600)]" aria-hidden />
-      <h2 className="text-sm font-semibold tracking-tight text-[color:var(--color-foreground)]">
-        {children}
-      </h2>
-    </div>
-  );
 }
 
 function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {

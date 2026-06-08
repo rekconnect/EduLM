@@ -147,6 +147,63 @@ export async function deleteStudent(id: string) {
   redirect("/students");
 }
 
+/**
+ * Inline save of the built-in identity columns from the student fiche (the
+ * "Identité" section's pencil) — same read-only + pencil UX as the custom
+ * categories, instead of an always-open form. Returns {ok} for the client.
+ */
+export async function saveStudentIdentity(
+  studentId: string,
+  values: Record<string, string>,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole(["SCHOOL_ADMIN", "TEACHER"]);
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+  const parsed = studentSchema.safeParse(values);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid" };
+  }
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    await db.student.update({ where: { id: studentId }, data: parsed.data });
+    revalidatePath(`/students/${studentId}`);
+    return { ok: true };
+  });
+}
+
+/**
+ * Inline per-category save from the student fiche (EditableGroup). Merges the
+ * submitted values into Student.customAnswers by key, like the parent fiche's
+ * saveStudentFiche, but revalidates the student detail page.
+ */
+export async function saveStudentFicheFields(
+  studentId: string,
+  values: Record<string, string>,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const st = await db.student.findUnique({
+      where: { id: studentId },
+      select: { customAnswers: true },
+    });
+    if (!st) return { ok: false, error: "not-found" };
+    const answers: Record<string, unknown> =
+      st.customAnswers && typeof st.customAnswers === "object"
+        ? { ...(st.customAnswers as Record<string, unknown>) }
+        : {};
+    for (const [k, v] of Object.entries(values)) answers[k] = (v ?? "").trim();
+    await db.student.update({
+      where: { id: studentId },
+      data: { customAnswers: answers },
+    });
+    revalidatePath(`/students/${studentId}`);
+    revalidatePath("/admin/parents", "layout");
+    return { ok: true };
+  });
+}
+
 // ─── Custom answers (Round 6) ──────────────────────────────────
 
 /** See updateParentCustomAnswers for the storage contract — same shape. */

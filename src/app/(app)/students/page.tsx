@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Table, THead, TR, TH, TD } from "@/components/ui/table";
 import { SortableTH, type SortDir } from "@/components/ui/sortable-th";
 import { FilterPill } from "@/components/ui/filter-pill";
+import { Pagination } from "@/components/ui/pagination";
 import { YearPicker, UrlSelect } from "@/components/shell/year-picker";
 import { db } from "@/lib/db";
 import { withTenantSession } from "@/lib/session";
@@ -69,6 +70,7 @@ export default async function StudentsPage({
     status?: string;
     sort?: string;
     dir?: string;
+    page?: string;
   }>;
 }) {
   const {
@@ -79,6 +81,7 @@ export default async function StudentsPage({
     status,
     sort,
     dir,
+    page: pageParam,
   } = await searchParams;
 
   return withTenantSession(async (user) => {
@@ -150,27 +153,39 @@ export default async function StudentsPage({
       ? (status as StudentStatus)
       : undefined;
 
-    const students = await db.student.findMany({
-      where: {
-        AND: [
-          query
-            ? {
-                OR: [
-                  { firstName: { contains: query, mode: "insensitive" } },
-                  { lastName: { contains: query, mode: "insensitive" } },
-                ],
-              }
+    const whereClause: Prisma.StudentWhereInput = {
+      AND: [
+        query
+          ? {
+              OR: [
+                { firstName: { contains: query, mode: "insensitive" } },
+                { lastName: { contains: query, mode: "insensitive" } },
+              ],
+            }
+          : {},
+        classFilter
+          ? { enrollments: { some: { classId: classFilter } } }
+          : restrictToYear && selectedYearId
+            ? { enrollments: { some: { academicYearId: selectedYearId } } }
             : {},
-          classFilter
-            ? { enrollments: { some: { classId: classFilter } } }
-            : restrictToYear && selectedYearId
-              ? { enrollments: { some: { academicYearId: selectedYearId } } }
-              : {},
-          statusFilter ? { status: statusFilter } : {},
-        ],
-      },
+        statusFilter ? { status: statusFilter } : {},
+      ],
+    };
+
+    // Pagination — 50 per page.
+    const PAGE_SIZE = 50;
+    const totalMatching = await db.student.count({ where: whereClause });
+    const pageCount = Math.max(1, Math.ceil(totalMatching / PAGE_SIZE));
+    const pageNum = (() => {
+      const n = Number(pageParam);
+      return Number.isInteger(n) && n > 0 ? Math.min(n, pageCount) : 1;
+    })();
+
+    const students = await db.student.findMany({
+      where: whereClause,
       orderBy: orderByFor(sortKey, sortDir),
-      take: 200,
+      skip: (pageNum - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
       select: {
         id: true,
         firstName: true,
@@ -187,7 +202,7 @@ export default async function StudentsPage({
       },
     });
 
-    const count = students.length;
+    const count = totalMatching;
     const selectedClassName = classFilter
       ? (classes.find((c) => c.id === classFilter)?.name ?? "")
       : "";
@@ -320,6 +335,7 @@ export default async function StudentsPage({
               ) : null}
             </div>
           ) : (
+            <>
             <Table>
               <THead>
                 <tr>
@@ -401,6 +417,15 @@ export default async function StudentsPage({
                 })}
               </tbody>
             </Table>
+            <Pagination
+              basePath={BASE}
+              params={preserve}
+              page={pageNum}
+              pageCount={pageCount}
+              total={totalMatching}
+              pageSize={PAGE_SIZE}
+            />
+            </>
           )}
         </main>
     );

@@ -7,6 +7,7 @@ import { LinkButton } from "@/components/ui/button";
 import { Table, THead, TR, TH, TD } from "@/components/ui/table";
 import { SortableTH, type SortDir } from "@/components/ui/sortable-th";
 import { FilterPill } from "@/components/ui/filter-pill";
+import { Pagination } from "@/components/ui/pagination";
 import { YearPicker, UrlSelect } from "@/components/shell/year-picker";
 import {
   BulkHeaderCheckbox,
@@ -570,7 +571,7 @@ export default async function ParentsListPage({
               </tbody>
             </Table>
             <Pagination
-              base={BASE}
+              basePath={BASE}
               params={pagePreserve}
               page={pageNum}
               pageCount={pageCount}
@@ -659,65 +660,3 @@ function ParentInitials({
   );
 }
 
-function Pagination({
-  base,
-  params,
-  page,
-  pageCount,
-  total,
-  pageSize,
-}: {
-  base: string;
-  params: Record<string, string | undefined>;
-  page: number;
-  pageCount: number;
-  total: number;
-  pageSize: number;
-}) {
-  if (total === 0) return null;
-  const from = (page - 1) * pageSize + 1;
-  const to = Math.min(total, page * pageSize);
-  const prevHref =
-    page > 1 ? hrefWith(base, { ...params, page: String(page - 1) }) : null;
-  const nextHref =
-    page < pageCount
-      ? hrefWith(base, { ...params, page: String(page + 1) })
-      : null;
-  return (
-    <div className="flex items-center justify-between gap-3 pt-1">
-      <p className="text-xs tabular-nums text-[color:var(--color-foreground-muted)]">
-        {from}–{to} sur {total}
-      </p>
-      <div className="flex items-center gap-2">
-        <PageLink href={prevHref} label="Précédent" />
-        <span className="text-xs tabular-nums text-[color:var(--color-foreground-muted)]">
-          Page {page} / {pageCount}
-        </span>
-        <PageLink href={nextHref} label="Suivant" />
-      </div>
-    </div>
-  );
-}
-
-function PageLink({ href, label }: { href: string | null; label: string }) {
-  const cls =
-    "inline-flex items-center rounded-md border border-[color:var(--color-border-subtle)] px-3 py-1.5 text-sm font-medium transition-all duration-150 ease-out";
-  if (!href) {
-    return (
-      <span
-        aria-disabled
-        className={`${cls} cursor-not-allowed text-[color:var(--color-foreground-subtle)] opacity-50`}
-      >
-        {label}
-      </span>
-    );
-  }
-  return (
-    <Link
-      href={href}
-      className={`${cls} bg-[color:var(--color-surface-raised)] text-[color:var(--color-foreground-muted)] hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] active:scale-[0.98]`}
-    >
-      {label}
-    </Link>
-  );
-}

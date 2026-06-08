@@ -36,8 +36,19 @@ const PHONE_TYPE: Record<number, string> = { 1: "Fixe", 2: "Travail", 3: "Mobile
 async function runChunked<T>(items: T[], size: number, label: string, fn: (i: T) => Promise<void>) {
   let done = 0;
   for (let i = 0; i < items.length; i += size) {
-    await Promise.all(items.slice(i, i + size).map(fn));
-    done += Math.min(size, items.length - i);
+    const chunk = items.slice(i, i + size);
+    // Retry each chunk a few times — rides out transient P2024 connection-pool
+    // timeouts (Prisma connection_limit=1 + the dev server querying alongside).
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await Promise.all(chunk.map(fn));
+        break;
+      } catch (e) {
+        if (attempt >= 6) throw e;
+        await new Promise((r) => setTimeout(r, 600 * attempt));
+      }
+    }
+    done += chunk.length;
     process.stdout.write(`\r  ${label}: ${done}/${items.length}`);
   }
   process.stdout.write("\n");
@@ -47,6 +58,17 @@ async function main() {
   const { tenantName, confirm } = parseFlags();
   const tenant = await resolveTenant(prisma, tenantName);
   const codes = await CodesTable.load();
+
+  // Active EduLM year → Dars SYear (label "2025-2026" → 2026). Used to pick
+  // the right Isc_StudentClass row for year-specific single values (the
+  // registration date / class), instead of the latest re-registration.
+  const activeYearRow = await prisma.academicYear.findFirst({
+    where: { tenantId: tenant.id, isActive: true },
+    select: { label: true },
+  });
+  const activeSYear = activeYearRow
+    ? Number(activeYearRow.label.split("-")[1])
+    : null;
 
   // Lookup maps
   const qazaRows = await darsQuery<{ ID: number; Qaza: string | null; QazaAR: string | null }>(
@@ -173,15 +195,31 @@ async function main() {
   );
   const studentById = new Map(dStudents.map((s) => [Number(s.ID_Student), s]));
 
-  // Latest StudentClass per student (max SYear) — dates + leaving + class
+  // ALL StudentClass rows per student (every SYear). RegisterDate / class /
+  // leaving are year-specific, so the single values use the ACTIVE year's row
+  // (the date d'inscription for 2025-2026), falling back to the latest year
+  // when the student isn't enrolled in the active year.
   const scRows = await darsQuery<Record<string, unknown>>(
     `SELECT sc.ID_Student, sc.SYear, sc.ID_Class, sc.RegisterDate, sc.HasLeft, sc.LeavingReason, sc.LeftDate
      FROM Isc_StudentClass sc
-     JOIN (SELECT ID_Student, MAX(SYear) AS mx FROM Isc_StudentClass WHERE Id_College = ${C} GROUP BY ID_Student) m
-       ON m.ID_Student = sc.ID_Student AND m.mx = sc.SYear
      WHERE sc.Id_College = ${C} AND sc.ID_Student IN (${inList(studentIds)})`,
   );
-  const scById = new Map(scRows.map((r) => [Number(r.ID_Student), r]));
+  const scByStudent = new Map<number, Map<number, Record<string, unknown>>>();
+  for (const r of scRows) {
+    const sid = Number(r.ID_Student);
+    let m = scByStudent.get(sid);
+    if (!m) {
+      m = new Map();
+      scByStudent.set(sid, m);
+    }
+    m.set(Number(r.SYear), r);
+  }
+  const scFor = (sid: number): Record<string, unknown> | undefined => {
+    const m = scByStudent.get(sid);
+    if (!m || m.size === 0) return undefined;
+    if (activeSYear != null && m.has(activeSYear)) return m.get(activeSYear);
+    return m.get(Math.max(...m.keys()));
+  };
 
   // ALL Isc_ModifStudents rows per student (every SYear) — registration is
   // year-specific (the form that opened in 2024 fills the current year; the
@@ -208,11 +246,6 @@ async function main() {
     }
     m.set(Number(r.SYear), r);
   }
-  const latestModFor = (sid: number) => {
-    const m = modsByStudent.get(sid);
-    if (!m || m.size === 0) return undefined;
-    return m.get(Math.max(...m.keys()));
-  };
 
   // Qaza / Town id → label (used by the transport alternate address).
   const qazaLabel = (v: unknown) => {
@@ -255,8 +288,7 @@ async function main() {
 
   function studentAnswers(s: Record<string, unknown>): Record<string, string> {
     const sid = Number(s.ID_Student);
-    const sc = scById.get(sid);
-    const mod = latestModFor(sid);
+    const sc = scFor(sid);
     const out: Record<string, string> = {
       dars_student_code: clean(s.StudentCode as string),
       pays_naissance: clean(s.CountryOfBirth as string),
@@ -279,21 +311,38 @@ async function main() {
       out.raison_depart = clean(sc.LeavingReason as string);
       out.date_depart = dstr(sc.LeftDate as Date);
     }
-    // Single-value fields = the latest registration on file (quitter_seul,
-    // transport mode/address, authorizations). NOTE: collation / cantine /
-    // autocar for the CURRENT year come from BILLING (backfill-*-services);
-    // these registration values are the opt-in form, surfaced per-year below.
-    if (mod) Object.assign(out, regForRow(mod));
-
-    // Per-year registration snapshot — one entry per SYear the student has a
-    // Isc_ModifStudents row for. Drives the year-aware fiche: the form that
-    // opened in 2024 → current year; the re-registration open now → next year.
+    // Per-year registration snapshot (drives the year-aware fiche) + the
+    // single-value consent fields. Both come from ALL the student's
+    // Isc_ModifStudents rows. Services (collation / cantine / autocar) come
+    // from BILLING, so they're only surfaced per-year here and NOT written as
+    // single values. Single-value transport / authorizations / quitter_seul
+    // take the most-recently-ANSWERED value across years (sorted ascending →
+    // later years overwrite), so a value set in an earlier year still shows
+    // even if the latest re-registration omitted those fields.
     const studentMods = modsByStudent.get(sid);
     if (studentMods) {
+      const CONSENT = new Set([
+        "quitter_seul",
+        "transport_aller",
+        "transport_retour",
+        "transport_adresse_diff",
+        "transport_caza",
+        "transport_village",
+        "transport_rue",
+        "transport_immeuble",
+        "transport_etage",
+        "transport_place",
+        "transport_remarque",
+        "auth_site",
+        "auth_livre",
+        "auth_reseaux",
+        "auth_radio",
+      ]);
       const byYear: Record<string, Record<string, string>> = {};
-      for (const [syear, m] of studentMods) {
-        const r = regForRow(m);
-        if (Object.keys(r).length) byYear[`${syear - 1}-${syear}`] = r;
+      for (const sy of [...studentMods.keys()].sort((a, b) => a - b)) {
+        const r = regForRow(studentMods.get(sy)!);
+        if (Object.keys(r).length) byYear[`${sy - 1}-${sy}`] = r;
+        for (const [k, vv] of Object.entries(r)) if (CONSENT.has(k)) out[k] = vv;
       }
       if (Object.keys(byYear).length)
         out.registration_by_year = JSON.stringify(byYear);
@@ -317,7 +366,7 @@ async function main() {
   }
 
   console.log("\n🔴 Writing customAnswers…");
-  await runChunked(eduParents, 10, "parents", async (p) => {
+  await runChunked(eduParents, 5, "parents", async (p) => {
     const d = parentById.get(Number(p.darsParentId));
     if (!d) return;
     const existing = (p.customAnswers && typeof p.customAnswers === "object" ? p.customAnswers : {}) as Record<string, unknown>;
@@ -326,7 +375,7 @@ async function main() {
       data: { customAnswers: { ...existing, ...parentAnswers(d) } },
     });
   });
-  await runChunked(eduStudents, 10, "students", async (s) => {
+  await runChunked(eduStudents, 5, "students", async (s) => {
     const d = studentById.get(Number(s.darsStudentId));
     if (!d) return;
     const existing = (s.customAnswers && typeof s.customAnswers === "object" ? s.customAnswers : {}) as Record<string, unknown>;

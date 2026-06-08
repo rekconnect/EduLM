@@ -166,7 +166,7 @@ export default async function ParentDetailPage({
                         customAnswers: true,
                         enrollments: {
                           select: {
-                            class: { select: { name: true } },
+                            class: { select: { name: true, level: true } },
                             academicYear: {
                               select: { label: true, isActive: true, startDate: true },
                             },
@@ -369,7 +369,7 @@ export default async function ParentDetailPage({
       status: string;
       customAnswers: unknown;
       enrollments: Array<{
-        class: { name: string };
+        class: { name: string; level: string };
         academicYear: { label: string; isActive: boolean };
       }>;
     }): FicheStudent => {
@@ -384,10 +384,22 @@ export default async function ParentDetailPage({
       } catch {
         /* ignore malformed */
       }
-      // Full parcours: each enrolled year → class → services (newest first).
+      // Per-year registration snapshot (Isc_ModifStudents by SYear).
+      let registrationByYear: Record<string, Record<string, string>> = {};
+      try {
+        if (answers.registration_by_year)
+          registrationByYear = JSON.parse(answers.registration_by_year) as Record<
+            string,
+            Record<string, string>
+          >;
+      } catch {
+        /* ignore malformed */
+      }
+      // Full parcours: each enrolled year → class → level → services (newest first).
       const parcours = st.enrollments.map((e) => ({
         year: e.academicYear.label,
         className: e.class.name,
+        level: e.class.level,
         services: servicesByYear[e.academicYear.label] ?? "",
       }));
       return {
@@ -399,6 +411,7 @@ export default async function ParentDetailPage({
         yearLabel: enr?.academicYear.label ?? null,
         answers,
         parcours,
+        registrationByYear,
       };
     };
     const famStudents = fam?.students ?? [];

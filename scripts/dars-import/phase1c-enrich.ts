@@ -247,6 +247,34 @@ async function main() {
     m.set(Number(r.SYear), r);
   }
 
+  // ALSO read Isc_TmpStudent — the IN-PROGRESS registration (drafts not yet
+  // finalized into Isc_ModifStudents). Active students' current registration —
+  // authorizations, transport, snacks/cafeteria, pickup person — lives here.
+  // Same shape, different service column names (Snacks/Cafeteria), so we
+  // normalize them to HasSnack/HasHotMeal and reuse regForRow.
+  const tmpRows = await darsQuery<Record<string, unknown>>(
+    `SELECT t.ID_Student AS Id_Student, t.SYear, t.Snacks, t.Cafeteria, t.AllowLeaveAlone, t.BusRegistered,
+            t.Transportation_BusMorning, t.Transportation_BusEvening,
+            t.Transportation_ParentsMorning, t.Transportation_ParentsEvening,
+            t.transOtherAddress, t.transOtherAddressQaza, t.transOtherAddressTown,
+            t.transOtherAddressStreet, t.transOtherAddressBuilding, t.transOtherAddressAddressFloor,
+            t.transOtherAddressPlaceDetails, t.transOtherAddressRemark,
+            t.AllowPublishImages, t.AllowPublishToSouvenirBook, t.AllowPublishToSocialMedia, t.AllowPublishAudio,
+            t.TransPersonName, t.TransPersonPhone
+     FROM Isc_TmpStudent t
+     WHERE t.Id_College = ${C} AND t.ID_Student IN (${inList(studentIds)})`,
+  );
+  const tmpByStudent = new Map<number, Map<number, Record<string, unknown>>>();
+  for (const r of tmpRows) {
+    const sid = Number(r.Id_Student);
+    let m = tmpByStudent.get(sid);
+    if (!m) {
+      m = new Map();
+      tmpByStudent.set(sid, m);
+    }
+    m.set(Number(r.SYear), { ...r, HasSnack: r.Snacks, HasHotMeal: r.Cafeteria });
+  }
+
   // Qaza / Town id → label (used by the transport alternate address).
   const qazaLabel = (v: unknown) => {
     const n = Number(v);
@@ -282,6 +310,12 @@ async function main() {
     if (m.AllowPublishToSouvenirBook != null) r.auth_livre = yn(m.AllowPublishToSouvenirBook as boolean);
     if (m.AllowPublishToSocialMedia != null) r.auth_reseaux = yn(m.AllowPublishToSocialMedia as boolean);
     if (m.AllowPublishAudio != null) r.auth_radio = yn(m.AllowPublishAudio as boolean);
+    // Pickup person (Isc_TmpStudent only) — personne autorisée à récupérer.
+    const person = clean(m.TransPersonName as string);
+    if (person) {
+      const phone = clean(m.TransPersonPhone as string);
+      r.transport_person = phone ? `${person} (${phone})` : person;
+    }
     for (const k of Object.keys(r)) if (!r[k]) delete r[k];
     return r;
   }
@@ -320,7 +354,8 @@ async function main() {
     // later years overwrite), so a value set in an earlier year still shows
     // even if the latest re-registration omitted those fields.
     const studentMods = modsByStudent.get(sid);
-    if (studentMods) {
+    const studentTmp = tmpByStudent.get(sid);
+    if (studentMods || studentTmp) {
       const CONSENT = new Set([
         "quitter_seul",
         "transport_aller",
@@ -333,14 +368,24 @@ async function main() {
         "transport_etage",
         "transport_place",
         "transport_remarque",
+        "transport_person",
         "auth_site",
         "auth_livre",
         "auth_reseaux",
         "auth_radio",
       ]);
+      // Each year: merge submitted (Isc_ModifStudents) with in-progress
+      // (Isc_TmpStudent), in-progress winning per field (it's the latest draft).
+      const sYears = new Set([
+        ...(studentMods?.keys() ?? []),
+        ...(studentTmp?.keys() ?? []),
+      ]);
       const byYear: Record<string, Record<string, string>> = {};
-      for (const sy of [...studentMods.keys()].sort((a, b) => a - b)) {
-        const r = regForRow(studentMods.get(sy)!);
+      for (const sy of [...sYears].sort((a, b) => a - b)) {
+        const r = {
+          ...(studentMods?.has(sy) ? regForRow(studentMods.get(sy)!) : {}),
+          ...(studentTmp?.has(sy) ? regForRow(studentTmp.get(sy)!) : {}),
+        };
         if (Object.keys(r).length) byYear[`${sy - 1}-${sy}`] = r;
         for (const [k, vv] of Object.entries(r)) if (CONSENT.has(k)) out[k] = vv;
       }

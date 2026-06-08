@@ -25,6 +25,7 @@ import {
   deleteStudent,
   saveStudentFicheFields,
   saveStudentIdentity,
+  saveStudentRegistrationYear,
 } from "../_actions";
 import { StudentIdentitySection, type StudentIdentity } from "./_identity-card";
 import { GuardianManager, type ParentOption } from "./_guardian-link";
@@ -152,12 +153,17 @@ export default async function StudentDetailPage({
 
     const generalFields = fieldsInCat(studentFieldsConfig, "Info générale");
     const scolariteFields = fieldsInCat(studentFieldsConfig, "Scolarité");
-    const servicesFields = fieldsInCat(studentFieldsConfig, "Services");
-    const autorisationsFields = fieldsInCat(studentFieldsConfig, "Autorisations");
+    // Services (transport mode/address) AND authorizations are YEAR-SPECIFIC —
+    // e.g. 2025-2026 transport "Avec parent" while the 2026-2027 re-registration
+    // draft differs, or auth "Oui" this year and still "Non" in next year's
+    // draft. A single editable value can only hold one year's answer and gets
+    // polluted by the latest draft, so both are edited per-year (a pencil per
+    // year) inside StudentYearView only — never shown twice as flat groups.
     const arabeFields = fieldsInCat(studentFieldsConfig, "Info Arabe");
 
     const saveFiche = saveStudentFicheFields.bind(null, student.id);
     const saveIdentity = saveStudentIdentity.bind(null, student.id);
+    const saveRegYear = saveStudentRegistrationYear.bind(null, student.id);
     const studentIdentity: StudentIdentity = {
       firstName: student.firstName,
       lastName: student.lastName,
@@ -267,33 +273,20 @@ export default async function StudentDetailPage({
       label: "Services & autorisations",
       icon: <Bus className="size-4" />,
       content: card(
-        <div className="space-y-6">
-          {servicesFields.length > 0 ? (
-            <EditableGroup
-              title="Services"
-              fields={servicesFields}
-              initialValues={initialStudentAnswers}
-              onSave={saveFiche}
-            />
-          ) : null}
-          {autorisationsFields.length > 0 ? (
-            <EditableGroup
-              title="Autorisations"
-              fields={autorisationsFields}
-              initialValues={initialStudentAnswers}
-              onSave={saveFiche}
-            />
-          ) : null}
-          {parcours.length > 0 ||
+        parcours.length > 0 ||
           Object.keys(registrationByYear).length > 0 ? (
-            <div className="border-t border-[color:var(--color-border-subtle)] pt-5">
-              <StudentYearView
-                parcours={parcours}
-                registrationByYear={registrationByYear}
-              />
-            </div>
-          ) : null}
-        </div>,
+          <StudentYearView
+            parcours={parcours}
+            registrationByYear={registrationByYear}
+            fallback={initialStudentAnswers}
+            onSaveYear={saveRegYear}
+          />
+        ) : (
+          <p className="text-sm text-[color:var(--color-foreground-subtle)]">
+            Aucune inscription — les services et autorisations s'affichent par
+            année une fois l'élève inscrit.
+          </p>
+        ),
       ),
     });
     tabs.push({

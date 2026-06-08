@@ -32,10 +32,33 @@ async function main() {
   const [trans, can, col] = await Promise.all([serviceSet("TRANS"), serviceSet("CAN"), serviceSet("COL")]);
   console.log(`Billed (2025-2026): transport ${trans.size}, cantine ${can.size}, collation ${col.size}`);
 
+  // Collation is only offered up to CM2 — never collège / lycée. A "COL" billing
+  // line for a collège student is not collation, so we don't flag it.
+  const COLLATION_LEVELS = new Set(["PS", "MS", "GS", "CP", "CE1", "CE2", "CM1", "CM2"]);
+  const activeYear = await prisma.academicYear.findFirst({
+    where: { tenantId: tenant.id, isActive: true },
+    select: { id: true },
+  });
+  if (!activeYear) {
+    console.error("No active academic year.");
+    await closeDars();
+    await prisma.$disconnect();
+    return;
+  }
+
   // Only currently-enrolled students get the current-year flags.
   const students = await prisma.student.findMany({
     where: { tenantId: tenant.id, darsStudentId: { not: null }, status: "ENROLLED" },
-    select: { id: true, darsStudentId: true, customAnswers: true },
+    select: {
+      id: true,
+      darsStudentId: true,
+      customAnswers: true,
+      enrollments: {
+        where: { academicYearId: activeYear.id },
+        select: { class: { select: { level: true } } },
+        take: 1,
+      },
+    },
   });
   console.log(`Enrolled students to flag: ${students.length}`);
 
@@ -47,20 +70,35 @@ async function main() {
   }
 
   let done = 0;
-  for (let i = 0; i < students.length; i += 10) {
-    await Promise.all(
-      students.slice(i, i + 10).map((s) => {
-        const did = Number(s.darsStudentId);
-        const ca = {
-          ...((s.customAnswers ?? {}) as Record<string, unknown>),
-          autocar: trans.has(did) ? "yes" : "no",
-          repas_chaud: can.has(did) ? "yes" : "no",
-          collations: col.has(did) ? "yes" : "no",
-        };
-        return prisma.student.update({ where: { id: s.id }, data: { customAnswers: ca } });
-      }),
-    );
-    done += Math.min(10, students.length - i);
+  const SZ = 5; // small + retry — rides out P2024 pool timeouts under dev-server load
+  for (let i = 0; i < students.length; i += SZ) {
+    const chunk = students.slice(i, i + SZ);
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await Promise.all(
+          chunk.map((s) => {
+            const did = Number(s.darsStudentId);
+            const level = s.enrollments[0]?.class.level ?? "";
+            const ca = {
+              ...((s.customAnswers ?? {}) as Record<string, unknown>),
+              autocar: trans.has(did) ? "yes" : "no",
+              repas_chaud: can.has(did) ? "yes" : "no",
+              collations:
+                col.has(did) && COLLATION_LEVELS.has(level) ? "yes" : "no",
+            };
+            return prisma.student.update({
+              where: { id: s.id },
+              data: { customAnswers: ca },
+            });
+          }),
+        );
+        break;
+      } catch (e) {
+        if (attempt >= 6) throw e;
+        await new Promise((r) => setTimeout(r, 600 * attempt));
+      }
+    }
+    done += chunk.length;
     process.stdout.write(`\r  flagged: ${done}/${students.length}`);
   }
   process.stdout.write("\n✓ Current-year service flags set from billing.\n");

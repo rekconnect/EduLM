@@ -23,23 +23,42 @@ export default async function ServicesReport() {
     });
     const activeYear = years.find((y) => y.isActive) ?? years[0] ?? null;
 
-    // Current-year cohort: students enrolled in the active year.
+    // Current-year cohort: students enrolled in the active year (with their level).
     const cohort = activeYear
       ? await db.student.findMany({
           where: { enrollments: { some: { academicYearId: activeYear.id } } },
-          select: { customAnswers: true },
+          select: {
+            customAnswers: true,
+            enrollments: {
+              where: { academicYearId: activeYear.id },
+              select: { class: { select: { level: true } } },
+              take: 1,
+            },
+          },
         })
       : [];
     const total = cohort.length;
 
+    // Collation is only offered up to CM2 — never collège / lycée.
+    const COLLATION_LEVELS = new Set([
+      "PS",
+      "MS",
+      "GS",
+      "CP",
+      "CE1",
+      "CE2",
+      "CM1",
+      "CM2",
+    ]);
     let transport = 0;
     let cantine = 0;
     let collation = 0;
     for (const s of cohort) {
       const ca = (s.customAnswers ?? {}) as Record<string, unknown>;
+      const level = s.enrollments[0]?.class.level ?? "";
       if (isYes(ca.autocar)) transport++;
       if (isYes(ca.repas_chaud)) cantine++;
-      if (isYes(ca.collations)) collation++;
+      if (isYes(ca.collations) && COLLATION_LEVELS.has(level)) collation++;
     }
 
     const summary = [

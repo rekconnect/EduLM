@@ -204,6 +204,63 @@ export async function saveStudentFicheFields(
   });
 }
 
+/**
+ * Inline per-YEAR save from the student fiche's year-aware view
+ * (StudentYearView). Authorizations and the transport mode are stored per
+ * academic year inside customAnswers.registration_by_year[<year>], so editing
+ * them merges into THAT year's object — never the single value (which gets
+ * polluted by the latest in-progress re-registration draft). An empty value
+ * clears the key for that year.
+ */
+export async function saveStudentRegistrationYear(
+  studentId: string,
+  year: string,
+  fields: Record<string, string>,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const st = await db.student.findUnique({
+      where: { id: studentId },
+      select: { customAnswers: true },
+    });
+    if (!st) return { ok: false, error: "not-found" };
+    const answers: Record<string, unknown> =
+      st.customAnswers && typeof st.customAnswers === "object"
+        ? { ...(st.customAnswers as Record<string, unknown>) }
+        : {};
+
+    let byYear: Record<string, Record<string, string>> = {};
+    if (typeof answers.registration_by_year === "string") {
+      try {
+        byYear = JSON.parse(answers.registration_by_year) as Record<
+          string,
+          Record<string, string>
+        >;
+      } catch {
+        byYear = {};
+      }
+    }
+    const current: Record<string, string> = { ...(byYear[year] ?? {}) };
+    for (const [k, v] of Object.entries(fields)) {
+      const t = (v ?? "").trim();
+      if (t === "") delete current[k];
+      else current[k] = t;
+    }
+    byYear[year] = current;
+    answers.registration_by_year = JSON.stringify(byYear);
+
+    await db.student.update({
+      where: { id: studentId },
+      data: { customAnswers: answers },
+    });
+    revalidatePath(`/students/${studentId}`);
+    return { ok: true };
+  });
+}
+
 // ─── Custom answers (Round 6) ──────────────────────────────────
 
 /** See updateParentCustomAnswers for the storage contract — same shape. */

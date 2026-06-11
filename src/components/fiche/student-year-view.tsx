@@ -29,7 +29,6 @@ export type ParcoursEntry = {
   services: string; // billing tokens, e.g. "Transport, Cantine, Collation"
 };
 
-const MATERNELLE = new Set(["PS", "MS", "GS"]);
 // Collation is only offered up to CM2 — never in collège / lycée (6ème+).
 const COLLATION_LEVELS = new Set([
   "PS",
@@ -56,6 +55,7 @@ const AUTH_FIELDS: Array<[string, string]> = [
   ["auth_livre", "Livre souvenir"],
   ["auth_reseaux", "Réseaux sociaux"],
   ["auth_radio", "Web radio"],
+  ["quitter_seul", "Autorisé à quitter seul"],
 ];
 // Commute details that only exist when the bus flag is "yes".
 const TRANSPORT_DETAIL_KEYS = [
@@ -155,19 +155,17 @@ export function StudentYearView({
   const billing = entry?.services ?? "";
   const billingHas = (t: string) => billing.includes(t);
   const level = entry?.level ?? "";
-  const isMaternelle = MATERNELLE.has(level);
   const collationOffered = COLLATION_LEVELS.has(level);
 
-  // Services: enrolled year → billing (what was served); future-only year →
-  // registration form. Collation: obligatory for PS/MS/GS, never after CM2.
+  // Services: enrolled year → billing/accounting (the authoritative semester
+  // list synced into services_by_year); future-only year → registration form.
+  // Collation is never offered after CM2; otherwise it is exactly what the
+  // accounting list says — no maternelle "obligatoire" override, the list is
+  // the source of truth (a PS pupil off the list shows Non).
   const collation = enrolled
-    ? !collationOffered
-      ? "Non"
-      : isMaternelle
-        ? "Oui"
-        : billingHas("Collation")
-          ? "Oui"
-          : "Non"
+    ? collationOffered && billingHas("Collation")
+      ? "Oui"
+      : "Non"
     : ynLabel(reg.collations);
   const cantine = enrolled
     ? billingHas("Cantine")
@@ -204,7 +202,7 @@ export function StudentYearView({
     .join(", ");
 
   const services: Array<[string, string]> = [
-    ["Collation" + (isMaternelle ? " (obligatoire)" : ""), collation],
+    ["Collation", collation],
     ["Cantine (repas chaud)", cantine],
     ["Transport (bus)", transport],
   ];
@@ -236,7 +234,8 @@ export function StudentYearView({
     for (const k of EDIT_KEYS) {
       // Auth + pickup person fall back to the single value; transport mode /
       // address are year-specific (no fallback).
-      const useFallback = k.startsWith("auth_") || k === "transport_person";
+      const useFallback =
+        k.startsWith("auth_") || k === "quitter_seul" || k === "transport_person";
       f[k] = useFallback
         ? r[k] || (isEnrolled ? (fallback[k] ?? "") : "")
         : (r[k] ?? "");

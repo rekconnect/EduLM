@@ -118,6 +118,9 @@ model Tenant {
   applicationContacts     ApplicationContact[]
   applicationSiblings     ApplicationSibling[]
   inscriptionFormAuditLog TenantConfigAuditLog[]
+  medicalRecords          StudentMedicalRecord[]
+  immunizations           StudentImmunization[]
+  medicalVisits           MedicalVisit[]
 }
 
 model User {
@@ -309,9 +312,122 @@ model Student {
   invoices                 Invoice[]
   originApplication        Application?
   renewalApplications      Application[]      @relation("StudentRenewal")
+  medicalRecord            StudentMedicalRecord?
+  immunizations            StudentImmunization[]
+  medicalVisits            MedicalVisit[]
 
   @@index([tenantId, lastName, firstName])
   @@index([tenantId, familyId])
+}
+
+// ───────────────────────── Infirmerie / santé ─────────────────────────
+
+/// One medical record per student — allergies, chronic conditions, consents.
+/// Sensitive: only surfaced to SCHOOL_ADMIN (and later a NURSE role), never to
+/// teachers or other parents. Imported from Dars Med_History (infirmary-entered)
+/// overlaid with Med_HistoryOnline (the parent-filled online form).
+model StudentMedicalRecord {
+  id        String @id @default(cuid())
+  tenantId  String
+  studentId String @unique
+
+  bloodType String?
+  // Chronic conditions (checkbox set from the Dars form)
+  diabetic       Boolean @default(false)
+  asthma         Boolean @default(false)
+  epilepsy       Boolean @default(false)
+  scoliosis      Boolean @default(false)
+  favism         Boolean @default(false)
+  hemophilia     Boolean @default(false)
+  cardiacProblem Boolean @default(false)
+
+  // Free-text clinical info
+  allergies       String?
+  medications     String?
+  hospitalization String?
+  surgeries       String?
+  majorIllnesses  String?
+  chronicIllness  String?
+  familyHistory   String?
+  specialNeeds    String?
+  remarks         String?
+
+  pediatricianName  String?
+  pediatricianPhone String?
+
+  // Parental consents (null = not answered)
+  allowEmergencyMeasures Boolean?
+  allowDoctorExam        Boolean?
+  allowParacetamol       Boolean?
+  allowMedicalTreatment  Boolean?
+
+  unfitForSports Boolean @default(false)
+  unfitDuration  String?
+  unfitReason    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+/// One row per student per vaccine. Names come from a configurable mapping
+/// (Dars hardcodes them in the app); darsImmunizationId keeps the original id
+/// so the mapping can be corrected and re-applied.
+model StudentImmunization {
+  id        String  @id @default(cuid())
+  tenantId  String
+  studentId String
+
+  vaccine             String
+  darsImmunizationId  Int?
+  done                Boolean @default(false)
+  month               Int?
+  year                Int?
+  notes               String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, darsImmunizationId])
+  @@index([tenantId, studentId])
+}
+
+/// An infirmary visit / periodic checkup. Vitals as columns; the many
+/// specialty exam fields (audition, dents, scoliose, poux…) in `details` JSON
+/// as label → value, rendered as a list.
+model MedicalVisit {
+  id        String   @id @default(cuid())
+  tenantId  String
+  studentId String
+
+  visitDate DateTime
+  yearLabel String? // academic year label, e.g. "2025-2026"
+  heightCm  Float?
+  weightKg  Float?
+  bpHigh    String?
+  bpLow     String?
+  visionOd  String? // right eye
+  visionOg  String? // left eye
+  exam      String?
+  plan      String?
+  followUp  String?
+  remarks   String?
+  details   Json     @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, studentId, visitDate])
 }
 
 model Guardian {

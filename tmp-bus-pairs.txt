@@ -1,0 +1,143 @@
+✓ Target tenant: Lycée Montaigne (cmp6rug7t0000w57oqchgkkb9)
+=== PAIRES PROBABLES (orthographe différente) — 50 ===
+  100%  Excel: "Chris khoury" (CE1, Bus 3, Soir)  ↔  EduLM: KHOURY Chris [RS 3]
+  100%  Excel: "Charles Maroun" (6eme, Bus 4, Matin)  ↔  EduLM: MAROUN Charles [AS 4 + RS 16]
+  100%  Excel: "Charles Maroun" (CP, Bus 5, Soir)  ↔  EduLM: MAROUN Charles [RS 5]
+  100%  Excel: "Ivy Maria JABBOUR" (MS, Bus 6, Soir)  ↔  EduLM: Jabbour IVY MARIA [RS 10]
+  100%  Excel: "Raphael Bou kazi" (CE2, Bus 12, Matin;Soir)  ↔  EduLM: BOUKAZI Raphael [AS 12 + RS 12]
+  100%  Excel: "Gabriel Bou kazi" (CP, Bus 12, Matin;Soir)  ↔  EduLM: BOUKAZI Gabriel [AS 12 + RS 12]
+  100%  Excel: "Michel Bou kazi" (4eme, Bus 13, Soir)  ↔  EduLM: BOUKAZI Michel [AS 12 + RS 13]
+  96%  Excel: "Jabr Emmanuelle" (1ere, Bus 10, Matin)  ↔  EduLM: JABRE Emmanuelle [AS 6 + RS 6]
+  94%  Excel: "Khoury Yara" (CM2, Bus 4, Matin;Soir)  ↔  EduLM: KHOURY Yara [AS 4 + RS 4]
+  93%  Excel: "Kian Haddad" (CE1, Bus 10, Soir)  ↔  EduLM: HADDAD Kiyan [RS 6]
+  91%  Excel: "Karen Khoury" (4eme, Bus 8, Soir)  ↔  EduLM: KHOURY (EL) Karen [RS 8]
+  90%  Excel: "Chris Khoury" (CM2, Bus 5, Soir)  ↔  EduLM: KHOURY (EL) Chris [RS 5]
+  89%  Excel: "Nay Achkar" (6eme, Bus 9, Matin)  ↔  EduLM: ACHKAR (EL) Nay [AS 9]
+  88%  Excel: "Thalia  khalil" (4eme, Bus 16, Matin)  ↔  EduLM: Khalil Talia [RS 16]
+  86%  Excel: "Roger Paul  Abou Jaoude" (MS, Bus 11, Soir)  ↔  EduLM: Elia Abou Jaoude Roger Paul [RS 11]
+  85%  Excel: "Andrea Semergian" (CE2, Bus 9, Matin;Soir)  ↔  EduLM: SEMERJIAN Andréa [AS 9 + RS 9]
+  83%  Excel: "Zoe Attic" (GS, Bus 8, Matin;Soir)  ↔  EduLM: Atik Zoé [AS 8 + RS 8]
+  82%  Excel: "Matheas Karam" (GS, Bus 8, Soir)  ↔  EduLM: KARAM Mathias [RS 8]
+  82%  Excel: "Joe Mechaalani" (MS, Bus 16, Soir)  ↔  EduLM: Machaalani Joe [RS 16]
+  82%  Excel: "Albert Morkos" (GS, Bus 19, Soir)  ↔  EduLM: MORCOS Albert [RS 19]
+  81%  Excel: "Antoine Abi Azar" (6eme, Bus 2, Matin)  ↔  EduLM: ABOU AZAR Antoine [AS 2 + RS 7]
+  80%  Excel: "Ghanem Laetitia" (1ere, Bus 8, Matin)  ↔  EduLM: GHANEM Laeticia [AS 8]
+  80%  Excel: "Feghali Yasmine" (3eme, Bus 10, Matin)  ↔  EduLM: KHALED FEGHALI Yasmine [AS 6 + RS 11]
+  80%  Excel: "Fouad Morkos" (CP, Bus 19, Soir)  ↔  EduLM: MORCOS FOUAD [RS 19]
+  80%  Excel: "Mia Keyrouz" (6eme, Bus 14, Soir)  ↔  EduLM: KEYROUZ Sofia [AS 2]
+  78%  Excel: "Chris Saliba" (PS, Bus 17, Soir)  ↔  EduLM: SALIBA CIELO CHRIS [RS 17]
+  78%  Excel: "Roukos Paul" (CM2, Bus 8, Matin;Soir)  ↔  EduLM: ROUKOZ Paul [AS 8 + RS 8]
+  78%  Excel: "Roukos Yana" (5eme, Bus 8, Matin)  ↔  EduLM: ROUKOZ Yana [AS 8]
+  78%  Excel: "KHOURY (EL)" (Axelle, Bus 9, Lundi)  ↔  EduLM: Khoury (EL) AYLA [AS 8 + RS 8]
+  76%  Excel: "Fidawi Matheo" (4eme, Bus 11, Matin)  ↔  EduLM: FIDAWI Matteo [AS 11 + RS 14]
+  76%  Excel: "Philippe  El Hajj" (CM2, Bus 17, Soir)  ↔  EduLM: HAGE (EL) Philippe [RS 17]
+  76%  Excel: "Marilyn Salloum" (CM1, Bus 9, Matin;Soir)  ↔  EduLM: CHAAYA SALLOUM Marilynn [RS 9]
+  75%  Excel: "Helene el Khourey" (CP, Bus 9, Matin)  ↔  EduLM: Khoury (El) Helene [AS 9 + RS 9]
+  75%  Excel: "Fidawi Geovani" (6eme, Bus 11, Matin)  ↔  EduLM: FIDAWI Giovanni [AS 11 + RS 14]
+  73%  Excel: "Johnathan  Harbouk" (6eme, Bus 14, Matin)  ↔  EduLM: Harbouk Jonathan Anthony [AS 14 + RS 5]
+  73%  Excel: "Moawad Joya" (CM2, Bus 8, Matin;Soir)  ↔  EduLM: HANNA MOAWAD Joya [AS 8 + RS 8]
+  73%  Excel: "Moawad Tala" (3eme, Bus 8, Matin;Soir)  ↔  EduLM: HANNA MOAWAD Tala [AS 8 + RS 8]
+  73%  Excel: "Katlyn el Ramy" (MS, Bus 14, Matin;Soir)  ↔  EduLM: Rami (El) Katelyn [RS 14]
+  71%  Excel: "Kaia Hajj" (CE2, Bus 11, Matin;Soir)  ↔  EduLM: HAGE (EL) Kaia [AS 11 + RS 11]
+  71%  Excel: "Sophia Haadad" (CE1, Bus 10, Soir)  ↔  EduLM: HADDAD Sofia [RS 6]
+  70%  Excel: "Kahi Veronica" (CM1, Bus 18, Matin;Soir)  ↔  EduLM: KAI (EL) Véronica [AS 18 + RS 18]
+  70%  Excel: "Milana Elhayek" (CP, Bus 18, Matin;Soir)  ↔  EduLM: Hayeck Milana [AS 18 + RS 18]
+  67%  Excel: "Moawad Jad" (CM2, Bus 8, Matin;Soir)  ↔  EduLM: HANNA MOAWAD Jad [AS 8 + RS 8]
+  67%  Excel: "Rita Tauk" (GS, Bus 12, Matin;Soir)  ↔  EduLM: Tawk Rita [AS 12 + RS 12]
+  64%  Excel: "Michael Bou kazi" (4eme, Bus 12, Matin)  ↔  EduLM: Jabbour Michael [RS 1]
+  63%  Excel: "Luna El Hajj" (4eme, Bus 6, Matin)  ↔  EduLM: HAGE (EL) Luna [AS 10 + RS 7]
+  61%  Excel: "ABDELSATER SKY" (CE2, Bus 10, Matin;Soir)  ↔  EduLM: ABDEL SATER Sky,Maria,Christina [AS 6 + RS 6]
+  60%  Excel: "HAGE" (Kaia, Bus 14, Lundi)  ↔  EduLM: HAGE (EL) Léa [AS 10 + RS 7]
+  56%  Excel: "Isabella Daoud" (3eme, Bus 16, Matin)  ↔  EduLM: DAOUD Léa [RS 18]
+  56%  Excel: "Cecilia Yaziji" (CPB, Bus 9, Mardi)  ↔  EduLM: Aziz Celia [RS 1]
+
+=== ABSENTS restants (vraiment pas dans l'Excel) — 34 ===
+  • IBRAHIM PETER [AS ? + RS ?] (4ème)
+  • BAAKLINI Elie [AS 10 + RS 10] (CE2)
+  • Bou Dib Kyle [AS 1 + RS 1] (GS)
+  • JABBOUR Marc [RS 12] (4ème)
+  • NASSIF Joseph [AS 10] (6ème)
+  • NEMER Théa [RS 10] (CE1)
+  • JAMATI Alexandre Mattéo [AS 7 + RS 12] (Terminale)
+  • KAMAL Alex [AS 16 + RS 22] (CE2)
+  • Aziz Ayla [RS 1] (GS)
+  • KAHI (EL) Karl [RS 20] (4ème)
+  • RIACHY (EL) John-Paul [RS 6] (6ème)
+  • HAJJAR (EL) Gabriel [RS 12] (CE1)
+  • CHALLITA Thalia [AS 1 + RS 1] (CE1)
+  • JABBOUR Maelle [RS 12] (4ème)
+  • ROUKOZ Jad [RS 14] (3ème)
+  • GEBRAEL Eden Noel Margaux [AS 2 + RS 2] (GS)
+  • ISKANDAR Peter [AS 6 + RS 6] (CM1)
+  • LABAKY (EL) Maroun [AS 15 + RS 12] (Terminale)
+  • KASSIS Matteo [AS 22 + RS 19] (Terminale)
+  • ESTEPHAN Lucas [AS 8 + RS 3] (CM1)
+  • AOUAD Naya [AS 11 + RS 11] (6ème)
+  • Raad Jackie Marie [AS 7 + RS 12] (Terminale)
+  • Khoury (EL) Alexandre [AS 8 + RS 8] (CE1)
+  • NASSIF Elya [AS 10] (3ème)
+  • ISKANDAR Rafael [AS 6 + RS 6] (CE1)
+  • ESTEPHAN LUCIANA [AS 3 + RS 8] (GS)
+  • BAAKLINI MARC [AS 10 + RS 10] (MS)
+  • BAAKLINI Charbel [AS 10 + RS 10] (CM1)
+  • Hatem LOUIE DOWAN [AS 10 + RS 10] (PS)
+  • RIACHY (EL) Matthew [RS 6] (3ème)
+  • IBRAHIM GEORGE JOSEPH [AS ? + RS ?] (2nde)
+  • RIACHY (EL) Ivana [RS 6] (CE1)
+  • AOUAD Rayan [AS 11 + RS 11] (4ème)
+  • MANOUKIAN Tara [AS 3] (Terminale)
+
+=== Lignes Excel restantes (vraiment pas dans EduLM) — 58 ===
+  • Gaëlle Rose Saad (5eme, Bus 1, Matin)
+  • LIAM WARDINI (PS, Bus 2, Matin;Soir)
+  • Sophia Keyrouz (4eme, Bus 2, Matin)
+  • THEA ATAMIAN (PS, Bus 2, Matin;Soir)
+  • JUL RICHANY AL (PS, Bus 3, Matin-soir Zalka)
+  • MELINA HADDAD (PS, Bus 6, 76596796)
+  • CARLO SACY (PS, Bus 6, 03-239369)
+  • Lea El Hajj (6eme, Bus 6, Matin;Soir)
+  • JULIA (ASSI, Bus 8, JULIA)
+  • SEMERJIAN (PS, Bus 11, Matin;Soir)
+  • [object Object] (, Bus 13, M/S)
+  • Nasereddine Rui Francisco (5eme, Bus 15, Matin)
+  • Nasereddine Rafael (3eme, Bus 15, Matin)
+  • Kamil labaki (3eme, Bus 15, Matin)
+  • SOPHIA BROUMMANA (MS, Bus 15, Soir)
+  • SOPHIA ZREIK (PS, Bus 15, Soir /Enebet Broumana)
+  • Mathew Eid (CP, Bus 17, Matin;Soir)
+  • JAD TOHME (PS, Bus 17, Soir)
+  • Kahi Chris (4eme, Bus 18, Matin)
+  • Sakr Jiyana (CE1, Bus 20, Soir)
+  • Abou Rizk Daladieh (5eme, Bus 22, Matin)
+  • Johnathan  Harbouk (6eme, Bus 5, Soir)
+  • KAHI (Lily Rose, Bus 5, Lundi)
+  • SALIBA (Giovanny, Bus 5, Lundi)
+  • EID (Laura, Bus 5, Lundi)
+  • TOHME (Chérif Michel, Bus 5, Lundi)
+  • Feghali Yasmine (3eme, Bus 6, Soir)
+  • Jabr Emmanuelle (1ere, Bus 6, Soir)
+  • ABDEL SATER (Sky, Maria, Christina, Bus 6, Lundi)
+  • Luna El Hajj (4eme, Bus 7, Soir)
+  • Antoine Abi Azar (6eme, Bus 7, Soir)
+  • CHEBLI (Célia, Bus 7, Lundi)
+  • ESCABASSE (Mila, Bus 7, Lundi)
+  • MOURADIKIAN (Uma, Bus 7, Lundi)
+  • WARDINI (Lea, Bus 7, Lundi)
+  • Moawad Tala (3eme, Bus 8, Soir)
+  • MAALOUF (Kelly, Bus 8, Lundi)
+  • Georgia DIBS (CM2B, Bus 8, Jeudi)
+  • Georgio SAHYOUN (MSA, Bus 8, Mardi)
+  • KADDISSY (Yasma, Bus 9, Lundi)
+  • Sofia Keryouz (4eme, Bus 14, Soir)
+  • Fidawi Geovani (6eme, Bus 14, Soir)
+  • Fidawi Matheo (4eme, Bus 14, Soir)
+  • KARAM (Lila, Bus 14, Lundi)
+  • Fidawi Kiyana (CPB, Bus 14, Mardi)
+  • Nay Achkar (6eme, Bus 15, Soir)
+  • TAGER (YACHA, Bus 15, Lundi)
+  • Rafih Michael (CM2B, Bus 15, Mardi)
+  • Charles Maroun (6eme, Bus 16, Soir)
+  • SARROUH (Jude, Bus 16, Lundi)
+  • Alexis Paoli (2nde, Bus 17, Soir)
+  • Mathieu Assis (Term, Bus 19, Soir)
+  • BOU ANNY (Moon, Bus 19, Lundi)

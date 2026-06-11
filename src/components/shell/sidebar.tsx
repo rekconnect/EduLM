@@ -26,6 +26,9 @@ import {
   Settings,
   BarChart3,
   ClipboardEdit,
+  Bus,
+  UtensilsCrossed,
+  HeartPulse,
   Search,
   PanelLeftClose,
   PanelLeftOpen,
@@ -63,6 +66,9 @@ const ICONS: Record<IconName, LucideIcon> = {
   settings: Settings,
   reports: BarChart3,
   inscriptionForm: ClipboardEdit,
+  transport: Bus,
+  cantine: UtensilsCrossed,
+  infirmerie: HeartPulse,
 };
 void FileText;
 

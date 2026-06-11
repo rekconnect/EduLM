@@ -9,8 +9,9 @@ export type FicheTab = {
   /** Pre-rendered icon element, e.g. <IdCard className="size-4" />. */
   icon: React.ReactNode;
   content: React.ReactNode;
-  /** Optional count badge (e.g. number of siblings). */
-  badge?: number;
+  /** Optional badge — a count (e.g. siblings) or a marker string (e.g. "!"
+   *  on Santé when the pupil has allergies / chronic conditions). */
+  badge?: number | string;
 };
 
 /**
@@ -54,7 +55,11 @@ export function FicheTabs({ tabs }: { tabs: FicheTab[] }) {
                 {t.icon}
               </span>
               <span className="min-w-0 flex-1 truncate">{t.label}</span>
-              {typeof t.badge === "number" && t.badge > 0 ? (
+              {typeof t.badge === "string" ? (
+                <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-red-500/10 px-1.5 text-[10px] font-bold text-red-600 dark:text-red-400">
+                  {t.badge}
+                </span>
+              ) : typeof t.badge === "number" && t.badge > 0 ? (
                 <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-[color:var(--color-surface-sunken)] px-1.5 text-[10px] font-semibold tabular-nums text-[color:var(--color-foreground-muted)]">
                   {t.badge}
                 </span>
@@ -64,7 +69,12 @@ export function FicheTabs({ tabs }: { tabs: FicheTab[] }) {
         })}
       </nav>
 
-      <div className="min-w-0">{current?.content}</div>
+      {/* key forces a remount per tab — otherwise React reuses the previous
+          tab's component instances (same type, same position) and stateful
+          editors (EditableGroup…) keep showing the OLD tab's values as "—". */}
+      <div className="min-w-0" key={current?.id}>
+        {current?.content}
+      </div>
     </div>
   );
 }

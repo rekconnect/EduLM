@@ -1,0 +1,359 @@
+✓ Target tenant: Lycée Montaigne (cmp6rug7t0000w57oqchgkkb9)
+Lignes élèves valides: 728 · profs: 3 · anomalies: 3 · TBD: 0
+Appariement: 453 élèves uniques · NON TROUVÉS: 95
+   ✗ Gaëlle Rose Saad (5eme, Bus 1, Matin)
+   ✗ LIAM WARDINI (PS, Bus 2, Matin;Soir)
+   ✗ Sophia Keyrouz (4eme, Bus 2, Matin)
+   ✗ Antoine Abi Azar (6eme, Bus 2, Matin)
+   ✗ THEA ATAMIAN (PS, Bus 2, Matin;Soir)
+   ✗ JUL RICHANY AL (PS, Bus 3, Matin;Soir)
+   ✗ Luna El Hajj (4eme, Bus 6, Matin)
+   ✗ Lea El Hajj (6eme, Bus 6, Matin;Soir)
+   ✗ Roukos Paul (CM2, Bus 8, Matin;Soir)
+   ✗ Roukos Yana (5eme, Bus 8, Matin)
+   ✗ Matheas Karam (GS, Bus 8, Soir)
+   ✗ Moawad Jad (CM2, Bus 8, Matin;Soir)
+   ✗ Moawad Joya (CM2, Bus 8, Matin;Soir)
+   ✗ Moawad Tala (3eme, Bus 8, Matin;Soir)
+   ✗ Zoe Attic (GS, Bus 8, Matin;Soir)
+   ✗ Ghanem Laetitia (1ere, Bus 8, Matin)
+   ✗ Andrea Semergian (CE2, Bus 9, Matin;Soir)
+   ✗ Helene el Khourey (CP, Bus 9, Matin)
+   ✗ Marilyn Salloum (CM1, Bus 9, Matin;Soir)
+   ✗ Feghali Yasmine (3eme, Bus 10, Matin)
+   ✗ ABDELSATER SKY (CE2, Bus 10, Matin;Soir)
+   ✗ Kian Haddad (CE1, Bus 10, Soir)
+   ✗ Sophia Haadad (CE1, Bus 10, Soir)
+   ✗ Jabr Emmanuelle (1ere, Bus 10, Matin)
+   ✗ Fidawi Geovani (6eme, Bus 11, Matin)
+   ✗ Fidawi Matheo (4eme, Bus 11, Matin)
+   ✗ Kaia Hajj (CE2, Bus 11, Matin;Soir)
+   ✗ Roger Paul  Abou Jaoude (MS, Bus 11, Soir)
+   ✗ SEMERJIAN (PS, Bus 11, Matin;Soir)
+   ✗ Michael Bou kazi (4eme, Bus 12, Matin)
+   ✗ Raphael Bou kazi (CE2, Bus 12, Matin;Soir)
+   ✗ Gabriel Bou kazi (CP, Bus 12, Matin;Soir)
+   ✗ Rita Tauk (GS, Bus 12, Matin;Soir)
+   ✗ [object Object] (, Bus 13, Matin;Soir)
+   ✗ Katlyn el Ramy (MS, Bus 14, Matin;Soir)
+   ✗ Johnathan  Harbouk (6eme, Bus 14, Matin)
+   ✗ Nasereddine Rui Francisco (5eme, Bus 15, Matin)
+   ✗ Nasereddine Rafael (3eme, Bus 15, Matin)
+   ✗ Kamil labaki (3eme, Bus 15, Matin)
+   ✗ SOPHIA BROUMMANA (MS, Bus 15, Soir)
+   ✗ SOPHIA ZREIK (PS, Bus 15, Soir)
+   ✗ Isabella Daoud (3eme, Bus 16, Matin)
+   ✗ Thalia  khalil (4eme, Bus 16, Matin)
+   ✗ Joe Mechaalani (MS, Bus 16, Soir)
+   ✗ Philippe  El Hajj (CM2, Bus 17, Soir)
+   ✗ Chris Saliba (PS, Bus 17, Soir)
+   ✗ Mathew Eid (CP, Bus 17, Matin;Soir)
+   ✗ JAD TOHME (PS, Bus 17, Soir)
+   ✗ Kahi Veronica (CM1, Bus 18, Matin;Soir)
+   ✗ Kahi Chris (4eme, Bus 18, Matin)
+   ✗ Milana Elhayek (CP, Bus 18, Matin;Soir)
+   ✗ Fouad Morkos (CP, Bus 19, Soir)
+   ✗ Albert Morkos (GS, Bus 19, Soir)
+   ✗ Sakr Jiyana (CE1, Bus 20, Soir)
+   ✗ [object Object] (, Bus 21, Matin)
+   ✗ Abou Rizk Daladieh (5eme, Bus 22, Matin)
+   ✗ Johnathan  Harbouk (6eme, Bus 5 College, Soir)
+   ✗ KAHI (Lily Rose, Bus 5 College, Soir)
+   ✗ SALIBA (Giovanny, Bus 5 College, Soir)
+   ✗ EID (Laura, Bus 5 College, Soir)
+   ✗ TOHME (Chérif Michel, Bus 5 College, Soir)
+   ✗ Feghali Yasmine (3eme, Bus 6 College, Soir)
+   ✗ Jabr Emmanuelle (1ere, Bus 6 College, Soir)
+   ✗ ABDEL SATER (Sky, Maria, Christina, Bus 6 College, Soir)
+   ✗ Lea El Hajj (6eme, Bus 7 College, Soir)
+   ✗ Luna El Hajj (4eme, Bus 7 College, Soir)
+   ✗ Antoine Abi Azar (6eme, Bus 7 College, Soir)
+   ✗ CHEBLI (Célia, Bus 7 College, Soir)
+   ✗ ESCABASSE (Mila, Bus 7 College, Soir)
+   ✗ MOURADIKIAN (Uma, Bus 7 College, Soir)
+   ✗ WARDINI (Lea, Bus 7 College, Soir)
+   ✗ Moawad Tala (3eme, Bus 8 College, Soir)
+   ✗ MAALOUF (Kelly, Bus 8 College, Soir)
+   ✗ Georgia DIBS (CM2B, Bus 8 College, Soir)
+   ✗ Georgio SAHYOUN (MSA, Bus 8 College, Soir)
+   ✗ KADDISSY (Yasma, Bus 9 College, Soir)
+   ✗ KHOURY (EL) (Axelle, Bus 9 College, Soir)
+   ✗ Cecilia Yaziji (CPB, Bus 9 College, Soir)
+   ✗ Kamil labaki (3eme, Bus 12 College, Soir)
+   ✗ Michel Bou kazi (4eme, Bus 13 College, Soir)
+   ✗ Mia Keyrouz (6eme, Bus 14 College, Soir)
+   ✗ Sofia Keryouz (4eme, Bus 14 College, Soir)
+   ✗ Fidawi Geovani (6eme, Bus 14 College, Soir)
+   ✗ Fidawi Matheo (4eme, Bus 14 College, Soir)
+   ✗ KARAM (Lila, Bus 14 College, Soir)
+   ✗ HAGE (Kaia, Bus 14 College, Soir)
+   ✗ KARAM (Cecilia, Bus 14 College, Soir)
+   ✗ Fidawi Kiyana (CPB, Bus 14 College, Soir)
+   ✗ TAGER (YACHA, Bus 15 College, Soir)
+   ✗ TAGER (Yoana, Bus 15 College, Soir)
+   ✗ Rafih Michael (CM2B, Bus 15 College, Soir)
+   ✗ SARROUH (Jude, Bus 16 College, Soir)
+   ✗ Alexis Paoli (2nde, Bus 17 College, Soir)
+   ✗ Mathieu Assis (Term, Bus 19 College, Soir)
+   ✗ BOU ANNY (Moon, Bus 19 College, Soir)
+
+=== DIFF vs EduLM (2025-2026|T3) ===
+identiques: 307
+
+TRAJET différent: 62
+   • ABOU EL NASR Elias: [AS 1] → [AS 1 + RS 8]
+   • ABDELNOUR Angelina: [AS 1] → [AS 1 + RS 8]
+   • ABDELNOUR Jason: [AS 1] → [AS 1 + RS 8]
+   • Murr (El) Andrew: [AS 1 + RS 1] → [RS 1]
+   • MOUSSA Naya: [RS 2] → [AS 2]
+   • KEYROUZ Marwan: [AS 2] → [AS 2 + RS 2]
+   • PAWLY Alexis: [AS 4 + RS 17] → [AS 4]
+   • ESCABASSE Mila: [AS 5] → [AS 5 + RS 19]
+   • ABOU ARRAJ Ayla: [AS 5] → [AS 5 + RS 14]
+   • JABR Audrey: [RS 5] → [AS 5 + RS 5]
+   • KHOURY EL Raphael, Elias: [RS 17] → [AS 17 + RS 6]
+   • FAHL (EL) Yoan: [RS 10] → [AS 6 + RS 9]
+   • SAADE Michaella: [RS 12] → [AS 7 + RS 16]
+   • FAYAD Chloé: [AS 7] → [AS 17 + RS 19]
+   • ARAMOUNI Andrea: [AS 7 + RS 7] → [AS 7]
+   • Zgheib Mandy: [RS 7] → [AS 7 + RS 7]
+   • AZOURI Rita Maria: [AS 8] → [AS 8 + RS 8]
+   • Khoury (El) Sophie: [AS 9 + RS 9] → [AS 9]
+   • AOUAD Rémy: [RS 9] → [AS 9 + RS 9]
+   • AOUAD Ivan: [RS 9] → [AS 9 + RS 9]
+   • ACHKAR (EL) Nay: [AS 9] → [AS 9 + RS 15]
+   • BAAKLINI Léa: [AS 6] → [AS 10 + RS 6]
+   • BAAKLINI Stéphane: [AS 6] → [AS 10 + RS 6]
+   • BOU ASSI Charbel: [AS 11 + RS 11] → [RS 11]
+   • HAJJAR Clara: [RS 13] → [AS 12 + RS 13]
+   • HAJJAR Georgio: [RS 13] → [AS 12 + RS 13]
+   • HAGOPIAN Arnaud: [AS 12 + RS 12] → [AS 12]
+   • HAGOPIAN Aram: [AS 12 + RS 12] → [AS 12]
+   • SARKIS Aiden: [AS 3 + RS 12] → [RS 12]
+   • ABI HAILA Yann: [AS 11] → [AS 13 + RS 6]
+   • HAKIM Roxane: [AS 13] → [AS 13 + RS 6]
+   • HAKIM Anaïs, Reine, France: [AS 13] → [AS 13 + RS 6]
+   • JALBOUT Céline: [AS 14] → [AS 14 + RS 5]
+   • JALBOUT Nour: [AS 14] → [AS 14 + RS 5]
+   • MATTA Lila: [AS 14] → [AS 14 + RS 8]
+   • MENHEM Nour, Naël: [AS 14] → [AS 14 + RS 5]
+   • NAJM Camille: [AS 15] → [AS 15 + RS 12]
+   • NAJM Sophie: [AS 15] → [AS 15 + RS 12]
+   • SALIBI Laura: [RS 15] → [AS 15 + RS 15]
+   • Khalil Perine: [RS 16] → [AS 16]
+   • Bou Zeidan Aurelia: [AS 20] → [AS 20 + RS 16]
+   • Bou Zeidan Elena: [AS 20] → [AS 20 + RS 16]
+   • BAZZI Abbas Jawad: [AS 18] → [AS 18 + RS 20]
+   • BAZZI Joséphine: [AS 18] → [AS 18 + RS 20]
+   • KORBAN Kathy: [RS 20] → [AS 20 + RS 20]
+   • KORBAN JIHAD ANTHONY: [RS 20] → [AS 20 + RS 20]
+   • KAI (EL) Nour: [RS 20] → [AS 20 + RS 20]
+   • KAI (EL) Nai: [RS 20] → [AS 20 + RS 20]
+   • Bou Anny Karim: [AS 22] → [AS 22 + RS 19]
+   • JALBOUT Marc: [AS 14] → [RS 5]
+   • AZAR Jean-Pierre: [AS 14 + RS 5] → [RS 5]
+   • Eid Mathieu: [AS 17 + RS 17] → [RS 5]
+   • NEHME ANTOUN Aya: [AS 10 + RS 9] → [RS 9]
+   • ANTONIA Raphael: [AS 15 + RS 12] → [RS 12]
+   • MOUAWAD Mathéo: [AS 5 + RS 14] → [RS 14]
+   • MATTA Leticia: [AS 8 + RS 14] → [RS 14]
+   • KEYROUZ Karim: [AS 9 + RS 15] → [RS 15]
+   • Mourad Christina: [AS 9 + RS 15] → [RS 15]
+   • HECHAIME Tia: [AS 4 + RS 17] → [RS 17]
+   • ABI RIZK Daladier: [AS 22 + RS 19] → [RS 19]
+   • CHIDIAC Patricia: [AS 18] → [RS 20]
+   • KAI (EL) Chris: [AS 18] → [RS 20]
+
+BUS différent (même trajet): 76
+   • Gemayel Adriana: [AS 1 + RS 11] → [AS 11 + RS 8]
+   • CHEDID Cherif: [AS 2 + RS 19] → [AS 2 + RS 4]
+   • CHEDID Elias: [AS 2 + RS 19] → [AS 2 + RS 4]
+   • MAALOUF Kelly: [AS 3 + RS 3] → [AS 3 + RS 8]
+   • AKL MIA: [AS 3 + RS 3] → [AS 3 + RS 21]
+   • AKL IVY: [AS 3 + RS 3] → [AS 3 + RS 21]
+   • Bou akl Sasha: [AS 3 + RS 19] → [AS 3 + RS 21]
+   • BOUSTANI (EL) Carl: [AS 4 + RS 4] → [AS 4 + RS 9]
+   • BOUSTANI (EL) Marc: [AS 4 + RS 4] → [AS 4 + RS 9]
+   • RAJJI (EL) ANAIS: [AS 4 + RS 19] → [AS 19 + RS 4]
+   • RAJJI (EL) KIM: [AS 4 + RS 19] → [AS 19 + RS 4]
+   • RAJJI (EL) GABRIEL: [AS 4 + RS 19] → [AS 19 + RS 4]
+   • MALLAH (EL) Marylee: [AS 4 + RS 10] → [AS 6 + RS 6]
+   • KARAM Matteo: [AS 5 + RS 5] → [AS 5 + RS 14]
+   • KHOURY (EL) Liam: [AS 10 + RS 9] → [AS 6 + RS 9]
+   • KHOURY (EL) Axelle: [AS 10 + RS 10] → [AS 6 + RS 6]
+   • HADDAD EL Angélina: [AS 10 + RS 10] → [AS 6 + RS 6]
+   • HADDAD EL Katalina: [AS 10 + RS 10] → [AS 6 + RS 6]
+   • TAUK MAROUN: [AS 19 + RS 10] → [AS 19 + RS 6]
+   • TAUK Joy: [AS 19 + RS 10] → [AS 19 + RS 6]
+   • Ghorayeb Mayron: [AS 10 + RS 9] → [AS 6 + RS 9]
+   • Ghorayeb Jaydon: [AS 10 + RS 9] → [AS 6 + RS 9]
+   • MOURADIKIAN Uma: [AS 10 + RS 10] → [AS 6 + RS 6]
+   • SACY ALEXIA: [RS 10] → [RS 6]
+   • SACY Selim: [RS 10] → [RS 6]
+   • SACY RAY: [RS 10] → [RS 6]
+   • SALIBA Adriano Leo: [AS 10 + RS 7] → [AS 6 + RS 7]
+   • SALIBA Thomas Mir: [AS 10 + RS 5] → [AS 6 + RS 5]
+   • FIKANI Michael: [AS 10 + RS 10] → [AS 6 + RS 6]
+   • CHAKRA Kate: [AS 10 + RS 10] → [AS 6 + RS 6]
+   • Hatem Joey Doyul: [AS 10 + RS 10] → [AS 6 + RS 6]
+   • Jabbour IVY MARIA: [RS 10] → [RS 6]
+   • KHAZEN (EL) Léa: [RS 10] → [RS 6]
+   • Bakalian Mateo: [AS 10 + RS 10] → [AS 6 + RS 9]
+   • Bakalian Milana: [AS 10 + RS 10] → [AS 6 + RS 9]
+   • Zgheib Georges: [RS 10] → [RS 6]
+   • Zgheib Ella: [RS 10] → [RS 6]
+   • Abi Rizk Nathan: [RS 10] → [RS 6]
+   • MAWAS (AL) Chris: [AS 3 + RS 8] → [AS 8 + RS 21]
+   • CHEBLI Laurent: [AS 3 + RS 7] → [AS 8 + RS 7]
+   • CHEBLI Célia: [AS 3 + RS 8] → [AS 8 + RS 21]
+   • RADI (EL) YAMMINE Gia: [AS 9 + RS 9] → [AS 9 + RS 15]
+   • BOUTROS Reem: [AS 6 + RS 11] → [AS 10 + RS 6]
+   • ASMAR (EL) Céléna: [AS 6 + RS 11] → [AS 10 + RS 6]
+   • ASMAR (EL) Elie: [AS 6 + RS 6] → [AS 10 + RS 6]
+   • ASMAR (EL) Chloé: [AS 6 + RS 11] → [AS 10 + RS 6]
+   • KHARRAT Majd: [AS 6 + RS 6] → [AS 10 + RS 10]
+   • KHORIATY Luke: [AS 6 + RS 11] → [AS 10 + RS 6]
+   • KHORIATY Olivia: [AS 6 + RS 6] → [AS 10 + RS 10]
+   • KHORIATY John: [AS 6 + RS 6] → [AS 10 + RS 10]
+   • ABDEL SATER David,Anwar,Christian: [AS 6 + RS 6] → [AS 10 + RS 10]
+   • MAALOUF Raphael: [AS 6 + RS 6] → [AS 10 + RS 10]
+   • HAJJ (EL) Rayane: [RS 6] → [RS 10]
+   • Obeid Charbel: [RS 6] → [RS 10]
+   • KHARRAT Ivan: [AS 6 + RS 6] → [AS 10 + RS 10]
+   • SAid Aram: [AS 6 + RS 6] → [AS 10 + RS 10]
+   • HERRO Noor: [AS 6 + RS 6] → [AS 10 + RS 10]
+   • HAJAL (EL) Joseph: [AS 3 + RS 18] → [AS 12 + RS 18]
+   • HAJAL (EL) Nour: [AS 3 + RS 3] → [AS 12 + RS 21]
+   • ABI HAILA Adriana: [AS 13 + RS 13] → [AS 13 + RS 6]
+   • BAJAK Joseph: [AS 14 + RS 14] → [AS 14 + RS 5]
+   • Harbouk Emma Marie: [AS 14 + RS 14] → [AS 14 + RS 5]
+   • Harbouk Peter Lucas: [AS 14 + RS 14] → [AS 14 + RS 5]
+   • BOU AKL Dylan: [AS 14 + RS 19] → [AS 14 + RS 5]
+   • HARB KAYLEE: [AS 16 + RS 22] → [AS 16 + RS 16]
+   • ATTIEH CLARA: [RS 16] → [RS 12]
+   • Riachi Celina: [AS 17 + RS 17] → [AS 17 + RS 5]
+   • Balkis Ella: [AS 9 + RS 19] → [AS 19 + RS 9]
+   • Tannoury Sophia: [AS 20 + RS 11] → [AS 20 + RS 20]
+   • OBEID Youssef: [AS 20 + RS 11] → [AS 20 + RS 20]
+   • KASSOUF (EL) Natacha: [RS 11] → [RS 6]
+   • HAJJ (EL) Naïm: [RS 11] → [RS 6]
+   • HAJJ (EL) Clara: [RS 11] → [RS 6]
+   • KHALIFAT Mark: [RS 20] → [RS 6]
+   • KHALIFAT Matéo: [RS 20] → [RS 6]
+   • SARROUH Yasmine: [RS 12] → [RS 16]
+
+NOUVEAUX (Excel, sans affectation EduLM): 8
+   • SIKIAS Mélanie → [RS 15]
+   • HAJJ (EL) Chloé → [RS 6]
+   • KHOURY Karen → [RS 8]
+   • Abi Aad Georgio → [RS 15]
+   • Abi Aad Yasmina → [RS 15]
+   • BOGHOS Joseph → [RS 18]
+   • BOGHOS Marianne → [RS 18]
+   • Kai Karlie → [RS 20]
+
+ABSENTS de l'Excel (affectés dans EduLM): 77
+   • Atik Zoé [AS 8+RS 8]
+   • HADDAD Kiyan [RS 6]
+   • Khalil Talia [RS 16]
+   • Jabbour Michael [RS 1]
+   • Khoury (El) Helene [AS 9+RS 9]
+   • IBRAHIM PETER [AS ?+RS ?]
+   • SALIBA CIELO CHRIS [RS 17]
+   • BOUKAZI Gabriel [AS 12+RS 12]
+   • KARAM Mathias [RS 8]
+   • BAAKLINI Elie [AS 10+RS 10]
+   • HAGE (EL) Luna [AS 10+RS 7]
+   • CHAAYA SALLOUM Marilynn [RS 9]
+   • Bou Dib Kyle [AS 1+RS 1]
+   • JABBOUR Marc [RS 12]
+   • Khoury (EL) AYLA [AS 8+RS 8]
+   • Machaalani Joe [RS 16]
+   • NASSIF Joseph [AS 10]
+   • NEMER Théa [RS 10]
+   • ROUKOZ Paul [AS 8+RS 8]
+   • JAMATI Alexandre Mattéo [AS 7+RS 12]
+   • Harbouk Jonathan Anthony [AS 14+RS 5]
+   • FIDAWI Giovanni [AS 11+RS 14]
+   • BOUKAZI Michel [AS 12+RS 13]
+   • KAMAL Alex [AS 16+RS 22]
+   • FIDAWI Matteo [AS 11+RS 14]
+   • Aziz Ayla [RS 1]
+   • KEYROUZ Sofia [AS 2]
+   • GHANEM Laeticia [AS 8]
+   • HANNA MOAWAD Jad [AS 8+RS 8]
+   • KAHI (EL) Karl [RS 20]
+   • KAI (EL) Véronica [AS 18+RS 18]
+   • HADDAD Sofia [RS 6]
+   • HAGE (EL) Léa [AS 10+RS 7]
+   • RIACHY (EL) John-Paul [RS 6]
+   • HAJJAR (EL) Gabriel [RS 12]
+   • CHALLITA Thalia [AS 1+RS 1]
+   • JABBOUR Maelle [RS 12]
+   • ROUKOZ Jad [RS 14]
+   • Aziz Celia [RS 1]
+   • GEBRAEL Eden Noel Margaux [AS 2+RS 2]
+   • KHOURY (EL) Karen [RS 8]
+   • ISKANDAR Peter [AS 6+RS 6]
+   • LABAKY (EL) Maroun [AS 15+RS 12]
+   • KASSIS Matteo [AS 22+RS 19]
+   • ESTEPHAN Lucas [AS 8+RS 3]
+   • Elia Abou Jaoude Roger Paul [RS 11]
+   • Hayeck Milana [AS 18+RS 18]
+   • KHALED FEGHALI Yasmine [AS 6+RS 11]
+   • Tawk Rita [AS 12+RS 12]
+   • AOUAD Naya [AS 11+RS 11]
+   • Raad Jackie Marie [AS 7+RS 12]
+   • Khoury (EL) Alexandre [AS 8+RS 8]
+   • NASSIF Elya [AS 10]
+   • JABRE Emmanuelle [AS 6+RS 6]
+   • SEMERJIAN Andréa [AS 9+RS 9]
+   • HAGE (EL) Philippe [RS 17]
+   • ABOU AZAR Antoine [AS 2+RS 7]
+   • ISKANDAR Rafael [AS 6+RS 6]
+   • ESTEPHAN LUCIANA [AS 3+RS 8]
+   • BAAKLINI MARC [AS 10+RS 10]
+   • BAAKLINI Charbel [AS 10+RS 10]
+   • MORCOS FOUAD [RS 19]
+   • ROUKOZ Yana [AS 8]
+   • HANNA MOAWAD Joya [AS 8+RS 8]
+   • MORCOS Albert [RS 19]
+   • Hatem LOUIE DOWAN [AS 10+RS 10]
+   • RIACHY (EL) Matthew [RS 6]
+   • IBRAHIM GEORGE JOSEPH [AS ?+RS ?]
+   • DAOUD Léa [RS 18]
+   • BOUKAZI Raphael [AS 12+RS 12]
+   • RIACHY (EL) Ivana [RS 6]
+   • HANNA MOAWAD Tala [AS 8+RS 8]
+   • AOUAD Rayan [AS 11+RS 11]
+   • Rami (El) Katelyn [RS 14]
+   • MANOUKIAN Tara [AS 3]
+   • HAGE (EL) Kaia [AS 11+RS 11]
+   • ABDEL SATER Sky,Maria,Christina [AS 6+RS 6]
+
+=== Annexes ===
+Profs dans les bus: 3 → lilian demain Prof (Bus 3) · Madame Charlie Aoun (Bus 6) · Jessy Sobeh (Bus 17 College)
+TBD (à placer): 0 → 
+Anomalies de saisie: 3
+   ⚠ MELINA HADDAD (PS, Bus 6): trajet="76596796"
+   ⚠ CARLO SACY (PS, Bus 6): trajet="03-239369"
+   ⚠ JULIA (ASSI, Bus 8): trajet="JULIA"
+Jours spécifiques (garderie): 21
+   • BOUSTANI (EL) Carl: Lundi
+   • BOUSTANI (EL) Marc: Mardi
+   • KARAM Matteo: Mercredi
+   • KAHI (EL) George: Lundi
+   • Bakalian Mateo: Mardi
+   • Bakalian Milana: Mardi
+   • FAHL (EL) Yoan: Mardi
+   • ASSI Jamie: Jeudi
+   • Sahyoun Gloria: Mardi
+   • ASMAR (EL) Elie: Mardi
+   • ABI HAILA Adriana: Mercredi
+   • BAJAK Joseph: Lundi
+   • Harbouk Emma Marie: Lundi
+   • Harbouk Peter Lucas: Mardi
+   • BOU AKL Dylan: Lundi
+
+=== Stats si l'Excel est appliqué ===
+Inscrits=453  Aller=326  Retour=441  AR=314 (même bus=158, 2 bus=156)

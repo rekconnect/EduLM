@@ -1,0 +1,14 @@
+✓ Target tenant: Lycée Montaigne (cmp6rug7t0000w57oqchgkkb9)
+EduLM students with darsStudentId: 1804
+
+Medical records to upsert: 1394 (skipped, unknown student: 24)
+Immunization rows to upsert: 19035 from 35558 Dars rows (skipped: 3499)
+Visits to import: 1819 for 775 students (skipped: 267)
+Writing immunizations (replace per student)…
+  immunizations: 250/1450
+  immunizations: 500/1450
+  immunizations: 750/1450
+  immunizations: 1000/1450
+  immunizations: 1250/1450
+
+✓ Medical import complete.

@@ -140,6 +140,7 @@ export const STUDENT_CATEGORIES = [
   "Services",
   "Autorisations",
   "Info Arabe",
+  "Renseignements pédagogiques",
 ];
 
 export const STUDENT_FIELDS: SeedField[] = [
@@ -154,6 +155,7 @@ export const STUDENT_FIELDS: SeedField[] = [
   { key: "nationalite2", label: "Nationalité 2", type: "select", category: "Info générale", codeType: "NAT" },
   { key: "communaute_eleve", label: "Communauté", type: "select", category: "Info générale", codeType: "REL" },
   { key: "numero_identite", label: "N° d'identité", type: "short_text", category: "Info générale" },
+  { key: "registerNum", label: "Registre", type: "short_text", category: "Info générale" },
   { key: "email_eleve", label: "Email", type: "email", category: "Info générale" },
   { key: "email_college", label: "Email au collège", type: "email", category: "Info générale" },
   { key: "portable_eleve", label: "Portable", type: "phone", category: "Info générale" },
@@ -198,4 +200,20 @@ export const STUDENT_FIELDS: SeedField[] = [
   // ── Info Arabe ──
   { key: "nom_prenom_ar", label: "الاسم الكامل (Nom Prénom AR)", type: "short_text", category: "Info Arabe" },
   { key: "lieu_naissance_ar", label: "مكان الولادة (Lieu naissance AR)", type: "short_text", category: "Info Arabe" },
+
+  // ── Renseignements pédagogiques ── (level-dependent registration choices;
+  // surfaced level-aware on the fiche by PedagogicalInfo, and the shared key
+  // contract the inscription form fills. Keep in sync with that component.)
+  { key: "arabe_langue", label: "Arabe (CE2→3ème)", type: "select", category: "Renseignements pédagogiques", options: ["Langue maternelle", "Langue étrangère"] },
+  { key: "lva", label: "LVA", type: "select", category: "Renseignements pédagogiques", options: ["Arabe", "Anglais"] },
+  { key: "lvb", label: "LVB", type: "select", category: "Renseignements pédagogiques", options: ["Arabe", "Anglais", "Espagnol"] },
+  { key: "lvc", label: "LVC (option)", type: "select", category: "Renseignements pédagogiques", options: ["Arabe", "Espagnol"] },
+  { key: "specialites", label: "Spécialités (1ère/Tle)", type: "short_text", category: "Renseignements pédagogiques" },
+  { key: "opt_arts_plastiques", label: "Arts plastiques", type: "yes_no", category: "Renseignements pédagogiques" },
+  { key: "opt_section_internationale", label: "Section internationale (SI)", type: "yes_no", category: "Renseignements pédagogiques" },
+  { key: "opt_bfi", label: "BFI", type: "yes_no", category: "Renseignements pédagogiques" },
+  { key: "comp_libanais_physique", label: "Complément libanais – Physique", type: "yes_no", category: "Renseignements pédagogiques" },
+  { key: "maths_complementaire", label: "Maths complémentaire", type: "yes_no", category: "Renseignements pédagogiques" },
+  { key: "maths_expertes", label: "Maths expertes", type: "yes_no", category: "Renseignements pédagogiques" },
+  { key: "comp_libanais_physique_svt", label: "Complément libanais – Physique + SVT", type: "yes_no", category: "Renseignements pédagogiques" },
 ];

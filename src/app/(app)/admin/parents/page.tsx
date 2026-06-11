@@ -331,32 +331,29 @@ export default async function ParentsListPage({
             />
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex w-full flex-wrap items-center gap-3">
-              <div className="w-full sm:w-64">
-                <ParentsSearchBox />
-              </div>
-              {years.length > 0 ? (
-                <>
-                  <YearPicker years={years} selectedId={selectedYearId ?? ""} />
-                  <UrlSelect
-                    name="scope"
-                    value={restrictToYear ? "year" : "all"}
-                    options={[
-                      { value: "year", label: "Familles de l'année" },
-                      { value: "all", label: "Tous les parents" },
-                    ]}
-                  />
-                </>
-              ) : null}
-            </div>
-            <p
-              aria-live="polite"
-              className="shrink-0 text-xs text-[color:var(--color-foreground-muted)]"
-            >
-              {countLabel}
-            </p>
+          {/* Search + filters on one row — same layout as /students. */}
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto]">
+            <ParentsSearchBox />
+            {years.length > 0 ? (
+              <>
+                <YearPicker years={years} selectedId={selectedYearId ?? ""} />
+                <UrlSelect
+                  name="scope"
+                  value={restrictToYear ? "year" : "all"}
+                  options={[
+                    { value: "year", label: "Familles de l'année" },
+                    { value: "all", label: "Tous les parents" },
+                  ]}
+                />
+              </>
+            ) : null}
           </div>
+          <p
+            aria-live="polite"
+            className="text-xs text-[color:var(--color-foreground-muted)]"
+          >
+            {countLabel}
+          </p>
 
           {restrictToYear && selectedYear ? (
             <p className="text-xs text-[color:var(--color-foreground-muted)]">

@@ -261,6 +261,204 @@ export async function saveStudentRegistrationYear(
   });
 }
 
+/**
+ * Save the family's "personnes autorisées à récupérer l'élève" + emergency
+ * contacts. The list is stored on the anchor guardian's User.customAnswers
+ * (imported from Dars per parent) and shown on every child's fiche, so editing
+ * from one child updates the whole family.
+ */
+export async function saveAuthorizedPersons(
+  studentId: string,
+  userId: string,
+  persons: Array<{ relation: string; name: string; phone: string; emergency: boolean }>,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  const clean = persons
+    .map((p) => ({
+      relation: String(p.relation ?? "").trim().slice(0, 120),
+      name: String(p.name ?? "").trim().slice(0, 160),
+      phone: String(p.phone ?? "").trim().slice(0, 40),
+      emergency: !!p.emergency,
+    }))
+    .filter((p) => p.name)
+    .slice(0, 50);
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const u = await db.user.findFirst({
+      where: { id: userId, tenantId, role: "PARENT" },
+      select: { customAnswers: true },
+    });
+    if (!u) return { ok: false, error: "not-found" };
+    const ca: Record<string, unknown> =
+      u.customAnswers && typeof u.customAnswers === "object"
+        ? { ...(u.customAnswers as Record<string, unknown>) }
+        : {};
+    ca.authorized_persons = JSON.stringify(clean);
+    await db.user.update({ where: { id: userId }, data: { customAnswers: ca } });
+    revalidatePath(`/students/${studentId}`);
+    revalidatePath("/admin/parents", "layout");
+    return { ok: true };
+  });
+}
+
+/**
+ * Bulk-save bus assignments from the transport management page. Field set
+ * mirrors the Dars transport exports — PER DIRECTION, because a pupil can ride
+ * different cars (even from different quartiers) morning vs evening (e.g. AS
+ * Car 1 Antelias + RS Car 8 Naccache): trajet AR/AS/RS, then car / quartier /
+ * station for matin and soir, plus free-text remarques. Stored as flat
+ * customAnswers keys so they also show on the fiche.
+ */
+export async function saveBusAssignments(
+  period: string, // "<yearLabel>|T1|T2|T3" — assignments are per trimester
+  updates: Array<{
+    studentId: string;
+    bus_as: string; // "yes" → rides the morning (aller) bus
+    bus_rs: string; // "yes" → rides the evening (retour) bus
+    bus_car_matin: string;
+    bus_zone_matin: string;
+    bus_station_matin: string;
+    bus_car_soir: string;
+    bus_zone_soir: string;
+    bus_station_soir: string;
+    bus_remarques: string;
+  }>,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+  if (updates.length === 0) return { ok: true };
+  if (!/^.+\|T[123]$/.test(period)) return { ok: false, error: "bad-period" };
+
+  // Superseded pre-period flat keys — removed on save (data now lives in
+  // bus_periods). bus_zone stays: it is the legacy quartier seed/suggestion.
+  const LEGACY = [
+    "bus_trajet", "bus_car", "bus_station", "bus_heure", "bus_matin", "bus_soir",
+    "bus_pre_activite", "bus_as", "bus_rs", "bus_car_matin", "bus_zone_matin",
+    "bus_station_matin", "bus_car_soir", "bus_zone_soir", "bus_station_soir",
+    "bus_remarques", "bus_tel", "bus_montant", "bus_paye",
+  ];
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const ids = updates.map((u) => u.studentId);
+    const rows = await db.student.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, customAnswers: true },
+    });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    for (const u of updates) {
+      const st = byId.get(u.studentId);
+      if (!st) continue;
+      const ca: Record<string, unknown> =
+        st.customAnswers && typeof st.customAnswers === "object"
+          ? { ...(st.customAnswers as Record<string, unknown>) }
+          : {};
+      let periods: Record<string, Record<string, string>> = {};
+      if (typeof ca.bus_periods === "string") {
+        try {
+          periods = JSON.parse(ca.bus_periods) as Record<string, Record<string, string>>;
+        } catch {
+          periods = {};
+        }
+      }
+      const as = u.bus_as === "yes";
+      const rs = u.bus_rs === "yes";
+      const prev = periods[period] ?? {};
+      periods[period] = {
+        ...prev, // keeps tel/montant/paye from the import
+        as: as ? "yes" : "",
+        rs: rs ? "yes" : "",
+        // A direction that's off carries no bus data.
+        car_matin: as ? (u.bus_car_matin ?? "").trim().slice(0, 20) : "",
+        zone_matin: as ? (u.bus_zone_matin ?? "").trim().slice(0, 80) : "",
+        station_matin: as ? (u.bus_station_matin ?? "").trim().slice(0, 160) : "",
+        car_soir: rs ? (u.bus_car_soir ?? "").trim().slice(0, 20) : "",
+        zone_soir: rs ? (u.bus_zone_soir ?? "").trim().slice(0, 80) : "",
+        station_soir: rs ? (u.bus_station_soir ?? "").trim().slice(0, 160) : "",
+        remarques: (u.bus_remarques ?? "").trim().slice(0, 400),
+      };
+      ca.bus_periods = JSON.stringify(periods);
+      for (const k of LEGACY) delete ca[k];
+      await db.student.update({
+        where: { id: u.studentId },
+        data: { customAnswers: ca },
+      });
+    }
+    revalidatePath("/transport");
+    for (const u of updates) revalidatePath(`/students/${u.studentId}`);
+    return { ok: true };
+  });
+}
+
+/**
+ * Upsert the student's medical record from the fiche "Santé" tab. Sensitive —
+ * SCHOOL_ADMIN only. Booleans arrive as "yes"/"no"/"" strings from the form;
+ * "" means unanswered for the consent tri-states.
+ */
+export async function saveStudentMedicalRecord(
+  studentId: string,
+  values: Record<string, string>,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  const txt = (k: string, max = 2000) => {
+    const v = (values[k] ?? "").trim().slice(0, max);
+    return v === "" ? null : v;
+  };
+  const flag = (k: string) => values[k] === "yes";
+  const tri = (k: string) =>
+    values[k] === "yes" ? true : values[k] === "no" ? false : null;
+
+  const data = {
+    bloodType: txt("bloodType", 8),
+    diabetic: flag("diabetic"),
+    asthma: flag("asthma"),
+    epilepsy: flag("epilepsy"),
+    scoliosis: flag("scoliosis"),
+    favism: flag("favism"),
+    hemophilia: flag("hemophilia"),
+    cardiacProblem: flag("cardiacProblem"),
+    allergies: txt("allergies"),
+    medications: txt("medications"),
+    hospitalization: txt("hospitalization"),
+    surgeries: txt("surgeries"),
+    majorIllnesses: txt("majorIllnesses"),
+    chronicIllness: txt("chronicIllness"),
+    familyHistory: txt("familyHistory"),
+    specialNeeds: txt("specialNeeds"),
+    remarks: txt("remarks"),
+    pediatricianName: txt("pediatricianName", 160),
+    pediatricianPhone: txt("pediatricianPhone", 40),
+    allowEmergencyMeasures: tri("allowEmergencyMeasures"),
+    allowDoctorExam: tri("allowDoctorExam"),
+    allowParacetamol: tri("allowParacetamol"),
+    allowMedicalTreatment: tri("allowMedicalTreatment"),
+    unfitForSports: flag("unfitForSports"),
+    unfitDuration: txt("unfitDuration", 160),
+    unfitReason: txt("unfitReason", 400),
+  };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const st = await db.student.findUnique({
+      where: { id: studentId },
+      select: { id: true },
+    });
+    if (!st) return { ok: false, error: "not-found" };
+    await db.studentMedicalRecord.upsert({
+      where: { studentId },
+      create: { tenantId, studentId, ...data },
+      update: data,
+    });
+    revalidatePath(`/students/${studentId}`);
+    revalidatePath("/infirmerie");
+    return { ok: true };
+  });
+}
+
 // ─── Custom answers (Round 6) ──────────────────────────────────
 
 /** See updateParentCustomAnswers for the storage contract — same shape. */

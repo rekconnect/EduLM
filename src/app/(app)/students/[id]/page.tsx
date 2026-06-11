@@ -3,7 +3,6 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import {
   IdCard,
-  User,
   BookOpen,
   Bus,
   Languages,
@@ -11,6 +10,9 @@ import {
   Baby,
   CalendarDays,
   ArrowRight,
+  ShieldCheck,
+  GraduationCap,
+  HeartPulse,
 } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
@@ -18,13 +20,27 @@ import { Card, CardBody } from "@/components/ui/card";
 import { FicheTabs, type FicheTab } from "@/components/fiche/fiche-tabs";
 import { EditableGroup } from "@/components/fiche/editable-group";
 import { StudentYearView } from "@/components/fiche/student-year-view";
+import {
+  AuthorizedPersons,
+  type AuthorizedPerson,
+} from "@/components/fiche/authorized-persons";
+import { PedagogicalInfo } from "@/components/fiche/pedagogical-info";
+import { fieldsForLevel } from "@/components/fiche/pedagogical-fields";
+import {
+  MedicalSection,
+  type MedicalRecordData,
+  type ImmunizationData,
+  type VisitData,
+} from "@/components/fiche/medical-section";
 import type { EntityFieldsConfig, FieldDef } from "@/lib/entity-fields";
 import { db } from "@/lib/db";
 import { withTenantSession } from "@/lib/session";
 import {
   deleteStudent,
+  saveAuthorizedPersons,
   saveStudentFicheFields,
   saveStudentIdentity,
+  saveStudentMedicalRecord,
   saveStudentRegistrationYear,
 } from "../_actions";
 import { StudentIdentitySection, type StudentIdentity } from "./_identity-card";
@@ -52,6 +68,27 @@ function toAnswers(ca: unknown): Record<string, string> {
     }
   }
   return out;
+}
+
+/** Parse the authorized-persons / emergency-contacts list off a guardian. */
+function parsePersons(ca: unknown): AuthorizedPerson[] {
+  if (!ca || typeof ca !== "object") return [];
+  const raw = (ca as Record<string, unknown>).authorized_persons;
+  if (typeof raw !== "string") return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .map((p) => ({
+        relation: String(p?.relation ?? ""),
+        name: String(p?.name ?? ""),
+        phone: String(p?.phone ?? ""),
+        emergency: !!p?.emergency,
+      }))
+      .filter((p) => p.name);
+  } catch {
+    return [];
+  }
 }
 
 export default async function StudentDetailPage({
@@ -125,6 +162,22 @@ export default async function StudentDetailPage({
         })
       : [];
 
+    // Medical data — sensitive, only loaded (and the tab only shown) for admins.
+    const isAdmin = user.role === "SCHOOL_ADMIN";
+    const [medRecord, medImms, medVisits] = isAdmin
+      ? await Promise.all([
+          db.studentMedicalRecord.findUnique({ where: { studentId: id } }),
+          db.studentImmunization.findMany({
+            where: { studentId: id },
+            orderBy: { darsImmunizationId: "asc" },
+          }),
+          db.medicalVisit.findMany({
+            where: { studentId: id },
+            orderBy: { visitDate: "desc" },
+          }),
+        ])
+      : [null, [], []];
+
     const initialStudentAnswers = toAnswers(student.customAnswers);
 
     // Per-year billing services + registration snapshots → year-aware view.
@@ -151,6 +204,74 @@ export default async function StudentDetailPage({
       services: servicesByYear[e.academicYear.label] ?? "",
     }));
 
+    // Active-year level drives the level-aware "Renseignements pédagogiques".
+    const activeLevel =
+      student.enrollments.find((e) => e.academicYear.isActive)?.class.level ??
+      student.enrollments[0]?.class.level ??
+      "";
+
+    // Bus assignment (set by the bus admin on /transport) — read-only here.
+    // Per-trimester storage (bus_periods JSON): show the active year's latest
+    // trimester that has data; fall back to the pre-period flat keys.
+    const activeYearLabel =
+      student.enrollments.find((e) => e.academicYear.isActive)?.academicYear
+        .label ?? "";
+    let busPeriod: Record<string, string> = {};
+    let busPeriodLabel = "";
+    try {
+      const periods = JSON.parse(
+        initialStudentAnswers.bus_periods ?? "{}",
+      ) as Record<string, Record<string, string>>;
+      for (const t of ["T3", "T2", "T1"]) {
+        const p = periods[`${activeYearLabel}|${t}`];
+        if (p && (p.as === "yes" || p.rs === "yes")) {
+          busPeriod = p;
+          busPeriodLabel = `Trimestre ${t.slice(1)}`;
+          break;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    if (!busPeriodLabel && (initialStudentAnswers.bus_as || initialStudentAnswers.bus_rs)) {
+      busPeriod = {
+        as: initialStudentAnswers.bus_as ?? "",
+        rs: initialStudentAnswers.bus_rs ?? "",
+        car_matin: initialStudentAnswers.bus_car_matin ?? "",
+        zone_matin: initialStudentAnswers.bus_zone_matin ?? "",
+        station_matin: initialStudentAnswers.bus_station_matin ?? "",
+        car_soir: initialStudentAnswers.bus_car_soir ?? "",
+        zone_soir: initialStudentAnswers.bus_zone_soir ?? "",
+        station_soir: initialStudentAnswers.bus_station_soir ?? "",
+        remarques: initialStudentAnswers.bus_remarques ?? "",
+      };
+      busPeriodLabel = "Trimestre 3";
+    }
+    const matinParts = [
+      busPeriod.car_matin ? `Bus ${busPeriod.car_matin}` : "",
+      busPeriod.zone_matin,
+      busPeriod.station_matin,
+    ].filter(Boolean);
+    const soirParts = [
+      busPeriod.car_soir ? `Bus ${busPeriod.car_soir}` : "",
+      busPeriod.zone_soir,
+      busPeriod.station_soir,
+    ].filter(Boolean);
+    const busInfo = (
+      [
+        ["Période", busPeriodLabel],
+        [
+          "AS — Aller (matin)",
+          busPeriod.as === "yes" ? matinParts.join(" · ") || "Oui" : "",
+        ],
+        [
+          "RS — Retour (soir)",
+          busPeriod.rs === "yes" ? soirParts.join(" · ") || "Oui" : "",
+        ],
+        ["Remarques", busPeriod.remarques],
+      ] as Array<[string, string | undefined]>
+    ).filter(([, v]) => v && v.trim()) as Array<[string, string]>;
+
     const generalFields = fieldsInCat(studentFieldsConfig, "Info générale");
     const scolariteFields = fieldsInCat(studentFieldsConfig, "Scolarité");
     // Services (transport mode/address) AND authorizations are YEAR-SPECIFIC —
@@ -164,6 +285,23 @@ export default async function StudentDetailPage({
     const saveFiche = saveStudentFicheFields.bind(null, student.id);
     const saveIdentity = saveStudentIdentity.bind(null, student.id);
     const saveRegYear = saveStudentRegistrationYear.bind(null, student.id);
+
+    // Authorized pickup persons + emergency contacts live on the anchor
+    // guardian (imported per Dars parent). Read from the guardian that has
+    // them, else the father, else the primary/first — and edit that same anchor.
+    const apAnchor =
+      student.guardianLinks.find(
+        (l) => parsePersons(l.guardian.user.customAnswers).length > 0,
+      ) ??
+      student.guardianLinks.find((l) => l.guardian.relation === "pere") ??
+      student.guardianLinks.find((l) => l.isPrimary) ??
+      student.guardianLinks[0];
+    const authorizedPersons = apAnchor
+      ? parsePersons(apAnchor.guardian.user.customAnswers)
+      : [];
+    const saveAuthorized = apAnchor
+      ? saveAuthorizedPersons.bind(null, student.id, apAnchor.guardian.userId)
+      : undefined;
     const studentIdentity: StudentIdentity = {
       firstName: student.firstName,
       lastName: student.lastName,
@@ -230,30 +368,38 @@ export default async function StudentDetailPage({
       </Card>
     );
 
+    // Identité + Info générale share one tab: the built-in identity card on
+    // top, then the custom fields — minus the ones the card already shows
+    // (nationalité, lieu de naissance), so nothing appears twice.
+    const IDENTITY_DUPLICATES = new Set(["nationalite", "lieu_naissance"]);
+    const complementFields = generalFields.filter(
+      (f) => !IDENTITY_DUPLICATES.has(f.key),
+    );
     const tabs: FicheTab[] = [
       {
         id: "identite",
-        label: "Identité",
+        label: "Identité & infos",
         icon: <IdCard className="size-4" />,
         content: card(
-          <StudentIdentitySection initial={studentIdentity} onSave={saveIdentity} />,
+          <div className="space-y-6">
+            <StudentIdentitySection
+              initial={studentIdentity}
+              onSave={saveIdentity}
+            />
+            {complementFields.length > 0 ? (
+              <div className="border-t border-[color:var(--color-border-subtle)] pt-5">
+                <EditableGroup
+                  title="Informations complémentaires"
+                  fields={complementFields}
+                  initialValues={initialStudentAnswers}
+                  onSave={saveFiche}
+                />
+              </div>
+            ) : null}
+          </div>,
         ),
       },
     ];
-    if (generalFields.length > 0)
-      tabs.push({
-        id: "general",
-        label: "Info générale",
-        icon: <User className="size-4" />,
-        content: card(
-          <EditableGroup
-            title="Info générale"
-            fields={generalFields}
-            initialValues={initialStudentAnswers}
-            onSave={saveFiche}
-          />,
-        ),
-      });
     if (scolariteFields.length > 0)
       tabs.push({
         id: "scolarite",
@@ -268,25 +414,55 @@ export default async function StudentDetailPage({
           />,
         ),
       });
+    if (fieldsForLevel(activeLevel).length > 0)
+      tabs.push({
+        id: "pedago",
+        label: "Renseignements pédagogiques",
+        icon: <GraduationCap className="size-4" />,
+        content: card(
+          <PedagogicalInfo
+            level={activeLevel}
+            initial={initialStudentAnswers}
+            onSave={user.role === "SCHOOL_ADMIN" ? saveFiche : undefined}
+          />,
+        ),
+      });
     tabs.push({
       id: "services",
       label: "Services & autorisations",
       icon: <Bus className="size-4" />,
       content: card(
-        parcours.length > 0 ||
+        <div className="space-y-6">
+          {busInfo.length > 0 ? (
+            <div className="space-y-2">
+              <h4 className="text-[0.7rem] font-semibold uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
+                Affectation bus
+              </h4>
+              <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                {busInfo.map(([l, v]) => (
+                  <div key={l} className="min-w-0">
+                    <dt className="text-xs text-[color:var(--color-foreground-muted)]">{l}</dt>
+                    <dd className="text-sm font-medium text-[color:var(--color-foreground)]">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ) : null}
+          {parcours.length > 0 ||
           Object.keys(registrationByYear).length > 0 ? (
-          <StudentYearView
-            parcours={parcours}
-            registrationByYear={registrationByYear}
-            fallback={initialStudentAnswers}
-            onSaveYear={saveRegYear}
-          />
-        ) : (
-          <p className="text-sm text-[color:var(--color-foreground-subtle)]">
-            Aucune inscription — les services et autorisations s'affichent par
-            année une fois l'élève inscrit.
-          </p>
-        ),
+            <StudentYearView
+              parcours={parcours}
+              registrationByYear={registrationByYear}
+              fallback={initialStudentAnswers}
+              onSaveYear={saveRegYear}
+            />
+          ) : busInfo.length === 0 ? (
+            <p className="text-sm text-[color:var(--color-foreground-subtle)]">
+              Aucune inscription — les services et autorisations s'affichent par
+              année une fois l'élève inscrit.
+            </p>
+          ) : null}
+        </div>,
       ),
     });
     tabs.push({
@@ -361,6 +537,98 @@ export default async function StudentDetailPage({
             ))}
           </ul>
         ),
+      ),
+    });
+    if (isAdmin) {
+      const recordData: MedicalRecordData = {
+        bloodType: medRecord?.bloodType ?? "",
+        diabetic: medRecord?.diabetic ?? false,
+        asthma: medRecord?.asthma ?? false,
+        epilepsy: medRecord?.epilepsy ?? false,
+        scoliosis: medRecord?.scoliosis ?? false,
+        favism: medRecord?.favism ?? false,
+        hemophilia: medRecord?.hemophilia ?? false,
+        cardiacProblem: medRecord?.cardiacProblem ?? false,
+        allergies: medRecord?.allergies ?? "",
+        medications: medRecord?.medications ?? "",
+        hospitalization: medRecord?.hospitalization ?? "",
+        surgeries: medRecord?.surgeries ?? "",
+        majorIllnesses: medRecord?.majorIllnesses ?? "",
+        chronicIllness: medRecord?.chronicIllness ?? "",
+        familyHistory: medRecord?.familyHistory ?? "",
+        specialNeeds: medRecord?.specialNeeds ?? "",
+        remarks: medRecord?.remarks ?? "",
+        pediatricianName: medRecord?.pediatricianName ?? "",
+        pediatricianPhone: medRecord?.pediatricianPhone ?? "",
+        allowEmergencyMeasures: medRecord?.allowEmergencyMeasures ?? null,
+        allowDoctorExam: medRecord?.allowDoctorExam ?? null,
+        allowParacetamol: medRecord?.allowParacetamol ?? null,
+        allowMedicalTreatment: medRecord?.allowMedicalTreatment ?? null,
+        unfitForSports: medRecord?.unfitForSports ?? false,
+        unfitDuration: medRecord?.unfitDuration ?? "",
+        unfitReason: medRecord?.unfitReason ?? "",
+      };
+      // Unnamed technical rows (Dars ids 19/128 — date fields, no vaccine
+      // label) are hidden unless actually checked.
+      const immData: ImmunizationData[] = medImms
+        .filter((i) => i.done || !i.vaccine.startsWith("Vaccin #"))
+        .map((i) => ({
+          id: i.id,
+          vaccine: i.vaccine,
+          done: i.done,
+          month: i.month,
+          year: i.year,
+          notes: i.notes ?? "",
+        }));
+      const visitData: VisitData[] = medVisits.map((v) => ({
+        id: v.id,
+        date: v.visitDate.toISOString().slice(0, 10),
+        yearLabel: v.yearLabel ?? "",
+        heightCm: v.heightCm,
+        weightKg: v.weightKg,
+        bp: [v.bpHigh, v.bpLow].filter(Boolean).join("/"),
+        visionOd: v.visionOd ?? "",
+        visionOg: v.visionOg ?? "",
+        exam: v.exam ?? "",
+        plan: v.plan ?? "",
+        followUp: v.followUp ?? "",
+        remarks: v.remarks ?? "",
+        details:
+          v.details && typeof v.details === "object" && !Array.isArray(v.details)
+            ? Object.entries(v.details as Record<string, string>)
+            : [],
+      }));
+      const hasAlert =
+        !!recordData.allergies ||
+        recordData.asthma ||
+        recordData.diabetic ||
+        recordData.epilepsy ||
+        recordData.cardiacProblem;
+      tabs.push({
+        id: "sante",
+        label: "Santé",
+        icon: <HeartPulse className="size-4" />,
+        badge: hasAlert ? "!" : undefined,
+        content: card(
+          <MedicalSection
+            record={recordData}
+            immunizations={immData}
+            visits={visitData}
+            onSave={saveStudentMedicalRecord.bind(null, student.id)}
+          />,
+        ),
+      });
+    }
+    tabs.push({
+      id: "autorisees",
+      label: "Personnes autorisées",
+      icon: <ShieldCheck className="size-4" />,
+      badge: authorizedPersons.length || undefined,
+      content: card(
+        <AuthorizedPersons
+          initial={authorizedPersons}
+          onSave={user.role === "SCHOOL_ADMIN" ? saveAuthorized : undefined}
+        />,
       ),
     });
     tabs.push({

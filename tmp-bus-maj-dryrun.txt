@@ -1,0 +1,52 @@
+✓ Target tenant: Lycée Montaigne (cmp6rug7t0000w57oqchgkkb9)
+Lignes valides: 726 · ignorées (anomalies): 3
+   ⚠ MELINA HADDAD (PS, Bus 6): trajet="76596796"
+   ⚠ CARLO SACY (PS, Bus 6): trajet="03-239369"
+   ⚠ JULIA (ASSI, Bus 8): trajet="JULIA"
+
+Élèves appariés: 490 · non trouvés: 25
+   ✗ Gaëlle Rose Saad (5eme, Bus 1)
+   ✗ LIAM WARDINI (PS, Bus 2)
+   ✗ THEA ATAMIAN (PS, Bus 2)
+   ✗ JUL RICHANY AL (PS, Bus 3)
+   ✗ Zoe Attic (GS, Bus 8)
+   ✗ SEMERJIAN (PS, Bus 11)
+   ✗ Nasereddine Rui Francisco (5eme, Bus 15)
+   ✗ Nasereddine Rafael (3eme, Bus 15)
+   ✗ Kamil labaki (3eme, Bus 12)
+   ✗ SOPHIA BROUMMANA (MS, Bus 15)
+   ✗ SOPHIA ZREIK (PS, Bus 15)
+   ✗ Isabella Daoud (3eme, Bus 16)
+   ✗ Mathew Eid (CP, Bus 17)
+   ✗ JAD TOHME (PS, Bus 17)
+   ✗ Kahi Chris (4eme, Bus 18)
+   ✗ Sakr Jiyana (CE1, Bus 20)
+   ✗ Abou Rizk Daladieh (5eme, Bus 22)
+   ✗ CHEBLI (Célia, Bus 7)
+   ✗ Georgia DIBS (CM2B, Bus 8)
+   ✗ Georgio SAHYOUN (MSA, Bus 8)
+   ✗ Mia Keyrouz (6eme, Bus 14)
+   ✗ KARAM (Cecilia, Bus 14)
+   ✗ Rafih Michael (CM2B, Bus 15)
+   ✗ Alexis Paoli (2nde, Bus 17)
+   ✗ Mathieu Assis (Term, Bus 19)
+
+À mettre à jour (fusion): 478 élèves
+   • FARHAT ABOU JAOUDE Maria: AS 1 + RS 8 · Soir: tournée collège
+   • ABOU EL NASR Elias: AS 1 + RS 8 · Soir: tournée collège
+   • ABDELNOUR Angelina: AS 1 + RS 8 · Soir: tournée collège
+   • ABDELNOUR Jason: AS 1 + RS 8 · Soir: tournée collège
+   • ABDELNOUR James: AS 1 + RS 1
+   • ABDELNOUR Giovanni: AS 1 + RS 1
+   • KARAM Antoine: AS 1 + RS 1
+   • KARAM Alexandra: AS 1 + RS 1
+   • WAHAB Nadim: AS 1 + RS 8 · Soir: tournée collège
+   • HACHEM (EL) Carlos: AS 1 + RS 1
+   • FERNEINI Sacha: RS 1
+   • Murr (El) Andrew: RS 1
+   • NASSIF Marc: AS 1 + RS 8 · Soir: tournée collège
+   • MURRAY Eabha Rose: AS 1 + RS 1
+   • MURRAY Mia Louise: AS 1 + RS 1
+   … +463
+
+🟡 DRY-RUN — relancez avec --confirm pour écrire.

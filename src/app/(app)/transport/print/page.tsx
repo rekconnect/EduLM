@@ -2,7 +2,13 @@ import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
 import { unscopedDb } from "@/lib/db";
 import { PrintControls } from "../../reports/lists/_print-controls";
-import { loadBusRows, toExportRows, BUS_EXPORT_COLUMNS } from "../_data";
+import {
+  loadBusRows,
+  toExportRows,
+  filterBusRows,
+  busFilterSummary,
+  BUS_EXPORT_COLUMNS,
+} from "../_data";
 
 export const dynamic = "force-dynamic";
 
@@ -11,9 +17,17 @@ export const dynamic = "force-dynamic";
 export default async function TransportPrintPage({
   searchParams,
 }: {
-  searchParams: Promise<{ yearId?: string; trim?: string }>;
+  searchParams: Promise<{
+    yearId?: string;
+    trim?: string;
+    q?: string;
+    bus?: string;
+    zone?: string;
+    niveau?: string;
+    trajet?: string;
+  }>;
 }) {
-  const { yearId, trim: trimParam } = await searchParams;
+  const { yearId, trim: trimParam, q, bus, zone, niveau, trajet } = await searchParams;
   const user = await requireRole("SCHOOL_ADMIN");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
@@ -22,10 +36,12 @@ export default async function TransportPrintPage({
     where: { id: tenantId },
     select: { name: true, logoUrl: true },
   });
-  const { rows, yearLabel, trim } = await runWithTenant({ tenantId, slug: null }, () =>
+  const { rows: allRows, yearLabel, trim } = await runWithTenant({ tenantId, slug: null }, () =>
     loadBusRows({ yearId, trim: trimParam }),
   );
-  const exportRows = toExportRows(rows);
+  const filters = { q, bus, zone, niveau, trajet };
+  const exportRows = toExportRows(filterBusRows(allRows, filters));
+  const filterText = busFilterSummary(filters);
 
   const now = new Date();
   const stamp = `${String(now.getDate()).padStart(2, "0")}/${String(
@@ -77,6 +93,7 @@ export default async function TransportPrintPage({
         <div className="text-end text-xs text-[color:var(--color-foreground-muted)] print:text-[#475569]">
           <p>
             {yearLabel} · Trimestre {trim.slice(1)}
+            {filterText ? ` · ${filterText}` : ""}
           </p>
           <p>Généré le {stamp}</p>
         </div>

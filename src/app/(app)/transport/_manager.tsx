@@ -1,21 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Loader2,
   Search,
-  Save,
   Bus,
   MapPin,
+  Banknote,
   Sunrise,
   Sunset,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
   ArrowLeftRight,
-  Banknote,
   FileSpreadsheet,
   Printer,
+  Pencil,
+  Trash2,
+  Check,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Input, Select } from "@/components/ui/input";
@@ -26,6 +30,7 @@ import {
 } from "@/components/shell/year-picker";
 
 const PAGE_SIZE = 50;
+const ZONES = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
 
 export type BusRow = {
   id: string;
@@ -36,34 +41,36 @@ export type BusRow = {
   bus_as: string; // "yes" → aller (matin)
   bus_rs: string; // "yes" → retour (soir)
   bus_car_matin: string;
-  bus_zone_matin: string;
+  bus_zoneno_matin: string; // zone 1-10
+  bus_zone_matin: string; // quartier
   bus_station_matin: string;
   bus_car_soir: string;
+  bus_zoneno_soir: string;
   bus_zone_soir: string;
   bus_station_soir: string;
   bus_remarques: string;
-  // Read-only, from the Dars manifests (re-imported each export).
+  // Read-only, from the Dars tarif export.
   bus_tel: string;
   bus_montant: string;
-  bus_paye: string;
+  bus_remise: string;
+  bus_net: string;
+  email_pere: string;
+  email_mere: string;
 };
 
-type Edit = Omit<
-  BusRow,
-  "id" | "name" | "family" | "className" | "level" | "bus_tel" | "bus_montant" | "bus_paye"
->;
-
-const KEYS: Array<keyof Edit> = [
-  "bus_as",
-  "bus_rs",
-  "bus_car_matin",
-  "bus_zone_matin",
-  "bus_station_matin",
-  "bus_car_soir",
-  "bus_zone_soir",
-  "bus_station_soir",
-  "bus_remarques",
-];
+type Edit = {
+  bus_as: string;
+  bus_rs: string;
+  bus_car_matin: string;
+  bus_zoneno_matin: string;
+  bus_zone_matin: string;
+  bus_station_matin: string;
+  bus_car_soir: string;
+  bus_zoneno_soir: string;
+  bus_zone_soir: string;
+  bus_station_soir: string;
+  bus_remarques: string;
+};
 
 const LEVEL_ORDER = [
   "PS", "MS", "GS", "CP", "CE1", "CE2", "CM1", "CM2",
@@ -73,24 +80,19 @@ const lvlIdx = (l: string) => {
   const i = LEVEL_ORDER.indexOf(l);
   return i < 0 ? 99 : i;
 };
-const EMPTY: Edit = {
-  bus_as: "",
-  bus_rs: "",
-  bus_car_matin: "",
-  bus_zone_matin: "",
-  bus_station_matin: "",
-  bus_car_soir: "",
-  bus_zone_soir: "",
-  bus_station_soir: "",
-  bus_remarques: "",
+const busNum = (v: string) => {
+  const n = Number(v.trim());
+  return v.trim() === "" ? Number.POSITIVE_INFINITY : Number.isFinite(n) ? n : 9e8;
 };
 const pick = (r: BusRow): Edit => ({
   bus_as: r.bus_as,
   bus_rs: r.bus_rs,
   bus_car_matin: r.bus_car_matin,
+  bus_zoneno_matin: r.bus_zoneno_matin,
   bus_zone_matin: r.bus_zone_matin,
   bus_station_matin: r.bus_station_matin,
   bus_car_soir: r.bus_car_soir,
+  bus_zoneno_soir: r.bus_zoneno_soir,
   bus_zone_soir: r.bus_zone_soir,
   bus_station_soir: r.bus_station_soir,
   bus_remarques: r.bus_remarques,
@@ -106,18 +108,13 @@ type SortKey =
   | "bus_soir"
   | "zone_soir";
 
-const busNum = (v: string) => {
-  const n = Number(v.trim());
-  // empty buses sort last regardless of direction
-  return v.trim() === "" ? Number.POSITIVE_INFINITY : Number.isFinite(n) ? n : 9e8;
-};
-
 export function TransportManager({
   rows,
   years,
   selectedYearId,
   trim,
   onSave,
+  onDelete,
 }: {
   rows: BusRow[];
   years: YearOption[];
@@ -126,67 +123,50 @@ export function TransportManager({
   onSave: (
     updates: Array<{ studentId: string } & Edit>,
   ) => Promise<{ ok: boolean; error?: string }>;
+  onDelete: (studentId: string) => Promise<{ ok: boolean; error?: string }>;
 }) {
-  const [edits, setEdits] = useState<Record<string, Edit>>(() =>
-    Object.fromEntries(rows.map((r) => [r.id, pick(r)])),
-  );
+  const router = useRouter();
   const [q, setQ] = useState("");
   const [zoneFilter, setZoneFilter] = useState("");
+  const [zonenoFilter, setZonenoFilter] = useState("");
   const [busFilter, setBusFilter] = useState("");
   const [levelFilter, setLevelFilter] = useState("");
   const [trajetFilter, setTrajetFilter] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null);
   const [page, setPage] = useState(1);
+  // Row-level editing.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<Edit | null>(null);
   const [pending, start] = useTransition();
 
-  // New period (year / trimester) → new rows from the server: reseed edits.
-  useEffect(() => {
-    setEdits(Object.fromEntries(rows.map((r) => [r.id, pick(r)])));
-  }, [rows]);
-
-  // Back to page 1 whenever the visible set changes shape.
   useEffect(() => {
     setPage(1);
-  }, [q, zoneFilter, busFilter, levelFilter, trajetFilter, sort, rows]);
+  }, [q, zoneFilter, zonenoFilter, busFilter, levelFilter, trajetFilter, sort, rows]);
 
-  const exportQs = `?yearId=${encodeURIComponent(selectedYearId)}&trim=${encodeURIComponent(trim)}`;
+  const exportQs = (() => {
+    const sp = new URLSearchParams({ yearId: selectedYearId, trim });
+    if (q.trim()) sp.set("q", q.trim());
+    if (busFilter) sp.set("bus", busFilter);
+    if (zonenoFilter) sp.set("zoneno", zonenoFilter);
+    if (zoneFilter) sp.set("zone", zoneFilter);
+    if (levelFilter) sp.set("niveau", levelFilter);
+    if (trajetFilter) sp.set("trajet", trajetFilter);
+    return `?${sp.toString()}`;
+  })();
 
-  const original = useMemo(
-    () => Object.fromEntries(rows.map((r) => [r.id, pick(r)])),
-    [rows],
-  );
-  const set = (id: string, k: keyof Edit, v: string) =>
-    setEdits((p) => ({ ...p, [id]: { ...(p[id] ?? EMPTY), [k]: v } }));
-  const e0 = (id: string): Edit => edits[id] ?? EMPTY;
-
-  const dirtyIds = useMemo(
-    () =>
-      rows
-        .filter((r) => {
-          const e = edits[r.id];
-          const o = original[r.id];
-          if (!e || !o) return false;
-          return KEYS.some((k) => e[k] !== o[k]);
-        })
-        .map((r) => r.id),
-    [rows, edits, original],
-  );
-
-  const zones = useMemo(
+  const quartiers = useMemo(
     () =>
       [...new Set(
-        rows.flatMap((r) => [e0(r.id).bus_zone_matin.trim(), e0(r.id).bus_zone_soir.trim()]).filter(Boolean),
+        rows.flatMap((r) => [r.bus_zone_matin.trim(), r.bus_zone_soir.trim()]).filter(Boolean),
       )].sort((a, b) => a.localeCompare(b)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows, edits],
+    [rows],
   );
   const buses = useMemo(
     () =>
       [...new Set(
-        rows.flatMap((r) => [e0(r.id).bus_car_matin.trim(), e0(r.id).bus_car_soir.trim()]).filter(Boolean),
+        rows.flatMap((r) => [r.bus_car_matin.trim(), r.bus_car_soir.trim()]).filter(Boolean),
       )].sort((a, b) => Number(a) - Number(b) || a.localeCompare(b)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows, edits],
+    [rows],
   );
   const levels = useMemo(
     () => [...new Set(rows.map((r) => r.level))].sort((a, b) => lvlIdx(a) - lvlIdx(b)),
@@ -198,16 +178,20 @@ export function TransportManager({
     const base = rows.filter((r) => {
       if (nq && !r.name.toLowerCase().includes(nq)) return false;
       if (levelFilter && r.level !== levelFilter) return false;
-      const e = e0(r.id);
-      const rowZones = [e.bus_zone_matin.trim(), e.bus_zone_soir.trim()];
+      const rowZones = [r.bus_zone_matin.trim(), r.bus_zone_soir.trim()];
       if (zoneFilter === "__none__" && rowZones.some(Boolean)) return false;
       if (zoneFilter && zoneFilter !== "__none__" && !rowZones.includes(zoneFilter)) return false;
-      const rowBuses = [e.bus_car_matin.trim(), e.bus_car_soir.trim()];
+      if (
+        zonenoFilter &&
+        ![r.bus_zoneno_matin.trim(), r.bus_zoneno_soir.trim()].includes(zonenoFilter)
+      )
+        return false;
+      const rowBuses = [r.bus_car_matin.trim(), r.bus_car_soir.trim()];
       if (busFilter === "__none__" && rowBuses.some(Boolean)) return false;
       if (busFilter && busFilter !== "__none__" && !rowBuses.includes(busFilter)) return false;
-      const as = e.bus_as === "yes";
-      const rs = e.bus_rs === "yes";
-      const sameBus = e.bus_car_matin.trim() === e.bus_car_soir.trim();
+      const as = r.bus_as === "yes";
+      const rs = r.bus_rs === "yes";
+      const sameBus = r.bus_car_matin.trim() === r.bus_car_soir.trim();
       if (trajetFilter === "AS" && !(as && !rs)) return false;
       if (trajetFilter === "RS" && !(rs && !as)) return false;
       if (trajetFilter === "AR" && !(as && rs)) return false;
@@ -216,10 +200,7 @@ export function TransportManager({
       if (trajetFilter === "__none__" && (as || rs)) return false;
       return true;
     });
-
     const cmp = (a: BusRow, b: BusRow): number => {
-      const ea = e0(a.id);
-      const eb = e0(b.id);
       if (sort) {
         const d = sort.dir;
         switch (sort.key) {
@@ -230,73 +211,104 @@ export function TransportManager({
             return d * (li !== 0 ? li : a.className.localeCompare(b.className));
           }
           case "as":
-            return d * ((eb.bus_as === "yes" ? 1 : 0) - (ea.bus_as === "yes" ? 1 : 0));
+            return d * ((b.bus_as === "yes" ? 1 : 0) - (a.bus_as === "yes" ? 1 : 0));
           case "rs":
-            return d * ((eb.bus_rs === "yes" ? 1 : 0) - (ea.bus_rs === "yes" ? 1 : 0));
+            return d * ((b.bus_rs === "yes" ? 1 : 0) - (a.bus_rs === "yes" ? 1 : 0));
           case "bus_matin":
-            return d * (busNum(ea.bus_car_matin) - busNum(eb.bus_car_matin));
+            return d * (busNum(a.bus_car_matin) - busNum(b.bus_car_matin));
           case "zone_matin":
-            return d * ea.bus_zone_matin.localeCompare(eb.bus_zone_matin);
+            return d * a.bus_zone_matin.localeCompare(b.bus_zone_matin);
           case "bus_soir":
-            return d * (busNum(ea.bus_car_soir) - busNum(eb.bus_car_soir));
+            return d * (busNum(a.bus_car_soir) - busNum(b.bus_car_soir));
           case "zone_soir":
-            return d * ea.bus_zone_soir.localeCompare(eb.bus_zone_soir);
+            return d * a.bus_zone_soir.localeCompare(b.bus_zone_soir);
         }
       }
-      // Default: bus matin, then zone, then level, then name.
-      const bm = busNum(ea.bus_car_matin) - busNum(eb.bus_car_matin);
+      const bm = busNum(a.bus_car_matin) - busNum(b.bus_car_matin);
       if (bm !== 0) return bm;
-      const z = (ea.bus_zone_matin || ea.bus_zone_soir).localeCompare(eb.bus_zone_matin || eb.bus_zone_soir);
+      const z = (a.bus_zone_matin || a.bus_zone_soir).localeCompare(
+        b.bus_zone_matin || b.bus_zone_soir,
+      );
       if (z !== 0) return z;
       const li = lvlIdx(a.level) - lvlIdx(b.level);
       if (li !== 0) return li;
       return a.name.localeCompare(b.name);
     };
     return [...base].sort(cmp);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, q, levelFilter, zoneFilter, busFilter, trajetFilter, edits, sort]);
+  }, [rows, q, levelFilter, zoneFilter, zonenoFilter, busFilter, trajetFilter, sort]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
   const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  const assigned = rows.filter(
-    (r) => e0(r.id).bus_car_matin.trim() || e0(r.id).bus_car_soir.trim(),
-  ).length;
-  const noZone = rows.filter(
-    (r) => !(e0(r.id).bus_zone_matin.trim() || e0(r.id).bus_zone_soir.trim()),
-  ).length;
-  // Direction totals (Dars-dashboard semantics: aller/retour each count every
-  // rider of that leg, AR included) — live, follows unsaved checkbox edits.
-  const asTotal = rows.filter((r) => e0(r.id).bus_as === "yes").length;
-  const rsTotal = rows.filter((r) => e0(r.id).bus_rs === "yes").length;
-  // "Aller-Retour" à la Dars = the SAME bus both ways (an AR subscription).
-  // Riding two different buses = two separate AS + RS subscriptions.
-  const both = rows.filter(
-    (r) => e0(r.id).bus_as === "yes" && e0(r.id).bus_rs === "yes",
-  );
+  // Stats.
+  const fmt = (n: number) => n.toLocaleString("fr-FR");
+  const asTotal = rows.filter((r) => r.bus_as === "yes").length;
+  const rsTotal = rows.filter((r) => r.bus_rs === "yes").length;
+  const both = rows.filter((r) => r.bus_as === "yes" && r.bus_rs === "yes");
   const allerRetour = both.filter(
-    (r) => e0(r.id).bus_car_matin.trim() === e0(r.id).bus_car_soir.trim(),
+    (r) => r.bus_car_matin.trim() === r.bus_car_soir.trim(),
   ).length;
   const asPlusRs = both.length - allerRetour;
-  const fmt = (n: number) => n.toLocaleString("fr-FR");
   const montantTotal = rows.reduce((acc, r) => acc + (Number(r.bus_montant) || 0), 0);
-  const payeTotal = rows.reduce((acc, r) => acc + (Number(r.bus_paye) || 0), 0);
+  const netTotal = rows.reduce(
+    (acc, r) => acc + (Number(r.bus_net) || Number(r.bus_montant) || 0),
+    0,
+  );
+  const remises = rows.filter((r) => Number(r.bus_remise) > 0).length;
+  const assigned = rows.filter(
+    (r) => r.bus_car_matin.trim() || r.bus_car_soir.trim(),
+  ).length;
+  const noZone = rows.filter(
+    (r) => !(r.bus_zone_matin.trim() || r.bus_zone_soir.trim()),
+  ).length;
 
-  function save() {
-    const updates = dirtyIds.map((id) => ({ studentId: id, ...(edits[id] ?? EMPTY) }));
-    if (updates.length === 0) return;
+  function startEdit(r: BusRow) {
+    setEditingId(r.id);
+    setForm(pick(r));
+  }
+  function cancelEdit() {
+    setEditingId(null);
+    setForm(null);
+  }
+  function set(k: keyof Edit, v: string) {
+    setForm((p) => (p ? { ...p, [k]: v } : p));
+  }
+  function saveRow() {
+    if (!editingId || !form) return;
     start(async () => {
-      const res = await onSave(updates);
-      if (res.ok) toast.success(`${updates.length} affectation(s) enregistrée(s)`);
-      else toast.error("Échec de l'enregistrement");
+      const res = await onSave([{ studentId: editingId, ...form }]);
+      if (res.ok) {
+        toast.success("Enregistré");
+        cancelEdit();
+        router.refresh();
+      } else {
+        toast.error("Échec de l'enregistrement");
+      }
+    });
+  }
+  function deleteRow(r: BusRow) {
+    if (
+      !window.confirm(
+        `Supprimer l'affectation bus de ${r.name} pour ce trimestre ?\n(Trajets, bus, zones et montants de la période seront retirés.)`,
+      )
+    )
+      return;
+    start(async () => {
+      const res = await onDelete(r.id);
+      if (res.ok) {
+        toast.success("Affectation supprimée");
+        if (editingId === r.id) cancelEdit();
+        router.refresh();
+      } else {
+        toast.error("Échec de la suppression");
+      }
     });
   }
 
   function toggleSort(key: SortKey) {
     setSort((p) => (p?.key === key ? (p.dir === 1 ? { key, dir: -1 } : null) : { key, dir: 1 }));
   }
-
   const SortTh = ({
     label,
     k,
@@ -326,6 +338,32 @@ export function TransportManager({
     </th>
   );
 
+  const ZoneSelect = ({ k }: { k: "bus_zoneno_matin" | "bus_zoneno_soir" }) => (
+    <Select value={form?.[k] ?? ""} onChange={(e) => set(k, e.target.value)} className="h-8">
+      <option value="">—</option>
+      {ZONES.map((z) => (
+        <option key={z} value={z}>{z}</option>
+      ))}
+    </Select>
+  );
+  const QuartierSelect = ({ k }: { k: "bus_zone_matin" | "bus_zone_soir" }) => (
+    <Select value={form?.[k] ?? ""} onChange={(e) => set(k, e.target.value)} className="h-8">
+      <option value="">—</option>
+      {/* keep a non-listed current value selectable */}
+      {form?.[k] && !quartiers.includes(form[k]) ? (
+        <option value={form[k]}>{form[k]}</option>
+      ) : null}
+      {quartiers.map((qt) => (
+        <option key={qt} value={qt}>{qt}</option>
+      ))}
+    </Select>
+  );
+
+  const dirText = (car: string, zoneno: string, quartier: string, station: string) =>
+    [car && `Bus ${car}`, zoneno && `Z${zoneno}`, quartier, station]
+      .filter(Boolean)
+      .join(" · ");
+
   return (
     <div className="space-y-4">
       {/* Stats */}
@@ -341,10 +379,10 @@ export function TransportManager({
           },
           {
             icon: <Banknote className="size-4" aria-hidden />,
-            label: `Montant total · payé ${fmt(payeTotal)} $`,
-            value: `${fmt(montantTotal)} $`,
+            label: `Net après remises · brut ${fmt(montantTotal)} $ · ${fmt(remises)} remise(s)`,
+            value: `${fmt(netTotal)} $`,
           },
-          { icon: <Save className="size-4" aria-hidden />, label: "Avec bus assigné", value: fmt(assigned) },
+          { icon: <Check className="size-4" aria-hidden />, label: "Avec bus assigné", value: fmt(assigned) },
           { icon: <MapPin className="size-4" aria-hidden />, label: "Sans quartier", value: fmt(noZone) },
         ].map((s) => (
           <div
@@ -360,8 +398,8 @@ export function TransportManager({
         ))}
       </div>
 
-      {/* Search + filters on one row — same layout as /students. */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-[1fr_repeat(6,auto)]">
+      {/* Search + filters */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-[1fr_repeat(7,auto)]">
         <div className="relative">
           <Search
             className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-[color:var(--color-foreground-subtle)]"
@@ -401,10 +439,16 @@ export function TransportManager({
             <option key={c} value={c}>Bus {c}</option>
           ))}
         </Select>
+        <Select value={zonenoFilter} onChange={(e) => setZonenoFilter(e.target.value)}>
+          <option value="">Toutes les zones</option>
+          {ZONES.map((z) => (
+            <option key={z} value={z}>Zone {z}</option>
+          ))}
+        </Select>
         <Select value={zoneFilter} onChange={(e) => setZoneFilter(e.target.value)}>
           <option value="">Tous les quartiers</option>
           <option value="__none__">— Sans quartier —</option>
-          {zones.map((z) => (
+          {quartiers.map((z) => (
             <option key={z} value={z}>{z}</option>
           ))}
         </Select>
@@ -416,7 +460,7 @@ export function TransportManager({
         </Select>
       </div>
 
-      {/* Count + actions */}
+      {/* Count + exports */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-[color:var(--color-foreground-muted)]">
           <span className="font-medium text-[color:var(--color-foreground)]">{filtered.length}</span> élève(s)
@@ -438,71 +482,59 @@ export function TransportManager({
             <Printer className="size-4" aria-hidden />
             PDF
           </a>
-          <button
-            type="button"
-            onClick={save}
-            disabled={pending || dirtyIds.length === 0}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[color:var(--color-brand-600)] px-3 text-sm font-medium text-[color:var(--color-foreground-onbrand)] transition-colors duration-150 ease-out hover:bg-[color:var(--color-brand-700)] disabled:opacity-50"
-          >
-            {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Save className="size-4" aria-hidden />}
-            Enregistrer{dirtyIds.length ? ` (${dirtyIds.length})` : ""}
-          </button>
         </div>
       </div>
 
-      <datalist id="bus-zones">
-        {zones.map((z) => (
-          <option key={z} value={z} />
-        ))}
-      </datalist>
-
-      {/* Table — AS (aller) and RS (retour) are independent: own bus, own zone.
-          Bounded height + sticky header keep BOTH scrollbars in view. */}
+      {/* Table */}
       <div className="max-h-[68vh] overflow-auto rounded-lg border border-[color:var(--color-border-subtle)]">
-        <table className="w-full min-w-[1640px] text-sm">
+        <table className="w-full min-w-[1980px] text-sm">
           <thead>
             <tr className="text-xs uppercase tracking-wider text-[color:var(--color-foreground-subtle)] [&>th]:sticky [&>th]:top-0 [&>th]:z-10 [&>th]:h-8 [&>th]:border-b [&>th]:border-[color:var(--color-border-subtle)] [&>th]:bg-[color:var(--color-surface-raised)]">
               <th className="px-3" colSpan={2} />
-              <th className="border-s border-[color:var(--color-border-subtle)] px-3 text-start font-semibold" colSpan={4}>
+              <th className="border-s border-[color:var(--color-border-subtle)] px-3 text-start font-semibold" colSpan={5}>
                 <span className="inline-flex items-center gap-1"><Sunrise className="size-3.5" aria-hidden /> AS — Aller (matin)</span>
               </th>
-              <th className="border-s border-[color:var(--color-border-subtle)] px-3 text-start font-semibold" colSpan={4}>
+              <th className="border-s border-[color:var(--color-border-subtle)] px-3 text-start font-semibold" colSpan={5}>
                 <span className="inline-flex items-center gap-1"><Sunset className="size-3.5" aria-hidden /> RS — Retour (soir)</span>
               </th>
-              <th className="border-s border-[color:var(--color-border-subtle)] px-3 text-start font-semibold" colSpan={3}>
-                Facturation
+              <th className="border-s border-[color:var(--color-border-subtle)] px-3 text-start font-semibold" colSpan={5}>
+                Contacts & facturation
               </th>
-              <th className="border-s border-[color:var(--color-border-subtle)] px-3" />
+              <th className="border-s border-[color:var(--color-border-subtle)] px-3" colSpan={2} />
             </tr>
             <tr className="text-start text-xs uppercase tracking-wider text-[color:var(--color-foreground-subtle)] [&>th]:sticky [&>th]:top-8 [&>th]:z-10 [&>th]:border-b [&>th]:border-[color:var(--color-border-subtle)] [&>th]:bg-[color:var(--color-surface-raised)]">
               <SortTh label="Élève" k="name" />
               <SortTh label="Classe" k="classe" />
               <SortTh label="AS" k="as" className="border-s border-[color:var(--color-border-subtle)]" />
               <SortTh label="Bus N°" k="bus_matin" />
+              <th className="px-3 py-2 text-start font-semibold">Zone</th>
               <SortTh label="Quartier" k="zone_matin" />
               <th className="px-3 py-2 text-start font-semibold">Station</th>
               <SortTh label="RS" k="rs" className="border-s border-[color:var(--color-border-subtle)]" />
               <SortTh label="Bus N°" k="bus_soir" />
+              <th className="px-3 py-2 text-start font-semibold">Zone</th>
               <SortTh label="Quartier" k="zone_soir" />
               <th className="px-3 py-2 text-start font-semibold">Station</th>
               <th className="border-s border-[color:var(--color-border-subtle)] px-3 py-2 text-start font-semibold">Tel</th>
+              <th className="px-3 py-2 text-start font-semibold">Emails</th>
               <th className="px-3 py-2 text-start font-semibold">Montant</th>
-              <th className="px-3 py-2 text-start font-semibold">Payé</th>
+              <th className="px-3 py-2 text-start font-semibold">Remise</th>
+              <th className="px-3 py-2 text-start font-semibold">Net</th>
               <th className="border-s border-[color:var(--color-border-subtle)] px-3 py-2 text-start font-semibold">Remarques</th>
+              <th className="px-3 py-2 text-end font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody>
             {paged.map((r) => {
-              const dirty = dirtyIds.includes(r.id);
-              const e = e0(r.id);
-              const as = e.bus_as === "yes";
-              const rs = e.bus_rs === "yes";
+              const isEditing = editingId === r.id && form;
+              const as = isEditing ? form!.bus_as === "yes" : r.bus_as === "yes";
+              const rs = isEditing ? form!.bus_rs === "yes" : r.bus_rs === "yes";
               return (
                 <tr
                   key={r.id}
                   className={
                     "border-b border-[color:var(--color-border-subtle)] last:border-0 " +
-                    (dirty ? "bg-[color:var(--color-brand-500)]/5" : "")
+                    (isEditing ? "bg-[color:var(--color-brand-500)]/5" : "hover:bg-[color:var(--color-surface-hover)]")
                   }
                 >
                   <td className="px-3 py-1.5">
@@ -514,80 +546,195 @@ export function TransportManager({
                   <td className="whitespace-nowrap px-3 py-1.5 text-[color:var(--color-foreground-muted)]">
                     {r.className || r.level || "—"}
                   </td>
+
+                  {/* ── AS (matin) ── */}
                   <td className="w-12 border-s border-[color:var(--color-border-subtle)] px-3 py-1.5 text-center">
-                    <input
-                      type="checkbox"
-                      checked={as}
-                      aria-label="Aller (AS)"
-                      onChange={(ev) => set(r.id, "bus_as", ev.target.checked ? "yes" : "")}
-                      className="size-4 rounded border-[color:var(--color-border)] accent-[color:var(--color-brand-600)]"
-                    />
+                    {isEditing ? (
+                      <input
+                        type="checkbox"
+                        checked={as}
+                        aria-label="Aller (AS)"
+                        onChange={(ev) => set("bus_as", ev.target.checked ? "yes" : "")}
+                        className="size-4 rounded border-[color:var(--color-border)] accent-[color:var(--color-brand-600)]"
+                      />
+                    ) : as ? (
+                      <Check className="mx-auto size-4 text-[color:var(--color-brand-600)]" aria-label="Oui" />
+                    ) : (
+                      <span className="text-[color:var(--color-foreground-subtle)]">—</span>
+                    )}
                   </td>
-                  <td className="w-20 px-2 py-1.5">
-                    {as ? (
-                      <Input value={e.bus_car_matin} placeholder="—" onChange={(ev) => set(r.id, "bus_car_matin", ev.target.value)} className="h-8" />
-                    ) : null}
-                  </td>
-                  <td className="w-36 px-2 py-1.5">
-                    {as ? (
-                      <Input value={e.bus_zone_matin} placeholder="Quartier" list="bus-zones" onChange={(ev) => set(r.id, "bus_zone_matin", ev.target.value)} className="h-8" />
-                    ) : null}
-                  </td>
-                  <td className="w-40 px-2 py-1.5">
-                    {as ? (
-                      <Input value={e.bus_station_matin} placeholder="Station" onChange={(ev) => set(r.id, "bus_station_matin", ev.target.value)} className="h-8" />
-                    ) : null}
-                  </td>
+                  {isEditing && as ? (
+                    <>
+                      <td className="w-16 px-2 py-1.5">
+                        <Input value={form!.bus_car_matin} placeholder="—" onChange={(ev) => set("bus_car_matin", ev.target.value)} className="h-8" />
+                      </td>
+                      <td className="w-20 px-2 py-1.5"><ZoneSelect k="bus_zoneno_matin" /></td>
+                      <td className="w-40 px-2 py-1.5"><QuartierSelect k="bus_zone_matin" /></td>
+                      <td className="w-40 px-2 py-1.5">
+                        <Input value={form!.bus_station_matin} placeholder="Station" onChange={(ev) => set("bus_station_matin", ev.target.value)} className="h-8" />
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="whitespace-nowrap px-3 py-1.5 tabular-nums text-[color:var(--color-foreground)]">
+                        {as && r.bus_car_matin ? r.bus_car_matin : "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-1.5 tabular-nums text-[color:var(--color-foreground-muted)]">
+                        {as && r.bus_zoneno_matin ? r.bus_zoneno_matin : "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-[color:var(--color-foreground-muted)]">
+                        {as && r.bus_zone_matin ? r.bus_zone_matin : "—"}
+                      </td>
+                      <td className="max-w-[180px] truncate px-3 py-1.5 text-xs text-[color:var(--color-foreground-muted)]" title={r.bus_station_matin}>
+                        {as && r.bus_station_matin ? r.bus_station_matin : "—"}
+                      </td>
+                    </>
+                  )}
+
+                  {/* ── RS (soir) ── */}
                   <td className="w-12 border-s border-[color:var(--color-border-subtle)] px-3 py-1.5 text-center">
-                    <input
-                      type="checkbox"
-                      checked={rs}
-                      aria-label="Retour (RS)"
-                      onChange={(ev) => set(r.id, "bus_rs", ev.target.checked ? "yes" : "")}
-                      className="size-4 rounded border-[color:var(--color-border)] accent-[color:var(--color-brand-600)]"
-                    />
+                    {isEditing ? (
+                      <input
+                        type="checkbox"
+                        checked={rs}
+                        aria-label="Retour (RS)"
+                        onChange={(ev) => set("bus_rs", ev.target.checked ? "yes" : "")}
+                        className="size-4 rounded border-[color:var(--color-border)] accent-[color:var(--color-brand-600)]"
+                      />
+                    ) : rs ? (
+                      <Check className="mx-auto size-4 text-[color:var(--color-brand-600)]" aria-label="Oui" />
+                    ) : (
+                      <span className="text-[color:var(--color-foreground-subtle)]">—</span>
+                    )}
                   </td>
-                  <td className="w-20 px-2 py-1.5">
-                    {rs ? (
-                      <Input value={e.bus_car_soir} placeholder="—" onChange={(ev) => set(r.id, "bus_car_soir", ev.target.value)} className="h-8" />
-                    ) : null}
-                  </td>
-                  <td className="w-36 px-2 py-1.5">
-                    {rs ? (
-                      <Input value={e.bus_zone_soir} placeholder="Quartier" list="bus-zones" onChange={(ev) => set(r.id, "bus_zone_soir", ev.target.value)} className="h-8" />
-                    ) : null}
-                  </td>
-                  <td className="w-40 px-2 py-1.5">
-                    {rs ? (
-                      <Input value={e.bus_station_soir} placeholder="Station" onChange={(ev) => set(r.id, "bus_station_soir", ev.target.value)} className="h-8" />
-                    ) : null}
-                  </td>
+                  {isEditing && rs ? (
+                    <>
+                      <td className="w-16 px-2 py-1.5">
+                        <Input value={form!.bus_car_soir} placeholder="—" onChange={(ev) => set("bus_car_soir", ev.target.value)} className="h-8" />
+                      </td>
+                      <td className="w-20 px-2 py-1.5"><ZoneSelect k="bus_zoneno_soir" /></td>
+                      <td className="w-40 px-2 py-1.5"><QuartierSelect k="bus_zone_soir" /></td>
+                      <td className="w-40 px-2 py-1.5">
+                        <Input value={form!.bus_station_soir} placeholder="Station" onChange={(ev) => set("bus_station_soir", ev.target.value)} className="h-8" />
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="whitespace-nowrap px-3 py-1.5 tabular-nums text-[color:var(--color-foreground)]">
+                        {rs && r.bus_car_soir ? r.bus_car_soir : "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-1.5 tabular-nums text-[color:var(--color-foreground-muted)]">
+                        {rs && r.bus_zoneno_soir ? r.bus_zoneno_soir : "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-[color:var(--color-foreground-muted)]">
+                        {rs && r.bus_zone_soir ? r.bus_zone_soir : "—"}
+                      </td>
+                      <td className="max-w-[180px] truncate px-3 py-1.5 text-xs text-[color:var(--color-foreground-muted)]" title={r.bus_station_soir}>
+                        {rs && r.bus_station_soir ? r.bus_station_soir : "—"}
+                      </td>
+                    </>
+                  )}
+
+                  {/* ── Contacts & facturation (read-only) ── */}
                   <td className="w-36 whitespace-nowrap border-s border-[color:var(--color-border-subtle)] px-3 py-1.5 text-xs text-[color:var(--color-foreground-muted)]">
                     {r.bus_tel || "—"}
+                  </td>
+                  <td className="w-52 px-3 py-1.5 text-xs leading-tight text-[color:var(--color-foreground-muted)]">
+                    {r.email_pere || r.email_mere ? (
+                      <>
+                        {r.email_pere ? (
+                          <a href={`mailto:${r.email_pere}`} className="block truncate hover:text-[color:var(--color-brand-600)] hover:underline">
+                            {r.email_pere}
+                          </a>
+                        ) : null}
+                        {r.email_mere && r.email_mere !== r.email_pere ? (
+                          <a href={`mailto:${r.email_mere}`} className="block truncate hover:text-[color:var(--color-brand-600)] hover:underline">
+                            {r.email_mere}
+                          </a>
+                        ) : null}
+                      </>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="w-20 px-3 py-1.5 text-end tabular-nums text-[color:var(--color-foreground-muted)]">
                     {r.bus_montant || "—"}
                   </td>
                   <td
                     className={
-                      "w-20 px-3 py-1.5 text-end tabular-nums " +
-                      (r.bus_montant &&
-                      Number(r.bus_paye || 0) < Number(r.bus_montant || 0)
-                        ? "font-semibold text-red-600 dark:text-red-400"
-                        : "text-[color:var(--color-foreground-muted)]")
+                      "w-16 px-3 py-1.5 text-end tabular-nums " +
+                      (Number(r.bus_remise) > 0
+                        ? "font-semibold text-amber-600 dark:text-amber-400"
+                        : "text-[color:var(--color-foreground-subtle)]")
                     }
                   >
-                    {r.bus_paye || "—"}
+                    {Number(r.bus_remise) > 0 ? `${r.bus_remise}%` : "—"}
                   </td>
-                  <td className="w-40 border-s border-[color:var(--color-border-subtle)] px-2 py-1.5">
-                    <Input value={e.bus_remarques} placeholder="—" onChange={(ev) => set(r.id, "bus_remarques", ev.target.value)} className="h-8" />
+                  <td className="w-20 px-3 py-1.5 text-end tabular-nums font-medium text-[color:var(--color-foreground)]">
+                    {r.bus_net || r.bus_montant || "—"}
+                  </td>
+
+                  {/* ── Remarques + actions ── */}
+                  <td className="w-44 border-s border-[color:var(--color-border-subtle)] px-2 py-1.5">
+                    {isEditing ? (
+                      <Input value={form!.bus_remarques} placeholder="—" onChange={(ev) => set("bus_remarques", ev.target.value)} className="h-8" />
+                    ) : (
+                      <span className="block max-w-[170px] truncate text-xs text-[color:var(--color-foreground-muted)]" title={r.bus_remarques}>
+                        {r.bus_remarques || "—"}
+                      </span>
+                    )}
+                  </td>
+                  <td className="w-24 px-2 py-1.5 text-end">
+                    {isEditing ? (
+                      <div className="inline-flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          disabled={pending}
+                          aria-label="Annuler"
+                          className="inline-flex size-7 items-center justify-center rounded text-[color:var(--color-foreground-muted)] transition-colors duration-150 ease-out hover:bg-[color:var(--color-surface-hover)] hover:text-[color:var(--color-foreground)]"
+                        >
+                          <X className="size-4" aria-hidden />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={saveRow}
+                          disabled={pending}
+                          className="inline-flex h-7 items-center gap-1 rounded bg-[color:var(--color-brand-600)] px-2 text-xs font-medium text-[color:var(--color-foreground-onbrand)] transition-colors duration-150 ease-out hover:bg-[color:var(--color-brand-700)] disabled:opacity-60"
+                        >
+                          {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Check className="size-3.5" aria-hidden />}
+                          OK
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(r)}
+                          disabled={pending}
+                          aria-label={`Modifier ${r.name}`}
+                          className="inline-flex size-7 items-center justify-center rounded text-[color:var(--color-foreground-subtle)] transition-colors duration-150 ease-out hover:bg-[color:var(--color-surface-hover)] hover:text-[color:var(--color-foreground)]"
+                        >
+                          <Pencil className="size-3.5" aria-hidden />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteRow(r)}
+                          disabled={pending}
+                          aria-label={`Supprimer l'affectation de ${r.name}`}
+                          className="inline-flex size-7 items-center justify-center rounded text-[color:var(--color-foreground-subtle)] transition-colors duration-150 ease-out hover:bg-[color:var(--color-surface-hover)] hover:text-red-600 dark:hover:text-red-400"
+                        >
+                          <Trash2 className="size-3.5" aria-hidden />
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               );
             })}
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={14} className="px-3 py-8 text-center text-sm text-[color:var(--color-foreground-subtle)]">
+                <td colSpan={19} className="px-3 py-8 text-center text-sm text-[color:var(--color-foreground-subtle)]">
                   Aucun élève ne correspond.
                 </td>
               </tr>
@@ -596,27 +743,18 @@ export function TransportManager({
         </table>
       </div>
 
-      {/* Pager — same look as the students / parents tables (50 per page).
-          Bulk-save still covers dirty rows on every page. */}
+      {/* Pager */}
       {filtered.length > 0 ? (
         <div className="flex items-center justify-between gap-3 pt-1">
           <p className="text-xs tabular-nums text-[color:var(--color-foreground-muted)]">
             {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(filtered.length, safePage * PAGE_SIZE)} sur {filtered.length}
           </p>
           <div className="flex items-center gap-2">
-            <PageBtn
-              disabled={safePage <= 1}
-              onClick={() => setPage(safePage - 1)}
-              label="Précédent"
-            />
+            <PageBtn disabled={safePage <= 1} onClick={() => setPage(safePage - 1)} label="Précédent" />
             <span className="text-xs tabular-nums text-[color:var(--color-foreground-muted)]">
               Page {safePage} / {pageCount}
             </span>
-            <PageBtn
-              disabled={safePage >= pageCount}
-              onClick={() => setPage(safePage + 1)}
-              label="Suivant"
-            />
+            <PageBtn disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)} label="Suivant" />
           </div>
         </div>
       ) : null}

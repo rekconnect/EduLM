@@ -1,0 +1,278 @@
+Cpt_ReglementTarif  rows=0
+Cpt_ReglementTarif_Tmp  rows=52
+   cols: ID, Id_College, Annee, No_Reglement, Id_Tarif, Tarif, Compte, Libelle, Id_User, Net, Paye, Montant, Qui, Quand, Quoi, Id_Eleve, Eleve, DeviseFacture, InvoiceNb, Restant, Id_Versement
+    {"ID":"2353","Id_College":null,"Annee":null,"No_Reglement":null,"Id_Tarif":null,"Tarif":null,"Compte":null,"Libelle":null,"Id_User":null,"Net":null,"Paye":null,"Montant":
+    {"ID":"7773","Id_College":null,"Annee":null,"No_Reglement":null,"Id_Tarif":null,"Tarif":null,"Compte":null,"Libelle":null,"Id_User":null,"Net":null,"Paye":null,"Montant":
+    {"ID":"43948","Id_College":108,"Annee":2026,"No_Reglement":"","Id_Tarif":19149,"Tarif":"Contribution","Compte":"4111.0017 USD","Libelle":"","Id_User":18,"Net":5900,"Paye"
+    {"ID":"43949","Id_College":108,"Annee":2026,"No_Reglement":"","Id_Tarif":19149,"Tarif":"Contribution","Compte":"4111.0017 USD","Libelle":"","Id_User":18,"Net":5700,"Paye"
+    {"ID":"43950","Id_College":108,"Annee":2026,"No_Reglement":"","Id_Tarif":19149,"Tarif":"Contribution","Compte":"4111.0017 USD","Libelle":"","Id_User":18,"Net":5130,"Paye"
+    {"ID":"43951","Id_College":108,"Annee":2026,"No_Reglement":"","Id_Tarif":19154,"Tarif":"Activités Periscolaires","Compte":"4111.0018 USD","Libelle":"","Id_User":18,"Net":
+    {"ID":"43952","Id_College":108,"Annee":2026,"No_Reglement":"","Id_Tarif":19154,"Tarif":"Activités Periscolaires","Compte":"4111.0018 USD","Libelle":"","Id_User":18,"Net":
+    {"ID":"43953","Id_College":108,"Annee":2026,"No_Reglement":"","Id_Tarif":19155,"Tarif":"Assurance Protection Familles","Compte":"4111.0019 USD","Libelle":"","Id_User":18,
+    {"ID":"43954","Id_College":108,"Annee":2026,"No_Reglement":"","Id_Tarif":19155,"Tarif":"Assurance Protection Familles","Compte":"4111.0019 USD","Libelle":"","Id_User":18,
+    {"ID":"43955","Id_College":108,"Annee":2026,"No_Reglement":"","Id_Tarif":19155,"Tarif":"Assurance Protection Familles","Compte":"4111.0019 USD","Libelle":"","Id_User":18,
+    {"ID":"47533","Id_College":108,"Annee":2025,"No_Reglement":"RC25000908","Id_Tarif":13129,"Tarif":"Transport","Compte":"4111.0005 USD","Libelle":"","Id_User":-1,"Net":850,
+    {"ID":"47534","Id_College":108,"Annee":2025,"No_Reglement":"RC25000908","Id_Tarif":13129,"Tarif":"Transport","Compte":"4111.0005 USD","Libelle":"","Id_User":-1,"Net":850,
+    {"ID":"47535","Id_College":108,"Annee":2025,"No_Reglement":"RC25000908","Id_Tarif":19149,"Tarif":"Contribution","Compte":"4111.0017 USD","Libelle":"","Id_User":-1,"Net":3
+    {"ID":"47536","Id_College":108,"Annee":2025,"No_Reglement":"RC25000908","Id_Tarif":19149,"Tarif":"Contribution","Compte":"4111.0017 USD","Libelle":"","Id_User":-1,"Net":3
+    {"ID":"47537","Id_College":108,"Annee":2026,"No_Reglement":"RC25000908","Id_Tarif":13129,"Tarif":"Transport","Compte":"4731.0005 USD","Libelle":"","Id_User":-1,"Net":850,
+    {"ID":"47538","Id_College":108,"Annee":2026,"No_Reglement":"RC25000908","Id_Tarif":13129,"Tarif":"Transport","Compte":"4731.0005 USD","Libelle":"","Id_User":-1,"Net":850,
+    {"ID":"47539","Id_College":108,"Annee":2026,"No_Reglement":"RC25000908","Id_Tarif":19149,"Tarif":"Contribution","Compte":"4731.0017 USD","Libelle":"","Id_User":-1,"Net":3
+    {"ID":"47540","Id_College":108,"Annee":2026,"No_Reglement":"RC25000908","Id_Tarif":19149,"Tarif":"Contribution","Compte":"4731.0017 USD","Libelle":"","Id_User":-1,"Net":4
+    {"ID":"47541","Id_College":108,"Annee":2026,"No_Reglement":"RC25000908","Id_Tarif":19150,"Tarif":"Réinscription","Compte":"4731.0017 USD","Libelle":"","Id_User":-1,"Net":
+    {"ID":"47542","Id_College":108,"Annee":2026,"No_Reglement":"RC25000908","Id_Tarif":19150,"Tarif":"Réinscription","Compte":"4731.0017 USD","Libelle":"","Id_User":-1,"Net":
+    {"ID":"47543","Id_College":108,"Annee":2026,"No_Reglement":"RC25000908","Id_Tarif":19155,"Tarif":"Assurance Protection Familles","Compte":"4731.0019 USD","Libelle":"","Id
+    {"ID":"47544","Id_College":108,"Annee":2026,"No_Reglement":"RC25000908","Id_Tarif":19155,"Tarif":"Assurance Protection Familles","Compte":"4731.0019 USD","Libelle":"","Id
+    {"ID":"55268","Id_College":108,"Annee":2026,"No_Reglement":"","Id_Tarif":13129,"Tarif":"Transport","Compte":"4111.0005 USD","Libelle":"","Id_User":17,"Net":1150,"Paye":77
+    {"ID":"55269","Id_College":108,"Annee":2026,"No_Reglement":"","Id_Tarif":13129,"Tarif":"Transport","Compte":"4111.0005 USD","Libelle":"","Id_User":17,"Net":1150,"Paye":77
+    {"ID":"55270","Id_College":108,"Annee":2026,"No_Reglement":"","Id_Tarif":13129,"Tarif":"Transport","Compte":"4111.0005 USD","Libelle":"","Id_User":17,"Net":1150,"Paye":38
+    {"ID":"55271","Id_College":108,"Annee":2026,"No_Reglement":"","Id_Tarif":15131,"Tarif":"Collation","Compte":"4111.0008 USD","Libelle":"","Id_User":17,"Net":360,"Paye":120
+    {"ID":"55272","Id_College":108,"Annee":2026,"No_Reglement":"","Id_Tarif":19149,"Tarif":"Contribution","Compte":"4111.0017 USD","Libelle":"","Id_User":17,"Net":5700,"Paye"
+    {"ID":"55273","Id_College":108,"Annee":2026,"No_Reglement":"","Id_Tarif":19149,"Tarif":"Contribution","Compte":"4111.0017 USD","Libelle":"","Id_User":17,"Net":5700,"Paye"
+    {"ID":"55274","Id_College":108,"Annee":2026,"No_Reglement":"","Id_Tarif":19149,"Tarif":"Contribution","Compte":"4111.0017 USD","Libelle":"","Id_User":17,"Net":4770,"Paye"
+    {"ID":"55275","Id_College":108,"Annee":2026,"No_Reglement":"","Id_Tarif":19150,"Tarif":"Réinscription","Compte":"4111.0017 USD","Libelle":"","Id_User":17,"Net":1800,"Paye
+Fct_Activite_Tarif  rows=0
+Fct_Compte_Tarif  rows=69
+   cols: ID, Id_Tarif, Id_College, Id_Versement, Compte, Compte_Produit, Compte_Escompte
+    {"ID":"127","Id_Tarif":4004,"Id_College":108,"Id_Versement":42,"Compte":"","Compte_Produit":null,"Compte_Escompte":null}
+    {"ID":"128","Id_Tarif":4005,"Id_College":108,"Id_Versement":42,"Compte":"","Compte_Produit":null,"Compte_Escompte":null}
+    {"ID":"129","Id_Tarif":4006,"Id_College":108,"Id_Versement":42,"Compte":"","Compte_Produit":null,"Compte_Escompte":null}
+    {"ID":"130","Id_Tarif":4007,"Id_College":108,"Id_Versement":42,"Compte":"","Compte_Produit":null,"Compte_Escompte":null}
+    {"ID":"131","Id_Tarif":13125,"Id_College":108,"Id_Versement":42,"Compte":"","Compte_Produit":null,"Compte_Escompte":null}
+    {"ID":"132","Id_Tarif":13129,"Id_College":108,"Id_Versement":42,"Compte":"","Compte_Produit":null,"Compte_Escompte":null}
+Fct_CompteTarifClasse  rows=0
+Fct_Eleve_Tarif  rows=102387
+   cols: ID, Id_Eleve, Id_College, Id_Tarif_Classe, ID_Entete, Perc, Montant, Net, Type_Famille, Qui, Quand, Quoi, Ou, Id_Eleve_Station, ID_DiscountedBy, Detail, Montant_Fixe, Flag_Desistement
+    {"ID":"618657","Id_Eleve":502,"Id_College":108,"Id_Tarif_Classe":61,"ID_Entete":388,"Perc":0,"Montant":450000,"Net":225000,"Type_Famille":1,"Qui":"LM","Quand":"2018-07-31
+    {"ID":"618658","Id_Eleve":267,"Id_College":108,"Id_Tarif_Classe":14,"ID_Entete":390,"Perc":0,"Montant":750000,"Net":750000,"Type_Famille":1,"Qui":"LM","Quand":"2018-07-31
+    {"ID":"618659","Id_Eleve":267,"Id_College":108,"Id_Tarif_Classe":40,"ID_Entete":390,"Perc":0,"Montant":1440000,"Net":1440000,"Type_Famille":1,"Qui":"LM","Quand":"2018-07-
+    {"ID":"618660","Id_Eleve":267,"Id_College":108,"Id_Tarif_Classe":61,"ID_Entete":390,"Perc":0,"Montant":450000,"Net":450000,"Type_Famille":1,"Qui":"LM","Quand":"2018-07-31
+    {"ID":"618661","Id_Eleve":691,"Id_College":108,"Id_Tarif_Classe":30,"ID_Entete":420,"Perc":0,"Montant":2450000,"Net":2450000,"Type_Famille":1,"Qui":"LM","Quand":"2018-07-
+    {"ID":"618662","Id_Eleve":877,"Id_College":108,"Id_Tarif_Classe":16,"ID_Entete":427,"Perc":0,"Montant":350000,"Net":350000,"Type_Famille":1,"Qui":"LM","Quand":"2018-07-31
+Fct_SoucheTarif_Tmp  rows=0
+Fct_Tarif_Classe  rows=887
+   cols: ID, Id_College, Code_Classe, Id_Tarif, Id_versement, Montant, MontantODS, MontantInterne, Qui, Quand, Quoi, Ou, TypeDistribution
+    {"ID":4,"Id_College":108,"Code_Classe":"--","Id_Tarif":16123,"Id_versement":4,"Montant":0,"MontantODS":0,"MontantInterne":0,"Qui":"LM","Quand":"2018-07-31T13:41:52.037Z",
+    {"ID":5,"Id_College":108,"Code_Classe":"--","Id_Tarif":16123,"Id_versement":6,"Montant":0,"MontantODS":0,"MontantInterne":0,"Qui":"LM","Quand":"2018-07-31T13:41:52.037Z",
+    {"ID":6,"Id_College":108,"Code_Classe":"--","Id_Tarif":17121,"Id_versement":1,"Montant":0,"MontantODS":0,"MontantInterne":0,"Qui":"LM","Quand":"2018-07-31T13:41:52.037Z",
+    {"ID":7,"Id_College":108,"Code_Classe":"--","Id_Tarif":17121,"Id_versement":3,"Montant":0,"MontantODS":0,"MontantInterne":0,"Qui":"LM","Quand":"2018-07-31T13:41:52.037Z",
+    {"ID":8,"Id_College":108,"Code_Classe":"--","Id_Tarif":17121,"Id_versement":2,"Montant":0,"MontantODS":0,"MontantInterne":0,"Qui":"LM","Quand":"2018-07-31T13:41:52.037Z",
+    {"ID":9,"Id_College":108,"Code_Classe":"--","Id_Tarif":16123,"Id_versement":5,"Montant":0,"MontantODS":0,"MontantInterne":0,"Qui":"LM","Quand":"2018-07-31T13:41:52.037Z",
+Fct_Tarif_Classe_Annee  rows=0
+Fct_Tarif_Classe_NbEleve  rows=0
+Fct_Tarif_Repartition  rows=0
+Fct_TarifABCD  rows=0
+Fct_TarifCompte  rows=26
+   cols: Id_Tarif, Id_College, CompteSolde, CompteCourant, CompteAnterieur, CompteProduit, CompteEscompte
+    {"Id_Tarif":4004,"Id_College":108,"CompteSolde":"4112.0013 LBP","CompteCourant":"4111.0013 LBP","CompteAnterieur":"4731.0013 LBP","CompteProduit":"7111.0013 LBP","CompteE
+    {"Id_Tarif":4005,"Id_College":108,"CompteSolde":"4112.0012 LBP","CompteCourant":"4111.0012 LBP","CompteAnterieur":"4731.0012 LBP","CompteProduit":"7111.0012 LBP","CompteE
+    {"Id_Tarif":4006,"Id_College":108,"CompteSolde":"4112.0011 LBP","CompteCourant":"4111.0011 LBP","CompteAnterieur":"4731.0011 LBP","CompteProduit":"7111.0011 LBP","CompteE
+    {"Id_Tarif":4007,"Id_College":108,"CompteSolde":"4112.0010 LBP","CompteCourant":"4111.0010 LBP","CompteAnterieur":"4731.0010 LBP","CompteProduit":"7111.0010 LBP","CompteE
+    {"Id_Tarif":13125,"Id_College":108,"CompteSolde":"4112.0004 LBP","CompteCourant":"4111.0004 LBP","CompteAnterieur":"4731.0004 LBP","CompteProduit":"7111.0004 LBP","Compte
+    {"Id_Tarif":13129,"Id_College":108,"CompteSolde":"4112.0005 LBP","CompteCourant":"4111.0005 LBP","CompteAnterieur":"4731.0005 LBP","CompteProduit":"7111.0005 LBP","Compte
+    {"Id_Tarif":14128,"Id_College":108,"CompteSolde":"4112.0002 LBP","CompteCourant":"4111.0002 LBP","CompteAnterieur":"4731.0002 LBP","CompteProduit":"7111.0002 LBP","Compte
+    {"Id_Tarif":15130,"Id_College":108,"CompteSolde":"4112.0009 LBP","CompteCourant":"4111.0009 LBP","CompteAnterieur":"4731.0009 LBP","CompteProduit":"7111.0009 LBP","Compte
+    {"Id_Tarif":15131,"Id_College":108,"CompteSolde":"4112.0008 LBP","CompteCourant":"4111.0008 LBP","CompteAnterieur":"4731.0008 LBP","CompteProduit":"7111.0008 LBP","Compte
+    {"Id_Tarif":15132,"Id_College":108,"CompteSolde":"4112.0007 LBP","CompteCourant":"4111.0007 LBP","CompteAnterieur":"4731.0007 LBP","CompteProduit":"7111.0007 LBP","Compte
+    {"Id_Tarif":15133,"Id_College":108,"CompteSolde":"4112.0004 LBP","CompteCourant":"4111.0004 LBP","CompteAnterieur":"4731.0004 LBP","CompteProduit":"7111.0004 LBP","Compte
+    {"Id_Tarif":15134,"Id_College":108,"CompteSolde":"4112.0004 LBP","CompteCourant":"4111.0004 LBP","CompteAnterieur":"4731.0004 LBP","CompteProduit":"7111.0004 LBP","Compte
+    {"Id_Tarif":15135,"Id_College":108,"CompteSolde":"4112.0004 LBP","CompteCourant":"4111.0004 LBP","CompteAnterieur":"4731.0004 LBP","CompteProduit":"7111.0004 LBP","Compte
+    {"Id_Tarif":16123,"Id_College":108,"CompteSolde":"4112.0001 LBP","CompteCourant":"4111.0001 LBP","CompteAnterieur":"4731.0001 LBP","CompteProduit":"7111.0001 LBP","Compte
+    {"Id_Tarif":16124,"Id_College":108,"CompteSolde":"4112.0003 LBP","CompteCourant":"4111.0003 LBP","CompteAnterieur":"4731.0003 LBP","CompteProduit":"7111.0003 LBP","Compte
+    {"Id_Tarif":16140,"Id_College":108,"CompteSolde":"4112.0006 LBP","CompteCourant":"4111.0006 LBP","CompteAnterieur":"4731.0006 LBP","CompteProduit":"7111.0006 LBP","Compte
+    {"Id_Tarif":17121,"Id_College":108,"CompteSolde":"4112.0002 LBP","CompteCourant":"4111.0002 LBP","CompteAnterieur":"4731.0002 LBP","CompteProduit":"7111.0002 LBP","Compte
+    {"Id_Tarif":17144,"Id_College":108,"CompteSolde":"4112.0004 LBP","CompteCourant":"4111.0004 LBP","CompteAnterieur":"4731.0004 LBP","CompteProduit":"7111.0004 LBP","Compte
+    {"Id_Tarif":19145,"Id_College":108,"CompteSolde":"4112.0004 LBP","CompteCourant":"4111.0004 LBP","CompteAnterieur":"4731.0004 LBP","CompteProduit":"7191.0003 LBP","Compte
+    {"Id_Tarif":19146,"Id_College":108,"CompteSolde":"4112.0004 LBP","CompteCourant":"4111.0004 LBP","CompteAnterieur":"4731.0004 LBP","CompteProduit":"7111.0004 LBP","Compte
+    {"Id_Tarif":19148,"Id_College":108,"CompteSolde":"4112.0015 LBP","CompteCourant":"4116.0067 LBP","CompteAnterieur":"4731.0014 LBP","CompteProduit":"7112.0005 LBP","Compte
+    {"Id_Tarif":19149,"Id_College":108,"CompteSolde":"4112.0017 USD","CompteCourant":"4111.0017 USD","CompteAnterieur":"4731.0017 USD","CompteProduit":"4752.0001 USD","Compte
+    {"Id_Tarif":19150,"Id_College":108,"CompteSolde":"4112.0017 USD","CompteCourant":"4111.0017 USD","CompteAnterieur":"4731.0017 USD","CompteProduit":"4752.0001 USD","Compte
+    {"Id_Tarif":19151,"Id_College":108,"CompteSolde":"4112.0017 USD","CompteCourant":"4111.0017 USD","CompteAnterieur":"4731.0017 USD","CompteProduit":"4752.0001 USD","Compte
+    {"Id_Tarif":19154,"Id_College":108,"CompteSolde":"4112.0018 USD","CompteCourant":"4111.0018 USD","CompteAnterieur":"4731.0018 USD","CompteProduit":"7112.0009 USD","Compte
+    {"Id_Tarif":19155,"Id_College":108,"CompteSolde":"4112.0019 USD","CompteCourant":"4111.0019 USD","CompteAnterieur":"4731.0019 USD","CompteProduit":"7112.0010 USD","Compte
+Fct_TmpTarifDesc  rows=0
+Fct_Type_Tarif  rows=29
+   cols: ID, Id_College, Code, description, label, Compte, Rank, Qui, Quand, Quoi, Ou, Id_TarifGroup, ShowSolde, Id_Type_Souche, BalanceSolde, IsEditable, Centre_Cout, CompteEscompte
+    {"ID":4004,"Id_College":108,"Code":"TRE","description":"Treasury fee","label":"Treasury fee","Compte":"","Rank":13,"Qui":"LM","Quand":"2018-07-31T15:58:20.010Z","Quoi":"M
+    {"ID":4005,"Id_College":108,"Code":"PAR","description":"Parents' fund contribution","label":"Parents' fund contribution","Compte":"","Rank":12,"Qui":"LM","Quand":"2018-07
+    {"ID":4006,"Id_College":108,"Code":"STA","description":"Stamp fee","label":"Stamp fee","Compte":"","Rank":11,"Qui":"LM","Quand":"2018-07-31T15:58:20.010Z","Quoi":"MIG","O
+    {"ID":4007,"Id_College":108,"Code":"PAR","description":"Parents' contribution","label":"Parents' contribution","Compte":"","Rank":10,"Qui":"LM","Quand":"2018-07-31T15:58:
+    {"ID":13125,"Id_College":108,"Code":"SCO","description":"Scolarité","label":"Scolarité","Compte":"","Rank":4,"Qui":"LM","Quand":"2018-07-31T15:58:20.010Z","Quoi":"MIG","O
+    {"ID":13129,"Id_College":108,"Code":"TRANS","description":"Transport","label":"Transport","Compte":null,"Rank":5,"Qui":"LM","Quand":"2018-07-31T15:58:20.010Z","Quoi":"MIG
+    {"ID":14128,"Id_College":108,"Code":"ACO","description":"Acompte réinscription","label":"Acompte réinscription","Compte":null,"Rank":2,"Qui":"LM","Quand":"2018-07-31T15:5
+    {"ID":15130,"Id_College":108,"Code":"CAI","description":"Caisse de solidarité","label":"Caisse de solidarité","Compte":"","Rank":9,"Qui":"LM","Quand":"2018-07-31T15:58:20
+    {"ID":15131,"Id_College":108,"Code":"COL","description":"Collation","label":"Collation","Compte":"","Rank":8,"Qui":"LM","Quand":"2018-07-31T15:58:20.010Z","Quoi":"MIG","O
+    {"ID":15132,"Id_College":108,"Code":"CAN","description":"Cantine","label":"Cantine","Compte":"","Rank":7,"Qui":"LM","Quand":"2018-07-31T15:58:20.010Z","Quoi":"MIG","Ou":"
+    {"ID":15133,"Id_College":108,"Code":"SOL","description":"Solde reporté","label":"Solde reporté","Compte":null,"Rank":4,"Qui":"LM","Quand":"2018-07-31T15:58:20.010Z","Quoi
+    {"ID":15134,"Id_College":108,"Code":"AUG","description":"Augmentation scolarité","label":"Augmentation scolarité","Compte":null,"Rank":4,"Qui":"LM","Quand":"2018-07-31T15
+    {"ID":15135,"Id_College":108,"Code":"REL","description":"Reliquat scolarité 14-15","label":"Reliquat scolarité 14-15","Compte":null,"Rank":4,"Qui":"LM","Quand":"2018-07-3
+    {"ID":16123,"Id_College":108,"Code":"DRO","description":"Droit ouverture dossier","label":"Droit ouverture dossier","Compte":"","Rank":1,"Qui":"LM","Quand":"2018-07-31T15
+    {"ID":16124,"Id_College":108,"Code":"FOU","description":"Fournitures scolaires","label":"Fournitures scolaires","Compte":"","Rank":3,"Qui":"LM","Quand":"2018-07-31T15:58:
+    {"ID":16140,"Id_College":108,"Code":"COM","description":"Comité des parents","label":"Comité des parents","Compte":"","Rank":6,"Qui":"LM","Quand":"2018-07-31T15:58:20.010
+    {"ID":17121,"Id_College":108,"Code":"FRA","description":"Frais d'inscription","label":"Frais d'inscription","Compte":"","Rank":2,"Qui":"LM","Quand":"2018-07-31T15:58:20.0
+    {"ID":17144,"Id_College":108,"Code":"OPE","description":"Open Balance","label":"Open Balance","Compte":null,"Rank":4,"Qui":"LM","Quand":"2018-07-31T15:58:20.010Z","Quoi":
+    {"ID":19145,"Id_College":108,"Code":"REM","description":"Remboursement Scolarité","label":"Remboursement Scolarité","Compte":null,"Rank":4,"Qui":null,"Quand":null,"Quoi":
+    {"ID":19146,"Id_College":108,"Code":"AVN","description":"Avance Scolarité","label":"Avance Scolarité","Compte":null,"Rank":4,"Qui":null,"Quand":null,"Quoi":null,"Ou":null
+    {"ID":19147,"Id_College":108,"Code":"RE","description":"Réduction Exceptionelle","label":"Réduction Exceptionelle","Compte":null,"Rank":15,"Qui":null,"Quand":null,"Quoi":
+    {"ID":19148,"Id_College":108,"Code":"PRO","description":"Projets Adaptés","label":"Projets Adaptés","Compte":null,"Rank":16,"Qui":null,"Quand":null,"Quoi":null,"Ou":null,
+    {"ID":19149,"Id_College":108,"Code":"CONT","description":"Contribution","label":"Contribution","Compte":null,"Rank":16,"Qui":null,"Quand":null,"Quoi":null,"Ou":null,"Id_T
+    {"ID":19150,"Id_College":108,"Code":"REI","description":"Réinscription","label":"Réinscription","Compte":null,"Rank":17,"Qui":null,"Quand":null,"Quoi":null,"Ou":null,"Id_
+    {"ID":19151,"Id_College":108,"Code":"RRE","description":"Remboursement Réinscription","label":"Remboursement Réinscription","Compte":null,"Rank":18,"Qui":null,"Quand":nul
+    {"ID":19152,"Id_College":108,"Code":"RED","description":"Escompte Familles Contribution","label":"Escompte Familles Contribution","Compte":null,"Rank":9,"Qui":null,"Quand
+    {"ID":19153,"Id_College":108,"Code":"RED","description":"Escompte Familles Scolarité","label":"Escompte Familles Scolarité","Compte":null,"Rank":10,"Qui":null,"Quand":nul
+    {"ID":19154,"Id_College":108,"Code":"APS","description":"Activités Periscolaires","label":"Activités Periscolaires","Compte":null,"Rank":19,"Qui":null,"Quand":null,"Quoi"
+    {"ID":19155,"Id_College":108,"Code":"ASS","description":"Assurance Protection Familles","label":"Assurance Protection Familles","Compte":null,"Rank":20,"Qui":null,"Quand"
+Isc_AttestationByStudent  rows=0
+Isc_AttestationMontant  rows=0
+Isc_AttestationReports  rows=0
+Isc_AttestationReportText  rows=0
+Pers_AddrZone  rows=1663
+   cols: ID, QazaID, AddrZone, AddrZone_FR
+    {"ID":1,"QazaID":1,"AddrZone":"الاشرفية","AddrZone_FR":null}
+    {"ID":2,"QazaID":1,"AddrZone":"الرميل","AddrZone_FR":null}
+    {"ID":3,"QazaID":1,"AddrZone":"المدور","AddrZone_FR":null}
+    {"ID":4,"QazaID":1,"AddrZone":"المرفأ","AddrZone_FR":null}
+    {"ID":5,"QazaID":1,"AddrZone":"الباشورة","AddrZone_FR":null}
+    {"ID":6,"QazaID":1,"AddrZone":"الصيفي","AddrZone_FR":null}
+Pers_AttestationByPerson  rows=0
+Pers_AttestationReports  rows=0
+Trs_Activite  rows=1
+   cols: ID, Id_College, Id_TypeTarif, Activite, Qui, Quand, Quoi, Ou, Ordinaire, ExtraOrdinaire, TarifParZone
+    {"ID":1,"Id_College":108,"Id_TypeTarif":"13129","Activite":"Ordinaire","Qui":"nicole","Quand":"2018-09-04T14:13:58.140Z","Quoi":"INS","Ou":"10039","Ordinaire":true,"Extra
+Trs_Assurance  rows=0
+Trs_Autocar  rows=25
+   cols: ID, Id_College, Numero, Loue, CodeType, capacite, College_a, Qui, Quand, Quoi, Ou, longitude, latitude, LastUpdate, Garde, Centre_Act, Description, VehicleID, LicensePlate, Marque, Modele, Fuel, Places, Cylindre, Couleur, DateAchat, AnneeFabr, Moteur, Chaissis, LimitPerDay
+    {"ID":1,"Id_College":108,"Numero":1,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-09-04T14:11:21.343Z","Quoi":"INS","Ou":"100
+    {"ID":2,"Id_College":108,"Numero":2,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-09-04T14:11:24.123Z","Quoi":"INS","Ou":"100
+    {"ID":3,"Id_College":108,"Numero":3,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-09-04T14:11:28.120Z","Quoi":"INS","Ou":"100
+    {"ID":4,"Id_College":108,"Numero":4,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-09-04T14:11:30.760Z","Quoi":"INS","Ou":"100
+    {"ID":5,"Id_College":108,"Numero":5,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2025-05-28T13:07:45.100Z","Quoi":"UPD","Ou":"100
+    {"ID":6,"Id_College":108,"Numero":6,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-09-04T14:11:48.290Z","Quoi":"UPD","Ou":"100
+    {"ID":7,"Id_College":108,"Numero":7,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-09-04T14:11:51.840Z","Quoi":"UPD","Ou":"100
+    {"ID":8,"Id_College":108,"Numero":8,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-09-04T14:11:54.880Z","Quoi":"INS","Ou":"100
+    {"ID":9,"Id_College":108,"Numero":9,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-09-04T14:11:57.910Z","Quoi":"INS","Ou":"100
+    {"ID":10,"Id_College":108,"Numero":10,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-09-04T14:12:10.477Z","Quoi":"INS","Ou":"1
+    {"ID":11,"Id_College":108,"Numero":11,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-09-04T14:12:15.443Z","Quoi":"INS","Ou":"1
+    {"ID":12,"Id_College":108,"Numero":12,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-09-04T14:12:21.343Z","Quoi":"INS","Ou":"1
+    {"ID":13,"Id_College":108,"Numero":13,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-09-04T14:12:26.227Z","Quoi":"INS","Ou":"1
+    {"ID":14,"Id_College":108,"Numero":14,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-09-04T14:12:33.673Z","Quoi":"INS","Ou":"1
+    {"ID":15,"Id_College":108,"Numero":15,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-09-04T14:12:39.953Z","Quoi":"INS","Ou":"1
+    {"ID":16,"Id_College":108,"Numero":16,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-09-04T14:12:47.763Z","Quoi":"INS","Ou":"1
+    {"ID":17,"Id_College":108,"Numero":17,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-09-06T15:16:02.823Z","Quoi":"INS","Ou":"1
+    {"ID":18,"Id_College":108,"Numero":18,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-10-05T08:50:58.537Z","Quoi":"INS","Ou":"1
+    {"ID":19,"Id_College":108,"Numero":19,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2018-10-05T13:15:48.317Z","Quoi":"INS","Ou":"1
+    {"ID":20,"Id_College":108,"Numero":20,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2019-07-26T11:34:46.620Z","Quoi":"INS","Ou":"2
+    {"ID":21,"Id_College":108,"Numero":21,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2019-12-03T09:42:12.733Z","Quoi":"INS","Ou":"2
+    {"ID":22,"Id_College":108,"Numero":22,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2021-09-27T21:17:11.387Z","Quoi":"INS","Ou":"3
+    {"ID":23,"Id_College":108,"Numero":23,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2022-09-20T14:53:24.160Z","Quoi":"INS","Ou":"4
+    {"ID":24,"Id_College":108,"Numero":24,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"nicole","Quand":"2022-09-20T14:53:24.160Z","Quoi":"INS","Ou":"4
+    {"ID":25,"Id_College":108,"Numero":0,"Loue":false,"CodeType":"Bus","capacite":100,"College_a":null,"Qui":"dars","Quand":"2025-05-28T09:53:06.057Z","Quoi":"UPD","Ou":"1007
+Trs_Autocar_Circuit  rows=178
+   cols: ID, Id_College, Id_Autocar, Id_Circuit, NbPersonnes, Id_Session
+    {"ID":1,"Id_College":108,"Id_Autocar":1,"Id_Circuit":1,"NbPersonnes":100,"Id_Session":10039}
+    {"ID":2,"Id_College":108,"Id_Autocar":2,"Id_Circuit":2,"NbPersonnes":100,"Id_Session":10039}
+    {"ID":3,"Id_College":108,"Id_Autocar":3,"Id_Circuit":3,"NbPersonnes":100,"Id_Session":10039}
+    {"ID":4,"Id_College":108,"Id_Autocar":4,"Id_Circuit":4,"NbPersonnes":100,"Id_Session":10039}
+    {"ID":5,"Id_College":108,"Id_Autocar":5,"Id_Circuit":5,"NbPersonnes":100,"Id_Session":10039}
+    {"ID":6,"Id_College":108,"Id_Autocar":6,"Id_Circuit":6,"NbPersonnes":100,"Id_Session":10039}
+Trs_BusAppTiming  rows=0
+Trs_BusTrip  rows=0
+Trs_Circuit  rows=179
+   cols: ID, Id_College, Annee, Numero, Id_Activite, Tarif, Id_Session, Id_Chauffeur, Id_Surveillante
+    {"ID":1,"Id_College":108,"Annee":2019,"Numero":1,"Id_Activite":1,"Tarif":0,"Id_Session":10039,"Id_Chauffeur":6,"Id_Surveillante":7}
+    {"ID":2,"Id_College":108,"Annee":2019,"Numero":2,"Id_Activite":1,"Tarif":0,"Id_Session":10039,"Id_Chauffeur":6,"Id_Surveillante":7}
+    {"ID":3,"Id_College":108,"Annee":2019,"Numero":3,"Id_Activite":1,"Tarif":0,"Id_Session":10039,"Id_Chauffeur":6,"Id_Surveillante":7}
+    {"ID":4,"Id_College":108,"Annee":2019,"Numero":4,"Id_Activite":1,"Tarif":0,"Id_Session":10039,"Id_Chauffeur":6,"Id_Surveillante":7}
+    {"ID":5,"Id_College":108,"Annee":2019,"Numero":5,"Id_Activite":1,"Tarif":0,"Id_Session":10039,"Id_Chauffeur":6,"Id_Surveillante":7}
+    {"ID":6,"Id_College":108,"Annee":2019,"Numero":6,"Id_Activite":1,"Tarif":0,"Id_Session":10039,"Id_Chauffeur":6,"Id_Surveillante":7}
+Trs_Classe_Navette  rows=0
+Trs_Codes  rows=20
+   cols: ID, Code, Libelle, Type, Qui, Quand, Quoi, Ou
+    {"ID":3,"Code":"01","Libelle":"January","Type":"Mois","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":4,"Code":"02","Libelle":"February","Type":"Mois","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":5,"Code":"03","Libelle":"March","Type":"Mois","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":6,"Code":"04","Libelle":"April","Type":"Mois","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":7,"Code":"05","Libelle":"May","Type":"Mois","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":8,"Code":"06","Libelle":"June","Type":"Mois","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":9,"Code":"07","Libelle":"July","Type":"Mois","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":10,"Code":"08","Libelle":"August","Type":"Mois","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":11,"Code":"09","Libelle":"September","Type":"Mois","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":12,"Code":"10","Libelle":"October","Type":"Mois","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":13,"Code":"11","Libelle":"November","Type":"Mois","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":14,"Code":"12","Libelle":"December","Type":"Mois","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":19,"Code":"AR","Libelle":"Aller Retour","Type":"Sens","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":20,"Code":"AS","Libelle":"Aller Simple","Type":"Sens","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":16,"Code":"Bus","Libelle":"Bus","Type":"TBus","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":17,"Code":"MVa","Libelle":"Mini Bus","Type":"TBus","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":2,"Code":"Rem","Libelle":"Remplacant","Type":"TEmp","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":18,"Code":"RS","Libelle":"Retour Simple","Type":"Sens","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":1,"Code":"Tit","Libelle":"Titulaire","Type":"TEmp","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+    {"ID":15,"Code":"Van","Libelle":"Van","Type":"TBus","Qui":null,"Quand":null,"Quoi":null,"Ou":null}
+Trs_Date_Entree  rows=0
+Trs_Demande  rows=0
+Trs_Demande_Unite  rows=0
+Trs_Eleve_Station  rows=4813
+   cols: ID, Id_College, Id_Circuit, Id_Eleve, Type_Trajet, Flag_Desistement, Date_Desistement, Id_Session, Id_Quartier, CircuitRank, Station, StationAR, Heure_Retour, Heure_Depart, Remarks, OtherPhones, CircuitRankPM, Longitude, Latitude
+    {"ID":1,"Id_College":108,"Id_Circuit":1,"Id_Eleve":112,"Type_Trajet":"AR","Flag_Desistement":false,"Date_Desistement":null,"Id_Session":10039,"Id_Quartier":50,"CircuitRan
+    {"ID":2,"Id_College":108,"Id_Circuit":1,"Id_Eleve":221,"Type_Trajet":"AR","Flag_Desistement":false,"Date_Desistement":null,"Id_Session":10046,"Id_Quartier":51,"CircuitRan
+    {"ID":3,"Id_College":108,"Id_Circuit":1,"Id_Eleve":280,"Type_Trajet":"AR","Flag_Desistement":false,"Date_Desistement":null,"Id_Session":10046,"Id_Quartier":51,"CircuitRan
+    {"ID":4,"Id_College":108,"Id_Circuit":1,"Id_Eleve":749,"Type_Trajet":"AR","Flag_Desistement":false,"Date_Desistement":null,"Id_Session":10046,"Id_Quartier":51,"CircuitRan
+    {"ID":5,"Id_College":108,"Id_Circuit":1,"Id_Eleve":243,"Type_Trajet":"AR","Flag_Desistement":false,"Date_Desistement":null,"Id_Session":10051,"Id_Quartier":50,"CircuitRan
+    {"ID":6,"Id_College":108,"Id_Circuit":1,"Id_Eleve":81,"Type_Trajet":"AS","Flag_Desistement":false,"Date_Desistement":null,"Id_Session":10051,"Id_Quartier":50,"CircuitRank
+Trs_Essence  rows=0
+Trs_Garde  rows=0
+Trs_Huile  rows=0
+Trs_Jour_Trajet  rows=0
+Trs_JoursFeries  rows=0
+Trs_KM  rows=0
+Trs_PercOrdinaire  rows=11
+   cols: ID, Id_College, Id_Versement, Perc, Perc_AS, Perc_RS, Id_Session, Perc_Empl, Desist, Perc_AS_Empl, Perc_RS_Empl
+    {"ID":1,"Id_College":108,"Id_Versement":7,"Perc":100,"Perc_AS":65.29,"Perc_RS":65.29,"Id_Session":10039,"Perc_Empl":100,"Desist":0,"Perc_AS_Empl":65.29,"Perc_RS_Empl":65.
+    {"ID":2,"Id_College":108,"Id_Versement":10,"Perc":100,"Perc_AS":65.29,"Perc_RS":65.29,"Id_Session":23086,"Perc_Empl":100,"Desist":0,"Perc_AS_Empl":65.29,"Perc_RS_Empl":65
+    {"ID":3,"Id_College":108,"Id_Versement":11,"Perc":100,"Perc_AS":65.29,"Perc_RS":65.29,"Id_Session":25074,"Perc_Empl":0,"Desist":0,"Perc_AS_Empl":65.29,"Perc_RS_Empl":65.2
+    {"ID":19,"Id_College":108,"Id_Versement":16,"Perc":100,"Perc_AS":70,"Perc_RS":70,"Id_Session":33948,"Perc_Empl":0,"Desist":0,"Perc_AS_Empl":70,"Perc_RS_Empl":70}
+    {"ID":29,"Id_College":108,"Id_Versement":20,"Perc":100,"Perc_AS":70,"Perc_RS":70,"Id_Session":38775,"Perc_Empl":0,"Desist":0,"Perc_AS_Empl":70,"Perc_RS_Empl":70}
+    {"ID":30,"Id_College":108,"Id_Versement":18,"Perc":100,"Perc_AS":65,"Perc_RS":65,"Id_Session":38775,"Perc_Empl":0,"Desist":0,"Perc_AS_Empl":65,"Perc_RS_Empl":65}
+    {"ID":37,"Id_College":108,"Id_Versement":26,"Perc":100,"Perc_AS":65,"Perc_RS":65,"Id_Session":45914,"Perc_Empl":0,"Desist":0,"Perc_AS_Empl":65,"Perc_RS_Empl":65}
+    {"ID":38,"Id_College":108,"Id_Versement":32,"Perc":100,"Perc_AS":65,"Perc_RS":65,"Id_Session":66100,"Perc_Empl":0,"Desist":0,"Perc_AS_Empl":0,"Perc_RS_Empl":0}
+    {"ID":39,"Id_College":108,"Id_Versement":45,"Perc":100,"Perc_AS":65,"Perc_RS":65,"Id_Session":9831,"Perc_Empl":0,"Desist":0,"Perc_AS_Empl":0,"Perc_RS_Empl":0}
+    {"ID":40,"Id_College":108,"Id_Versement":50,"Perc":100,"Perc_AS":65,"Perc_RS":65,"Id_Session":9831,"Perc_Empl":0,"Desist":0,"Perc_AS_Empl":0,"Perc_RS_Empl":0}
+    {"ID":41,"Id_College":108,"Id_Versement":49,"Perc":100,"Perc_AS":65,"Perc_RS":65,"Id_Session":10110,"Perc_Empl":0,"Desist":0,"Perc_AS_Empl":0,"Perc_RS_Empl":0}
+Trs_PeriodeGarde  rows=0
+Trs_Personne  rows=2
+   cols: ID, Id_College, Code, Prenom, Nom, FullArabicName, ImageURL, DateNaissance, LicenseExpired, TypePers, IsActive, Telephone, Loue, ExclusGarde, adresse
+    {"ID":"6","Id_College":108,"Code":"0","Prenom":"--","Nom":"--","FullArabicName":"--","ImageURL":null,"DateNaissance":"2000-01-01T00:00:00.000Z","LicenseExpired":"2055-01-
+    {"ID":"7","Id_College":108,"Code":"0","Prenom":"--","Nom":"--","FullArabicName":"--","ImageURL":null,"DateNaissance":"2000-01-01T00:00:00.000Z","LicenseExpired":"2055-01-
+Trs_Reparation  rows=0
+Trs_Tarif_Zone  rows=68
+   cols: ID, Id_College, Id_Zone, Annee, Tarif, Id_Session
+    {"ID":1,"Id_College":108,"Id_Zone":1,"Annee":2019,"Tarif":605000,"Id_Session":10039}
+    {"ID":2,"Id_College":108,"Id_Zone":2,"Annee":2019,"Tarif":785000,"Id_Session":10039}
+    {"ID":3,"Id_College":108,"Id_Zone":3,"Annee":2019,"Tarif":845000,"Id_Session":10039}
+    {"ID":4,"Id_College":108,"Id_Zone":4,"Annee":2019,"Tarif":905000,"Id_Session":10039}
+    {"ID":5,"Id_College":108,"Id_Zone":5,"Annee":2019,"Tarif":965000,"Id_Session":10039}
+    {"ID":6,"Id_College":108,"Id_Zone":6,"Annee":2019,"Tarif":1035000,"Id_Session":10039}
+Trs_Tarif_Zone_Vers  rows=10
+   cols: ID, Id_College, ID_Zone, Id_Versement, Tarif, TarifAS, TarifRS, AddedBy, AddedDate, EditBy, EditDate, Tarif_AR_Activity, Tarif_RS_Activity, Tarif_AS_Activity
+    {"ID":"1031","Id_College":108,"ID_Zone":1,"Id_Versement":49,"Tarif":285,"TarifAS":185,"TarifRS":185,"AddedBy":4,"AddedDate":"2025-07-04T09:11:00.000Z","EditBy":4,"EditDat
+    {"ID":"1032","Id_College":108,"ID_Zone":2,"Id_Versement":49,"Tarif":330,"TarifAS":215,"TarifRS":215,"AddedBy":4,"AddedDate":"2025-07-04T09:11:00.000Z","EditBy":4,"EditDat
+    {"ID":"1033","Id_College":108,"ID_Zone":3,"Id_Versement":49,"Tarif":350,"TarifAS":225,"TarifRS":225,"AddedBy":4,"AddedDate":"2025-07-04T09:11:00.000Z","EditBy":4,"EditDat
+    {"ID":"1034","Id_College":108,"ID_Zone":4,"Id_Versement":49,"Tarif":385,"TarifAS":250,"TarifRS":250,"AddedBy":4,"AddedDate":"2025-07-04T09:11:00.000Z","EditBy":4,"EditDat
+    {"ID":"1035","Id_College":108,"ID_Zone":5,"Id_Versement":49,"Tarif":385,"TarifAS":250,"TarifRS":250,"AddedBy":4,"AddedDate":"2025-07-04T09:11:00.000Z","EditBy":4,"EditDat
+    {"ID":"1036","Id_College":108,"ID_Zone":6,"Id_Versement":49,"Tarif":400,"TarifAS":260,"TarifRS":260,"AddedBy":4,"AddedDate":"2025-07-04T09:11:00.000Z","EditBy":4,"EditDat
+    {"ID":"1037","Id_College":108,"ID_Zone":7,"Id_Versement":49,"Tarif":415,"TarifAS":270,"TarifRS":270,"AddedBy":4,"AddedDate":"2025-07-04T09:11:00.000Z","EditBy":4,"EditDat
+    {"ID":"1038","Id_College":108,"ID_Zone":8,"Id_Versement":49,"Tarif":415,"TarifAS":270,"TarifRS":270,"AddedBy":4,"AddedDate":"2025-07-04T09:11:00.000Z","EditBy":4,"EditDat
+    {"ID":"1039","Id_College":108,"ID_Zone":9,"Id_Versement":49,"Tarif":450,"TarifAS":290,"TarifRS":290,"AddedBy":4,"AddedDate":"2025-07-04T09:11:00.000Z","EditBy":4,"EditDat
+    {"ID":"1040","Id_College":108,"ID_Zone":10,"Id_Versement":49,"Tarif":450,"TarifAS":290,"TarifRS":290,"AddedBy":4,"AddedDate":"2025-07-04T09:11:00.000Z","EditBy":4,"EditDa
+Trs_Zone  rows=10
+   cols: ID, Id_College, ligne, TypeAutocar, Description, Id_Session
+    {"ID":1,"Id_College":108,"ligne":"1","TypeAutocar":"Bus","Description":"Zone 1","Id_Session":9831}
+    {"ID":2,"Id_College":108,"ligne":"2","TypeAutocar":"Bus","Description":"Zone 2","Id_Session":10039}
+    {"ID":3,"Id_College":108,"ligne":"3","TypeAutocar":"Bus","Description":"Zone 3","Id_Session":10039}
+    {"ID":4,"Id_College":108,"ligne":"4","TypeAutocar":"Bus","Description":"Zone 4","Id_Session":10039}
+    {"ID":5,"Id_College":108,"ligne":"5","TypeAutocar":"Bus","Description":"Zone 5","Id_Session":10039}
+    {"ID":6,"Id_College":108,"ligne":"6","TypeAutocar":"Bus","Description":"Zone 6","Id_Session":10039}
+    {"ID":7,"Id_College":108,"ligne":"7","TypeAutocar":"Bus","Description":"Zone 7","Id_Session":30804}
+    {"ID":8,"Id_College":108,"ligne":"8","TypeAutocar":"Bus","Description":"Zone 8","Id_Session":30804}
+    {"ID":9,"Id_College":108,"ligne":"9","TypeAutocar":"Bus","Description":"Zone 9","Id_Session":45905}
+    {"ID":10,"Id_College":108,"ligne":"10","TypeAutocar":"Bus","Description":"Zone 10","Id_Session":45905}

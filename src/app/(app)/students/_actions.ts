@@ -319,9 +319,11 @@ export async function saveBusAssignments(
     bus_as: string; // "yes" → rides the morning (aller) bus
     bus_rs: string; // "yes" → rides the evening (retour) bus
     bus_car_matin: string;
-    bus_zone_matin: string;
+    bus_zoneno_matin: string; // zone number 1-10
+    bus_zone_matin: string; // quartier
     bus_station_matin: string;
     bus_car_soir: string;
+    bus_zoneno_soir: string;
     bus_zone_soir: string;
     bus_station_soir: string;
     bus_remarques: string;
@@ -365,16 +367,22 @@ export async function saveBusAssignments(
       }
       const as = u.bus_as === "yes";
       const rs = u.bus_rs === "yes";
+      const zno = (v: string) => {
+        const t = (v ?? "").trim();
+        return /^([1-9]|10)$/.test(t) ? t : "";
+      };
       const prev = periods[period] ?? {};
       periods[period] = {
-        ...prev, // keeps tel/montant/paye from the import
+        ...prev, // keeps tel/montant/remise/net from the import
         as: as ? "yes" : "",
         rs: rs ? "yes" : "",
         // A direction that's off carries no bus data.
         car_matin: as ? (u.bus_car_matin ?? "").trim().slice(0, 20) : "",
+        zoneno_matin: as ? zno(u.bus_zoneno_matin) : "",
         zone_matin: as ? (u.bus_zone_matin ?? "").trim().slice(0, 80) : "",
         station_matin: as ? (u.bus_station_matin ?? "").trim().slice(0, 160) : "",
         car_soir: rs ? (u.bus_car_soir ?? "").trim().slice(0, 20) : "",
+        zoneno_soir: rs ? zno(u.bus_zoneno_soir) : "",
         zone_soir: rs ? (u.bus_zone_soir ?? "").trim().slice(0, 80) : "",
         station_soir: rs ? (u.bus_station_soir ?? "").trim().slice(0, 160) : "",
         remarques: (u.bus_remarques ?? "").trim().slice(0, 400),
@@ -388,6 +396,50 @@ export async function saveBusAssignments(
     }
     revalidatePath("/transport");
     for (const u of updates) revalidatePath(`/students/${u.studentId}`);
+    return { ok: true };
+  });
+}
+
+/**
+ * Delete a student's bus assignment for one period ("the student left the
+ * bus") — removes the period entry entirely, including its billing trace.
+ */
+export async function deleteBusAssignment(
+  period: string,
+  studentId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+  if (!/^.+\|T[123]$/.test(period)) return { ok: false, error: "bad-period" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const st = await db.student.findUnique({
+      where: { id: studentId },
+      select: { customAnswers: true },
+    });
+    if (!st) return { ok: false, error: "not-found" };
+    const ca: Record<string, unknown> =
+      st.customAnswers && typeof st.customAnswers === "object"
+        ? { ...(st.customAnswers as Record<string, unknown>) }
+        : {};
+    let periods: Record<string, Record<string, string>> = {};
+    if (typeof ca.bus_periods === "string") {
+      try {
+        periods = JSON.parse(ca.bus_periods) as Record<string, Record<string, string>>;
+      } catch {
+        periods = {};
+      }
+    }
+    delete periods[period];
+    if (Object.keys(periods).length === 0) delete ca.bus_periods;
+    else ca.bus_periods = JSON.stringify(periods);
+    await db.student.update({
+      where: { id: studentId },
+      data: { customAnswers: ca },
+    });
+    revalidatePath("/transport");
+    revalidatePath(`/students/${studentId}`);
     return { ok: true };
   });
 }

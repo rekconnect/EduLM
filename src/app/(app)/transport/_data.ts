@@ -18,15 +18,19 @@ export type BusPeriod = Partial<{
   as: string;
   rs: string;
   car_matin: string;
-  zone_matin: string;
+  zoneno_matin: string; // zone number 1-10
+  zone_matin: string; // quartier name
   station_matin: string;
   car_soir: string;
+  zoneno_soir: string;
   zone_soir: string;
   station_soir: string;
   remarques: string;
   tel: string;
-  montant: string;
-  paye: string;
+  montant: string; // brut
+  paye: string; // legacy (anciens manifestes)
+  remise: string; // % de remise (export tarif)
+  net: string; // net après remise
 }>;
 
 export function periodKey(yearLabel: string, trim: string): string {
@@ -105,6 +109,13 @@ export async function loadBusRows(opts?: {
         select: { class: { select: { name: true, level: true } } },
         take: 1,
       },
+      guardianLinks: {
+        select: {
+          guardian: {
+            select: { relation: true, user: { select: { email: true } } },
+          },
+        },
+      },
     },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
   });
@@ -149,15 +160,29 @@ export async function loadBusRows(opts?: {
       bus_as: as ? "yes" : "",
       bus_rs: rs ? "yes" : "",
       bus_car_matin: p.car_matin ?? "",
+      bus_zoneno_matin: p.zoneno_matin ?? "",
       bus_zone_matin: (p.zone_matin ?? "") || (as ? legacyZone : ""),
       bus_station_matin: p.station_matin ?? "",
       bus_car_soir: p.car_soir ?? "",
+      bus_zoneno_soir: p.zoneno_soir ?? "",
       bus_zone_soir: (p.zone_soir ?? "") || (rs ? legacyZone : ""),
       bus_station_soir: p.station_soir ?? "",
       bus_remarques: p.remarques ?? "",
       bus_tel: p.tel ?? "",
       bus_montant: p.montant ?? "",
-      bus_paye: p.paye ?? "",
+      bus_remise: p.remise ?? "",
+      bus_net: p.net ?? "",
+      // Parent emails from EduLM guardians (père / mère, fallback any).
+      email_pere:
+        s.guardianLinks.find((l) => l.guardian.relation === "pere")?.guardian
+          .user.email ??
+        s.guardianLinks[0]?.guardian.user.email ??
+        "",
+      email_mere:
+        s.guardianLinks.find((l) => l.guardian.relation === "mere")?.guardian
+          .user.email ??
+        s.guardianLinks[1]?.guardian.user.email ??
+        "",
     });
   }
   return {
@@ -177,15 +202,20 @@ export const BUS_EXPORT_COLUMNS = [
   { key: "className", header: "Classe", width: 10 },
   { key: "as", header: "AS", width: 6 },
   { key: "bus_car_matin", header: "Bus matin", width: 10 },
+  { key: "bus_zoneno_matin", header: "Zone matin", width: 9 },
   { key: "bus_zone_matin", header: "Quartier matin", width: 18 },
   { key: "bus_station_matin", header: "Station matin", width: 24 },
   { key: "rs", header: "RS", width: 6 },
   { key: "bus_car_soir", header: "Bus soir", width: 10 },
+  { key: "bus_zoneno_soir", header: "Zone soir", width: 9 },
   { key: "bus_zone_soir", header: "Quartier soir", width: 18 },
   { key: "bus_station_soir", header: "Station soir", width: 24 },
   { key: "bus_tel", header: "Tel", width: 20 },
+  { key: "email_pere", header: "Email père", width: 26 },
+  { key: "email_mere", header: "Email mère", width: 26 },
   { key: "bus_montant", header: "Montant", width: 10 },
-  { key: "bus_paye", header: "Payé", width: 10 },
+  { key: "bus_remise", header: "Remise %", width: 9 },
+  { key: "bus_net", header: "Net", width: 10 },
   { key: "bus_remarques", header: "Remarques", width: 24 },
 ] as const;
 
@@ -193,6 +223,64 @@ const busNum = (v: string) => {
   const n = Number(v.trim());
   return v.trim() === "" ? Number.POSITIVE_INFINITY : Number.isFinite(n) ? n : 9e8;
 };
+
+/** Filters mirrored from the /transport toolbar — used by the Excel/PDF
+ *  exports so they produce exactly what the screen shows. */
+export type BusFilters = {
+  q?: string;
+  bus?: string; // bus n° or "__none__"
+  zone?: string; // quartier or "__none__"
+  zoneno?: string; // zone number 1-10
+  niveau?: string;
+  trajet?: string; // AS | RS | AR | AR1 | AR2 | __none__
+};
+
+export function filterBusRows(rows: BusRow[], f: BusFilters): BusRow[] {
+  const nq = (f.q ?? "").trim().toLowerCase();
+  return rows.filter((r) => {
+    if (nq && !r.name.toLowerCase().includes(nq)) return false;
+    if (f.niveau && r.level !== f.niveau) return false;
+    const rowZones = [r.bus_zone_matin.trim(), r.bus_zone_soir.trim()];
+    if (f.zone === "__none__" && rowZones.some(Boolean)) return false;
+    if (f.zone && f.zone !== "__none__" && !rowZones.includes(f.zone)) return false;
+    const rowBuses = [r.bus_car_matin.trim(), r.bus_car_soir.trim()];
+    if (f.bus === "__none__" && rowBuses.some(Boolean)) return false;
+    if (f.bus && f.bus !== "__none__" && !rowBuses.includes(f.bus)) return false;
+    if (f.zoneno && ![r.bus_zoneno_matin.trim(), r.bus_zoneno_soir.trim()].includes(f.zoneno))
+      return false;
+    const as = r.bus_as === "yes";
+    const rs = r.bus_rs === "yes";
+    const sameBus = r.bus_car_matin.trim() === r.bus_car_soir.trim();
+    if (f.trajet === "AS" && !(as && !rs)) return false;
+    if (f.trajet === "RS" && !(rs && !as)) return false;
+    if (f.trajet === "AR" && !(as && rs)) return false;
+    if (f.trajet === "AR1" && !(as && rs && sameBus)) return false;
+    if (f.trajet === "AR2" && !(as && rs && !sameBus)) return false;
+    if (f.trajet === "__none__" && (as || rs)) return false;
+    return true;
+  });
+}
+
+const TRAJET_LABELS: Record<string, string> = {
+  AS: "Aller seul",
+  RS: "Retour seul",
+  AR: "Aller-Retour",
+  AR1: "Aller-Retour même bus",
+  AR2: "Aller-Retour 2 bus",
+  __none__: "Sans trajet",
+};
+
+/** Human-readable filter summary for export headers/subtitles. */
+export function busFilterSummary(f: BusFilters): string {
+  const parts: string[] = [];
+  if (f.q?.trim()) parts.push(`Recherche « ${f.q.trim()} »`);
+  if (f.bus) parts.push(f.bus === "__none__" ? "Sans bus" : `Bus ${f.bus}`);
+  if (f.zoneno) parts.push(`Zone ${f.zoneno}`);
+  if (f.zone) parts.push(f.zone === "__none__" ? "Sans quartier" : f.zone);
+  if (f.niveau) parts.push(f.niveau);
+  if (f.trajet) parts.push(TRAJET_LABELS[f.trajet] ?? f.trajet);
+  return parts.join(" · ");
+}
 
 /** Rows → export records, sorted by bus matin → quartier → name. */
 export function toExportRows(rows: BusRow[]): Array<Record<string, string>> {
@@ -210,15 +298,20 @@ export function toExportRows(rows: BusRow[]): Array<Record<string, string>> {
       className: r.className,
       as: r.bus_as === "yes" ? "AS" : "",
       bus_car_matin: r.bus_car_matin,
+      bus_zoneno_matin: r.bus_zoneno_matin,
       bus_zone_matin: r.bus_zone_matin,
       bus_station_matin: r.bus_station_matin,
       rs: r.bus_rs === "yes" ? "RS" : "",
       bus_car_soir: r.bus_car_soir,
+      bus_zoneno_soir: r.bus_zoneno_soir,
       bus_zone_soir: r.bus_zone_soir,
       bus_station_soir: r.bus_station_soir,
       bus_tel: r.bus_tel,
+      email_pere: r.email_pere,
+      email_mere: r.email_mere,
       bus_montant: r.bus_montant,
-      bus_paye: r.bus_paye,
+      bus_remise: r.bus_remise ? `${r.bus_remise}%` : "",
+      bus_net: r.bus_net,
       bus_remarques: r.bus_remarques,
     }));
 }

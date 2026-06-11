@@ -1,0 +1,174 @@
+✓ Target tenant: Lycée Montaigne (cmp6rug7t0000w57oqchgkkb9)
+Fichier: 600 lignes → 460 élèves uniques
+Appariement: par CODE 460 · par nom 0 · NON TROUVÉS 0
+
+=== DIFF vs EduLM (2025-2026|T3) ===
+identiques (trajet+bus+net): 267
+
+TRAJET différent: 62
+   • ABDELNOUR Angelina: [AS 1 + RS 8] (380$) → [AS 1] net 380$
+   • ABDELNOUR Jason: [AS 1 + RS 8] (380$) → [AS 1] net 380$
+   • ABI RIZK Daladier: [RS 19] (420$) → [AS 22 + RS 19] net 420$
+   • ABOU ARRAJ Ayla: [AS 5 + RS 14] (350$) → [AS 5] net 350$
+   • ABOU EL NASR Elias: [AS 1 + RS 8] (380$) → [AS 1] net 0$ (remise 100%)
+   • ACHKAR (EL) Nay: [AS 9 + RS 15] (280$) → [AS 9] net 280$
+   • ATTIEH CLARA: [RS 12] (250$) → [AS 14 + RS 16] net 585$
+   • ANTONIA Raphael: [RS 12] (380$) → [AS 15 + RS 12] net 380$
+   • AOUAD Ivan: [AS 9 + RS 9] (250$) → [RS 9] net 250$
+   • AOUAD Rémy: [AS 9 + RS 9] (250$) → [RS 9] net 250$
+   • ARAMOUNI Andrea: [AS 7] (420$) → [AS 7 + RS 7] net 420$
+   • AZAR Jean-Pierre: [RS 5] (335$) → [AS 14 + RS 5] net 335$
+   • BAAKLINI Léa: [AS 10 + RS 6] (400$) → [AS 6] net 400$
+   • BAAKLINI Stéphane: [AS 10 + RS 6] (400$) → [AS 6] net 400$
+   • BAZZI Abbas Jawad: [AS 18 + RS 20] (280$) → [AS 18] net 280$
+   • BAZZI Joséphine: [AS 18 + RS 20] (280$) → [AS 18] net 280$
+   • Bou Anny Karim: [AS 22 + RS 19] (420$) → [AS 22] net 295$ (remise 30%)
+   • Bou Zeidan Aurelia: [AS 20 + RS 16] (450$) → [AS 20] net 450$
+   • Bou Zeidan Elena: [AS 20 + RS 16] (450$) → [AS 20] net 450$
+   • CHAAYA SALLOUM Marilynn: [AS 9 + RS 9] (250$) → [RS 9] net 250$
+   • CHIDIAC Patricia: [RS 20] (380$) → [AS 18] net 380$
+   • Eid Mathieu: [RS 5] (280$) → [AS 17 + RS 17] net 280$
+   • ESCABASSE Mila: [AS 5 + RS 7] (335$) → [AS 5] net 335$
+   • FAHL (EL) Yoan: [AS 6 + RS 9] (230$) → [RS 10] net 230$
+   • FAYAD Chloé: [AS 17 + RS 19] (420$) → [AS 7] net 420$
+   … +37
+
+BUS différent: 85
+   • ABDEL SATER David,Anwar,Christian: [AS 10 + RS 10] (280$) → [AS 6 + RS 6] net 280$
+   • ABDEL SATER Sky,Maria,Christina: [AS 10 + RS 6] (280$) → [AS 6 + RS 6] net 280$
+   • ABI HAILA Adriana: [AS 13 + RS 6] (280$) → [AS 13 + RS 13] net 280$
+   • ABI HAILA Yann: [AS 13 + RS 6] (280$) → [AS 13 + RS 11] net 280$
+   • AKL IVY: [AS 3 + RS 21] (335$) → [AS 3 + RS 3] net 335$
+   • AKL MIA: [AS 3 + RS 21] (335$) → [AS 3 + RS 3] net 335$
+   • ASMAR (EL) Céléna: [AS 10 + RS 6] (400$) → [AS 6 + RS 11] net 400$
+   • ASMAR (EL) Chloé: [AS 10 + RS 6] (400$) → [AS 6 + RS 11] net 400$
+   • ASMAR (EL) Elie: [AS 10 + RS 6] (400$) → [AS 6 + RS 6] net 400$
+   • BAJAK Joseph: [AS 14 + RS 5] (280$) → [AS 14 + RS 14] net 280$
+   • Bakalian Mateo: [AS 6 + RS 9] (350$) → [AS 10 + RS 10] net 350$
+   • Bakalian Milana: [AS 6 + RS 9] (350$) → [AS 10 + RS 10] net 350$
+   • Balkis Ella: [AS 19 + RS 9] (380$) → [AS 9 + RS 19] net 380$
+   • BOU AKL Dylan: [AS 14 + RS 5] (335$) → [AS 14 + RS 19] net 335$
+   • Bou Anny Moon: [AS 22 + RS 19] (420$) → [AS 22 + RS 22] net 295$ (remise 30%)
+   • BOUSTANI (EL) Carl: [AS 4 + RS 9] (380$) → [AS 4 + RS 4] net 380$
+   • BOUSTANI (EL) Marc: [AS 4 + RS 9] (380$) → [AS 4 + RS 4] net 380$
+   • BOUTROS Reem: [AS 10 + RS 6] (400$) → [AS 6 + RS 11] net 400$
+   • CHAKRA Kate: [AS 6 + RS 6] (335$) → [AS 10 + RS 10] net 335$
+   • CHEBLI Célia: [AS 8 + RS 21] (350$) → [AS 3 + RS 8] net 350$
+   • CHEBLI Laurent: [AS 8 + RS 7] (350$) → [AS 3 + RS 7] net 350$
+   • CHEDID Elias: [AS 2 + RS 4] (450$) → [AS 2 + RS 19] net 450$
+   • Eid Laura: [AS 17 + RS 5] (280$) → [AS 17 + RS 17] net 280$
+   • FIDAWI Kiana: [AS 11 + RS 14] (380$) → [AS 11 + RS 11] net 380$
+   • FIKANI Michael: [AS 6 + RS 6] (335$) → [AS 10 + RS 10] net 335$
+   … +60
+
+MONTANT seul différent: 19
+   • ABDALLAH Emma: [AS 4 + RS 17] (450$) → [AS 4 + RS 17] net 225$ (remise 50%)
+   • ABOU AZAR Antoine: [AS 2 + RS 7] (350$) → [AS 2 + RS 7] net 0$ (remise 100%)
+   • ACHKAR (EL) Eric: [AS 7 + RS 13] (280$) → [AS 7 + RS 13] net 140$ (remise 50%)
+   • ACHKAR (EL) Katie: [RS 20] (180$) → [RS 20] net 0$ (remise 100%)
+   • ACHKAR (EL) Maurice: [RS 20] (180$) → [RS 20] net 0$ (remise 100%)
+   • ACHKAR (EL) Michelle: [RS 20] (180$) → [RS 20] net 0$ (remise 100%)
+   • Bou Anny Joie: [AS 22 + RS 22] (420$) → [AS 22 + RS 22] net 295$ (remise 30%)
+   • CHIDIAC Charles: [AS 18 + RS 20] (380$) → [AS 18 + RS 20] net 0$ (remise 100%)
+   • FAKHOURY Lynn: [RS 13] (180$) → [RS 13] net 120$ (remise 30%)
+   • IBRAHIM Mila: [RS 14] (220$) → [RS 14] net 0$ (remise 100%)
+   • Saade Jonas: [RS 1] (250$) → [RS 1] net 480$
+   • MAALOUF Saiid: [RS 20] (260$) → [RS 20] net 0$ (remise 100%)
+   • MORCOS Albert: [RS 19] (230$) → [RS 19] net 160$ (remise 30%)
+   • MORCOS FOUAD: [RS 19] (230$) → [RS 19] net 160$ (remise 30%)
+   • RIZK Mia: [RS 17] (300$) → [RS 17] net 0$ (remise 100%)
+   … +4
+
+À (RE)CRÉER — dans le fichier, sans affectation EduLM (inclut les 30 retirés): 27
+   • AOUAD Naya → [AS 11 + RS 11] net 380$
+   • AOUAD Rayan → [AS 11 + RS 11] net 380$
+   • ABOU AOUN Georges → [AS 8 + RS 8] net 335$
+   • BAAKLINI Charbel → [AS 10 + RS 10] net 350$
+   • BAAKLINI Elie → [AS 10 + RS 10] net 350$
+   • BAAKLINI MARC → [AS 10 + RS 10] net 350$
+   • Bou Dib Kyle → [AS 1 + RS 1] net 380$
+   • CHALLITA Thalia → [AS 1 + RS 1] net 380$
+   • DAOUD Léa → [RS 18] net 250$
+   • ESTEPHAN Lucas → [AS 8 + RS 3] net 335$
+   • GEBRAEL Eden Noel Margaux → [AS 2 + RS 2] net 350$
+   • ISKANDAR Peter → [AS 6 + RS 6] net 350$
+   • ISKANDAR Rafael → [AS 6 + RS 6] net 350$
+   • JABBOUR Maelle → [RS 12] net 230$
+   • JABBOUR Marc → [RS 12] net 230$
+   • JAMATI Alexandre Mattéo → [AS 7 + RS 12] net 380$
+   • KAHI (EL) Karl → [RS 20] net 180$
+   • KAMAL Alex → [AS 16 + RS 22] net 420$
+   • KASSIS Matteo → [AS 22 + RS 19] net 450$
+   • KHOURY (EL) Karen → [RS 8] net 250$
+   • Khoury (EL) Alexandre → [AS 8 + RS 8] net 335$
+   • LABAKY (EL) Maroun → [AS 15 + RS 12] net 380$
+   • MANOUKIAN Tara → [AS 3] net 250$
+   • NASSIF Joseph → [AS 10] net 40$
+   • NEMER Théa → [RS 10] net 230$
+   • Raad Jackie Marie → [AS 7 + RS 12] net 210$ (remise 50%)
+   • ROUKOZ Jad → [RS 14] net 230$
+
+ABSENTS du fichier (affectés dans EduLM): 58
+   • BOU ASSI Charbel [RS 11]
+   • ARJA Michael [RS 16]
+   • Nicolas LEA [AS 4+RS 17]
+   • SOUSSA ANTHONY [RS 22]
+   • Rizkallah George [AS 15+RS 15]
+   • Abi Aad Yasmina [RS 15]
+   • HADDAD Kiyan [RS 10]
+   • GABRIEL JOE [RS 18]
+   • BOGHOS Marianne [RS 18]
+   • Hayek Gabriella Julie Roxane [AS 14+RS 19]
+   • Azar Brian [AS 13+RS 13]
+   • LAMAH Naël Nathan Nabil [RS 5]
+   • Bou akl Sasha [AS 3+RS 21]
+   • SALIBA CIELO CHRIS [RS 17]
+   • Harbouk Peter Lucas [AS 14+RS 5]
+   • Harbouk Jonathan Anthony [AS 14+RS 5]
+   • Rizkallah Kai [AS 15+RS 15]
+   • KHOURY Karen [RS 8]
+   • ASSI Jamie [AS 8+RS 8]
+   • RAHME Cyan [RS 11]
+   • GHANEM Laeticia [AS 8]
+   • HADDAD Sofia [RS 10]
+   • Jabbour IVY MARIA [RS 6]
+   • BOGHOS Joseph [RS 18]
+   • Akl Jason [AS 14+RS 14]
+   • Atallah IVY [AS 12+RS 13]
+   • SAYAH Karl [RS 18]
+   • KHOURY EL Raphael, Elias [AS 17+RS 6]
+   • Rafih Joe [AS 11+RS 15]
+   • Hayeck Mark EL [AS 18+RS 18]
+   • HAJJ (EL) Chloé [RS 6]
+   • Bou Dagher Chloé [AS 22+RS 22]
+   • GHANTOUS Elitta [AS 9+RS 9]
+   • MAALOUF MARIA [RS 20]
+   • Elia Abou Jaoude Roger Paul [RS 11]
+   • JABR Audrey [AS 5+RS 5]
+   • Tohme Malek [RS 17]
+   • FAYAD Deona [AS 7+RS 7]
+   • Abi Rizk Nathan [RS 6]
+   • SIKIAS Mélanie [RS 15]
+   • Rahbani EL Hailey [AS 14+RS 14]
+   • Sahyoun Giorgio [RS 8]
+   • Harbouk Emma Marie [AS 14+RS 5]
+   • SACY RAY [RS 6]
+   • KOBROSSI IVAN [AS 12+RS 12]
+   • Rafih Mikael [AS 11+RS 11]
+   • SAYAH Kate [RS 18]
+   • Nicolas CHLOE [AS 4+RS 17]
+   • CHEDID Cherif [AS 2+RS 4]
+   • Abi Aad Georgio [RS 15]
+   • Akl John [AS 14+RS 14]
+   • DARCY James [AS 11+RS 11]
+   • CHAHBAZIAN MILENA [AS 5+RS 5]
+   • HAJJAR (EL) Camille [RS 13]
+   • Kai Karlie [RS 20]
+   • Habib Alessa [AS 1+RS 1]
+   • AMIL (EL) Marc [AS 12+RS 12]
+   • KHOURY Carl [RS 3]
+
+=== Stats si ce fichier est appliqué ===
+Inscrits=460  Aller=345  Retour=425  AR=310 (même bus=174, 2 bus=136)
+Montant brut=$148,680 · NET=$142,470 · remises: 32 élèves
+Zones numérotées: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10

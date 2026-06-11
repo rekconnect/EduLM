@@ -1,9 +1,9 @@
 /**
- * Per Raed's decision: students ASSIGNED in bus_periods["2025-2026|T3"] but
+ * Per Raed's decision: students with a bus_periods["2025-2026|T3"] entry but
  * ABSENT from the BUS MAJ Excel (the school's up-to-date truth) have left the
- * bus → clear their T3 assignment (as/rs/buses/quartiers/stations/remarques),
- * keeping tel/montant/paye for the record. Run sync-dossier-from-bus afterwards
- * to align the fiches (autocar=no, Transport token removed).
+ * bus → their T3 entry is REMOVED ENTIRELY (no transport AND no payment trace
+ * — montant/payé/tel deleted too). Run sync-dossier-from-bus afterwards to
+ * align the fiches (autocar=no, Transport token removed).
  *
  * DRY-RUN by default; --confirm to write.
  *   npx tsx scripts/dars-import/fix-bus-absents.ts --tenant-name="Lycée Montaigne" \
@@ -202,27 +202,19 @@ async function main() {
       }
     }
     const p = periods[PERIOD];
-    if (!p || (p.as !== "yes" && p.rs !== "yes")) continue;
-    periods[PERIOD] = {
-      // Keep billing facts for the record; clear the assignment itself.
-      ...(p.tel ? { tel: p.tel } : {}),
-      ...(p.montant != null ? { montant: p.montant } : {}),
-      ...(p.paye != null ? { paye: p.paye } : {}),
-      as: "",
-      rs: "",
-      car_matin: "",
-      zone_matin: "",
-      station_matin: "",
-      car_soir: "",
-      zone_soir: "",
-      station_soir: "",
-      remarques: "",
-    };
-    ca.bus_periods = JSON.stringify(periods);
+    if (!p) continue;
+    const hadSomething =
+      p.as === "yes" || p.rs === "yes" || p.montant || p.paye || p.tel || p.car_matin || p.car_soir;
+    if (!hadSomething) continue;
+    // Absent from the up-to-date list → remove the WHOLE entry (no transport,
+    // no payment trace).
+    delete periods[PERIOD];
+    if (Object.keys(periods).length === 0) delete ca.bus_periods;
+    else ca.bus_periods = JSON.stringify(periods);
     updates.push({
       id: s.id,
       ca,
-      label: `${s.lastName} ${s.firstName} (était ${p.as === "yes" ? "AS " + (p.car_matin || "?") : ""}${p.as === "yes" && p.rs === "yes" ? "+" : ""}${p.rs === "yes" ? "RS " + (p.car_soir || "?") : ""})`,
+      label: `${s.lastName} ${s.firstName} (était ${p.as === "yes" ? "AS " + (p.car_matin || "?") : ""}${p.as === "yes" && p.rs === "yes" ? "+" : ""}${p.rs === "yes" ? "RS " + (p.car_soir || "?") : ""}${p.montant ? ` · payé ${p.paye ?? 0}/${p.montant}$` : ""})`,
     });
   }
 

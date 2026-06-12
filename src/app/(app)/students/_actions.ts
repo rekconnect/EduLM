@@ -385,6 +385,10 @@ export async function saveBusAssignments(
         zoneno_soir: rs ? zno(u.bus_zoneno_soir) : "",
         zone_soir: rs ? (u.bus_zone_soir ?? "").trim().slice(0, 80) : "",
         station_soir: rs ? (u.bus_station_soir ?? "").trim().slice(0, 160) : "",
+        // Activité flags are derived/imported — keep them, but only while the
+        // direction stays on.
+        activite_matin: as ? ((prev.activite_matin as string) ?? "") : "",
+        activite_soir: rs ? ((prev.activite_soir as string) ?? "") : "",
         remarques: (u.bus_remarques ?? "").trim().slice(0, 400),
       };
       ca.bus_periods = JSON.stringify(periods);

@@ -48,6 +48,8 @@ export type BusRow = {
   bus_zoneno_soir: string;
   bus_zone_soir: string;
   bus_station_soir: string;
+  bus_activite_matin: string; // "yes" → trajet d'activité (hors circuits ordinaires)
+  bus_activite_soir: string;
   bus_remarques: string;
   // Read-only, from the Dars tarif export.
   bus_tel: string;
@@ -132,6 +134,7 @@ export function TransportManager({
   const [busFilter, setBusFilter] = useState("");
   const [levelFilter, setLevelFilter] = useState("");
   const [trajetFilter, setTrajetFilter] = useState("");
+  const [circuitFilter, setCircuitFilter] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null);
   const [page, setPage] = useState(1);
   // Row-level editing.
@@ -141,7 +144,7 @@ export function TransportManager({
 
   useEffect(() => {
     setPage(1);
-  }, [q, zoneFilter, zonenoFilter, busFilter, levelFilter, trajetFilter, sort, rows]);
+  }, [q, zoneFilter, zonenoFilter, busFilter, levelFilter, trajetFilter, circuitFilter, sort, rows]);
 
   const exportQs = (() => {
     const sp = new URLSearchParams({ yearId: selectedYearId, trim });
@@ -151,6 +154,7 @@ export function TransportManager({
     if (zoneFilter) sp.set("zone", zoneFilter);
     if (levelFilter) sp.set("niveau", levelFilter);
     if (trajetFilter) sp.set("trajet", trajetFilter);
+    if (circuitFilter) sp.set("circuit", circuitFilter);
     return `?${sp.toString()}`;
   })();
 
@@ -198,6 +202,10 @@ export function TransportManager({
       if (trajetFilter === "AR1" && !(as && rs && sameBus)) return false;
       if (trajetFilter === "AR2" && !(as && rs && !sameBus)) return false;
       if (trajetFilter === "__none__" && (as || rs)) return false;
+      const hasActivite =
+        (as && r.bus_activite_matin === "yes") || (rs && r.bus_activite_soir === "yes");
+      if (circuitFilter === "activite" && !hasActivite) return false;
+      if (circuitFilter === "ordinaire" && hasActivite) return false;
       return true;
     });
     const cmp = (a: BusRow, b: BusRow): number => {
@@ -235,7 +243,7 @@ export function TransportManager({
       return a.name.localeCompare(b.name);
     };
     return [...base].sort(cmp);
-  }, [rows, q, levelFilter, zoneFilter, zonenoFilter, busFilter, trajetFilter, sort]);
+  }, [rows, q, levelFilter, zoneFilter, zonenoFilter, busFilter, trajetFilter, circuitFilter, sort]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
@@ -252,7 +260,8 @@ export function TransportManager({
   const asPlusRs = both.length - allerRetour;
   const montantTotal = rows.reduce((acc, r) => acc + (Number(r.bus_montant) || 0), 0);
   const netTotal = rows.reduce(
-    (acc, r) => acc + (Number(r.bus_net) || Number(r.bus_montant) || 0),
+    // "0" is a real net (exonéré 100%) — only fall back when net is empty.
+    (acc, r) => acc + (r.bus_net.trim() !== "" ? Number(r.bus_net) || 0 : Number(r.bus_montant) || 0),
     0,
   );
   const remises = rows.filter((r) => Number(r.bus_remise) > 0).length;
@@ -398,9 +407,9 @@ export function TransportManager({
         ))}
       </div>
 
-      {/* Search + filters */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-[1fr_repeat(7,auto)]">
-        <div className="relative">
+      {/* Search + period (own row, full-width search) */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center">
+        <div className="relative min-w-0 flex-1">
           <Search
             className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-[color:var(--color-foreground-subtle)]"
             aria-hidden
@@ -413,17 +422,28 @@ export function TransportManager({
             className="ps-9"
           />
         </div>
-        <YearPicker years={years} selectedId={selectedYearId} />
-        <UrlSelect
-          name="trim"
-          value={trim}
-          options={[
-            { value: "T1", label: "Trimestre 1" },
-            { value: "T2", label: "Trimestre 2" },
-            { value: "T3", label: "Trimestre 3" },
-          ]}
-        />
-        <Select value={trajetFilter} onChange={(e) => setTrajetFilter(e.target.value)}>
+        <div className="flex shrink-0 gap-2">
+          <YearPicker years={years} selectedId={selectedYearId} />
+          <UrlSelect
+            name="trim"
+            value={trim}
+            options={[
+              { value: "T1", label: "Trimestre 1" },
+              { value: "T2", label: "Trimestre 2" },
+              { value: "T3", label: "Trimestre 3" },
+            ]}
+          />
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={circuitFilter} onChange={(e) => setCircuitFilter(e.target.value)} style={{ width: "auto" }}>
+          <option value="">Ordinaire + activité</option>
+          <option value="ordinaire">Circuits ordinaires</option>
+          <option value="activite">Trajets d&apos;activité</option>
+        </Select>
+        <Select value={trajetFilter} onChange={(e) => setTrajetFilter(e.target.value)} style={{ width: "auto" }}>
           <option value="">Tous les trajets</option>
           <option value="AS">Aller seul (AS)</option>
           <option value="RS">Retour seul (RS)</option>
@@ -432,27 +452,27 @@ export function TransportManager({
           <option value="AR2">Aller-Retour — 2 bus différents</option>
           <option value="__none__">— Sans trajet —</option>
         </Select>
-        <Select value={busFilter} onChange={(e) => setBusFilter(e.target.value)}>
+        <Select value={busFilter} onChange={(e) => setBusFilter(e.target.value)} style={{ width: "auto" }}>
           <option value="">Tous les bus</option>
           <option value="__none__">— Sans bus —</option>
           {buses.map((c) => (
             <option key={c} value={c}>Bus {c}</option>
           ))}
         </Select>
-        <Select value={zonenoFilter} onChange={(e) => setZonenoFilter(e.target.value)}>
+        <Select value={zonenoFilter} onChange={(e) => setZonenoFilter(e.target.value)} style={{ width: "auto" }}>
           <option value="">Toutes les zones</option>
           {ZONES.map((z) => (
             <option key={z} value={z}>Zone {z}</option>
           ))}
         </Select>
-        <Select value={zoneFilter} onChange={(e) => setZoneFilter(e.target.value)}>
+        <Select value={zoneFilter} onChange={(e) => setZoneFilter(e.target.value)} style={{ width: "auto" }}>
           <option value="">Tous les quartiers</option>
           <option value="__none__">— Sans quartier —</option>
           {quartiers.map((z) => (
             <option key={z} value={z}>{z}</option>
           ))}
         </Select>
-        <Select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)}>
+        <Select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)} style={{ width: "auto" }}>
           <option value="">Tous les niveaux</option>
           {levels.map((l) => (
             <option key={l} value={l}>{l}</option>
@@ -558,7 +578,16 @@ export function TransportManager({
                         className="size-4 rounded border-[color:var(--color-border)] accent-[color:var(--color-brand-600)]"
                       />
                     ) : as ? (
-                      <Check className="mx-auto size-4 text-[color:var(--color-brand-600)]" aria-label="Oui" />
+                      r.bus_activite_matin === "yes" ? (
+                        <span
+                          title="Trajet d'activité (hors circuits ordinaires)"
+                          className="mx-auto inline-flex size-5 items-center justify-center rounded bg-amber-500/15 text-[11px] font-bold text-amber-600 dark:text-amber-400"
+                        >
+                          A
+                        </span>
+                      ) : (
+                        <Check className="mx-auto size-4 text-[color:var(--color-brand-600)]" aria-label="Oui" />
+                      )
                     ) : (
                       <span className="text-[color:var(--color-foreground-subtle)]">—</span>
                     )}
@@ -602,7 +631,16 @@ export function TransportManager({
                         className="size-4 rounded border-[color:var(--color-border)] accent-[color:var(--color-brand-600)]"
                       />
                     ) : rs ? (
-                      <Check className="mx-auto size-4 text-[color:var(--color-brand-600)]" aria-label="Oui" />
+                      r.bus_activite_soir === "yes" ? (
+                        <span
+                          title="Trajet d'activité (hors circuits ordinaires)"
+                          className="mx-auto inline-flex size-5 items-center justify-center rounded bg-amber-500/15 text-[11px] font-bold text-amber-600 dark:text-amber-400"
+                        >
+                          A
+                        </span>
+                      ) : (
+                        <Check className="mx-auto size-4 text-[color:var(--color-brand-600)]" aria-label="Oui" />
+                      )
                     ) : (
                       <span className="text-[color:var(--color-foreground-subtle)]">—</span>
                     )}
@@ -671,7 +709,7 @@ export function TransportManager({
                     {Number(r.bus_remise) > 0 ? `${r.bus_remise}%` : "—"}
                   </td>
                   <td className="w-20 px-3 py-1.5 text-end tabular-nums font-medium text-[color:var(--color-foreground)]">
-                    {r.bus_net || r.bus_montant || "—"}
+                    {r.bus_net.trim() !== "" ? r.bus_net : r.bus_montant || "—"}
                   </td>
 
                   {/* ── Remarques + actions ── */}

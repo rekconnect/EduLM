@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/shell/page-header";
 import { withTenantSession } from "@/lib/session";
-import { saveBusAssignments } from "../students/_actions";
+import { saveBusAssignments, deleteBusAssignment } from "../students/_actions";
 import { TransportManager } from "./_manager";
 import { loadBusRows } from "./_data";
 
@@ -30,6 +30,7 @@ export default async function TransportPage({
 
     const data = await loadBusRows({ yearId, trim });
     const saveForPeriod = saveBusAssignments.bind(null, data.period);
+    const deleteForPeriod = deleteBusAssignment.bind(null, data.period);
 
     return (
       <main className="mx-auto max-w-7xl space-y-6 px-6 py-10">
@@ -43,6 +44,7 @@ export default async function TransportPage({
           selectedYearId={data.selectedYearId}
           trim={data.trim}
           onSave={saveForPeriod}
+          onDelete={deleteForPeriod}
         />
       </main>
     );

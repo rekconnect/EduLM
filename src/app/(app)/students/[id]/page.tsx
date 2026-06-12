@@ -249,11 +249,13 @@ export default async function StudentDetailPage({
     }
     const matinParts = [
       busPeriod.car_matin ? `Bus ${busPeriod.car_matin}` : "",
+      busPeriod.zoneno_matin ? `Zone ${busPeriod.zoneno_matin}` : "",
       busPeriod.zone_matin,
       busPeriod.station_matin,
     ].filter(Boolean);
     const soirParts = [
       busPeriod.car_soir ? `Bus ${busPeriod.car_soir}` : "",
+      busPeriod.zoneno_soir ? `Zone ${busPeriod.zoneno_soir}` : "",
       busPeriod.zone_soir,
       busPeriod.station_soir,
     ].filter(Boolean);

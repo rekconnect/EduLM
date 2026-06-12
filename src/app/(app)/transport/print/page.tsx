@@ -22,12 +22,14 @@ export default async function TransportPrintPage({
     trim?: string;
     q?: string;
     bus?: string;
+    zoneno?: string;
     zone?: string;
     niveau?: string;
     trajet?: string;
+    circuit?: string;
   }>;
 }) {
-  const { yearId, trim: trimParam, q, bus, zone, niveau, trajet } = await searchParams;
+  const { yearId, trim: trimParam, q, bus, zoneno, zone, niveau, trajet, circuit } = await searchParams;
   const user = await requireRole("SCHOOL_ADMIN");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
@@ -39,7 +41,7 @@ export default async function TransportPrintPage({
   const { rows: allRows, yearLabel, trim } = await runWithTenant({ tenantId, slug: null }, () =>
     loadBusRows({ yearId, trim: trimParam }),
   );
-  const filters = { q, bus, zone, niveau, trajet };
+  const filters = { q, bus, zoneno, zone, niveau, trajet, circuit };
   const exportRows = toExportRows(filterBusRows(allRows, filters));
   const filterText = busFilterSummary(filters);
 

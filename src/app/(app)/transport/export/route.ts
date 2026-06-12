@@ -28,9 +28,11 @@ export async function GET(request: Request) {
   const filters = {
     q: sp.get("q") ?? undefined,
     bus: sp.get("bus") ?? undefined,
+    zoneno: sp.get("zoneno") ?? undefined,
     zone: sp.get("zone") ?? undefined,
     niveau: sp.get("niveau") ?? undefined,
     trajet: sp.get("trajet") ?? undefined,
+    circuit: sp.get("circuit") ?? undefined,
   };
   const rows = filterBusRows(allRows, filters);
   const filterText = busFilterSummary(filters);

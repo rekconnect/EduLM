@@ -4,7 +4,7 @@
  * the activity returns — make sure before deleting/overwriting"):
  *   - Matching by student Code ↔ customAnswers.dars_student_code (100% exact).
  *   - For each matched student: a direction PRESENT in the file wins (car,
- *     zone "Z<n> · Quartier", station); a direction ABSENT from the file but
+ *     zoneno "<n>" + zone "Quartier", station); a direction ABSENT from the file but
  *     present in EduLM is KEPT (activity return).
  *   - Money: montant (brut) / remise % / net from the file (authoritative).
  *   - Tel: "P: père · M: mère". Remarques kept.
@@ -38,7 +38,7 @@ const cellText = (ws: ExcelJS.Worksheet, r: number, c: number): string => {
   return v == null ? "" : String(v);
 };
 
-type XDir = { car: string; zone: string; station: string };
+type XDir = { car: string; zoneno: string; zone: string; station: string };
 type X = {
   nom: string;
   prenom: string;
@@ -58,7 +58,8 @@ function dirFrom(ws: ExcelJS.Worksheet, r: number): XDir {
   const station = commaAt >= 0 ? quartierStation.slice(commaAt + 1).replace(/\s+/g, " ").trim() : "";
   return {
     car: cellText(ws, r, 14).trim(),
-    zone: zoneNo ? `Z${zoneNo} · ${quartier}` : quartier,
+    zoneno: zoneNo,
+    zone: quartier,
     station,
   };
 }
@@ -140,13 +141,13 @@ async function main() {
     const matin: XDir | null = x.matin
       ? x.matin
       : prev.as === "yes"
-        ? { car: prev.car_matin ?? "", zone: prev.zone_matin ?? "", station: prev.station_matin ?? "" }
+        ? { car: prev.car_matin ?? "", zoneno: prev.zoneno_matin ?? "", zone: prev.zone_matin ?? "", station: prev.station_matin ?? "" }
         : null;
     if (!x.matin && prev.as === "yes") keptMatin++;
     const soir: XDir | null = x.soir
       ? x.soir
       : prev.rs === "yes"
-        ? { car: prev.car_soir ?? "", zone: prev.zone_soir ?? "", station: prev.station_soir ?? "" }
+        ? { car: prev.car_soir ?? "", zoneno: prev.zoneno_soir ?? "", zone: prev.zone_soir ?? "", station: prev.station_soir ?? "" }
         : null;
     if (!x.soir && prev.rs === "yes") keptSoir++;
 
@@ -154,9 +155,11 @@ async function main() {
       as: matin ? "yes" : "",
       rs: soir ? "yes" : "",
       car_matin: matin?.car ?? "",
+      zoneno_matin: matin?.zoneno ?? "",
       zone_matin: matin?.zone ?? "",
       station_matin: matin?.station ?? "",
       car_soir: soir?.car ?? "",
+      zoneno_soir: soir?.zoneno ?? "",
       zone_soir: soir?.zone ?? "",
       station_soir: soir?.station ?? "",
       remarques: prev.remarques ?? "",

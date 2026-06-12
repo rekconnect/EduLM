@@ -25,6 +25,8 @@ export type BusPeriod = Partial<{
   zoneno_soir: string;
   zone_soir: string;
   station_soir: string;
+  activite_matin: string; // "yes" → trajet d'activité (hors circuits ordinaires Dars)
+  activite_soir: string;
   remarques: string;
   tel: string;
   montant: string; // brut
@@ -167,6 +169,8 @@ export async function loadBusRows(opts?: {
       bus_zoneno_soir: p.zoneno_soir ?? "",
       bus_zone_soir: (p.zone_soir ?? "") || (rs ? legacyZone : ""),
       bus_station_soir: p.station_soir ?? "",
+      bus_activite_matin: p.activite_matin ?? "",
+      bus_activite_soir: p.activite_soir ?? "",
       bus_remarques: p.remarques ?? "",
       bus_tel: p.tel ?? "",
       bus_montant: p.montant ?? "",
@@ -200,12 +204,12 @@ export const BUS_EXPORT_COLUMNS = [
   { key: "name", header: "Élève", width: 28 },
   { key: "family", header: "Code famille", width: 12 },
   { key: "className", header: "Classe", width: 10 },
-  { key: "as", header: "AS", width: 6 },
+  { key: "as", header: "AS", width: 9 },
   { key: "bus_car_matin", header: "Bus matin", width: 10 },
   { key: "bus_zoneno_matin", header: "Zone matin", width: 9 },
   { key: "bus_zone_matin", header: "Quartier matin", width: 18 },
   { key: "bus_station_matin", header: "Station matin", width: 24 },
-  { key: "rs", header: "RS", width: 6 },
+  { key: "rs", header: "RS", width: 9 },
   { key: "bus_car_soir", header: "Bus soir", width: 10 },
   { key: "bus_zoneno_soir", header: "Zone soir", width: 9 },
   { key: "bus_zone_soir", header: "Quartier soir", width: 18 },
@@ -233,6 +237,7 @@ export type BusFilters = {
   zoneno?: string; // zone number 1-10
   niveau?: string;
   trajet?: string; // AS | RS | AR | AR1 | AR2 | __none__
+  circuit?: string; // ordinaire | activite
 };
 
 export function filterBusRows(rows: BusRow[], f: BusFilters): BusRow[] {
@@ -257,6 +262,11 @@ export function filterBusRows(rows: BusRow[], f: BusFilters): BusRow[] {
     if (f.trajet === "AR1" && !(as && rs && sameBus)) return false;
     if (f.trajet === "AR2" && !(as && rs && !sameBus)) return false;
     if (f.trajet === "__none__" && (as || rs)) return false;
+    // Activité = at least one active direction outside the ordinary circuits.
+    const hasActivite =
+      (as && r.bus_activite_matin === "yes") || (rs && r.bus_activite_soir === "yes");
+    if (f.circuit === "activite" && !hasActivite) return false;
+    if (f.circuit === "ordinaire" && hasActivite) return false;
     return true;
   });
 }
@@ -279,6 +289,7 @@ export function busFilterSummary(f: BusFilters): string {
   if (f.zone) parts.push(f.zone === "__none__" ? "Sans quartier" : f.zone);
   if (f.niveau) parts.push(f.niveau);
   if (f.trajet) parts.push(TRAJET_LABELS[f.trajet] ?? f.trajet);
+  if (f.circuit) parts.push(f.circuit === "activite" ? "Trajets d'activité" : "Circuits ordinaires");
   return parts.join(" · ");
 }
 
@@ -296,12 +307,12 @@ export function toExportRows(rows: BusRow[]): Array<Record<string, string>> {
       name: r.name,
       family: r.family,
       className: r.className,
-      as: r.bus_as === "yes" ? "AS" : "",
+      as: r.bus_as === "yes" ? (r.bus_activite_matin === "yes" ? "AS (act.)" : "AS") : "",
       bus_car_matin: r.bus_car_matin,
       bus_zoneno_matin: r.bus_zoneno_matin,
       bus_zone_matin: r.bus_zone_matin,
       bus_station_matin: r.bus_station_matin,
-      rs: r.bus_rs === "yes" ? "RS" : "",
+      rs: r.bus_rs === "yes" ? (r.bus_activite_soir === "yes" ? "RS (act.)" : "RS") : "",
       bus_car_soir: r.bus_car_soir,
       bus_zoneno_soir: r.bus_zoneno_soir,
       bus_zone_soir: r.bus_zone_soir,

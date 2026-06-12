@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Search,
   UtensilsCrossed,
@@ -12,8 +13,16 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Pencil,
+  Trash2,
+  X,
+  Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Input, Select } from "@/components/ui/input";
+
+// Collation stops after CM2 — mirrors the module rule.
+const COLLATION_EDIT_LEVELS = new Set(["PS", "MS", "GS", "CP", "CE1", "CE2", "CM1", "CM2"]);
 
 export type ServiceRow = {
   id: string;
@@ -37,12 +46,58 @@ const lvlIdx = (l: string) => {
 
 type SortKey = "name" | "classe" | "collation" | "cantine";
 
-export function ServicesList({ rows }: { rows: ServiceRow[] }) {
+export function ServicesList({
+  rows,
+  onSet,
+}: {
+  rows: ServiceRow[];
+  onSet: (input: {
+    studentId: string;
+    cantine: boolean;
+    collation: boolean;
+  }) => Promise<{ ok: boolean; error?: string }>;
+}) {
+  const router = useRouter();
   const [q, setQ] = useState("");
   const [service, setService] = useState<"" | "collation" | "cantine" | "both">("");
   const [levelFilter, setLevelFilter] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null);
   const [page, setPage] = useState(1);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editCollation, setEditCollation] = useState(false);
+  const [editCantine, setEditCantine] = useState(false);
+  const [pending, start] = useTransition();
+
+  function startEdit(r: ServiceRow) {
+    setEditingId(r.id);
+    setEditCollation(r.collation);
+    setEditCantine(r.cantine);
+  }
+  function saveEdit(r: ServiceRow) {
+    start(async () => {
+      const res = await onSet({ studentId: r.id, cantine: editCantine, collation: editCollation });
+      if (res.ok) {
+        toast.success("Services mis à jour — dossier élève synchronisé");
+        setEditingId(null);
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "Échec de l'enregistrement");
+      }
+    });
+  }
+  function remove(r: ServiceRow) {
+    if (!window.confirm(`Retirer ${r.name} de la cantine/collation pour cette année ?`)) return;
+    start(async () => {
+      const res = await onSet({ studentId: r.id, cantine: false, collation: false });
+      if (res.ok) {
+        toast.success(`${r.name} retiré(e) des services de restauration`);
+        if (editingId === r.id) setEditingId(null);
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "Échec de la suppression");
+      }
+    });
+  }
 
   useEffect(() => {
     setPage(1);
@@ -205,39 +260,111 @@ export function ServicesList({ rows }: { rows: ServiceRow[] }) {
               <SortTh label="Classe" k="classe" />
               <SortTh label="Collation" k="collation" center />
               <SortTh label="Cantine" k="cantine" center />
+              <th className="px-3 py-2 text-end font-semibold uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {paged.map((r) => (
-              <tr key={r.id} className="border-b border-[color:var(--color-border-subtle)] last:border-0 hover:bg-[color:var(--color-surface-hover)]">
-                <td className="px-3 py-1.5">
-                  <div className="font-medium text-[color:var(--color-foreground)]">{r.name}</div>
-                  {r.family ? (
-                    <div className="text-xs text-[color:var(--color-foreground-subtle)]">{r.family}</div>
-                  ) : null}
-                </td>
-                <td className="whitespace-nowrap px-3 py-1.5 text-[color:var(--color-foreground-muted)]">
-                  {r.className || r.level || "—"}
-                </td>
-                <td className="px-3 py-1.5 text-center">
-                  {r.collation ? (
-                    <Check className="mx-auto size-4 text-[color:var(--color-brand-600)]" aria-label="Oui" />
-                  ) : (
-                    <span className="text-[color:var(--color-foreground-subtle)]">—</span>
-                  )}
-                </td>
-                <td className="px-3 py-1.5 text-center">
-                  {r.cantine ? (
-                    <Check className="mx-auto size-4 text-[color:var(--color-brand-600)]" aria-label="Oui" />
-                  ) : (
-                    <span className="text-[color:var(--color-foreground-subtle)]">—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {paged.map((r) => {
+              const isEditing = editingId === r.id;
+              const collationEditable = COLLATION_EDIT_LEVELS.has(r.level);
+              return (
+                <tr
+                  key={r.id}
+                  className={
+                    "border-b border-[color:var(--color-border-subtle)] last:border-0 " +
+                    (isEditing ? "bg-[color:var(--color-brand-500)]/5" : "hover:bg-[color:var(--color-surface-hover)]")
+                  }
+                >
+                  <td className="px-3 py-1.5">
+                    <div className="font-medium text-[color:var(--color-foreground)]">{r.name}</div>
+                    {r.family ? (
+                      <div className="text-xs text-[color:var(--color-foreground-subtle)]">{r.family}</div>
+                    ) : null}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-1.5 text-[color:var(--color-foreground-muted)]">
+                    {r.className || r.level || "—"}
+                  </td>
+                  <td className="px-3 py-1.5 text-center">
+                    {isEditing ? (
+                      <input
+                        type="checkbox"
+                        checked={editCollation && collationEditable}
+                        disabled={!collationEditable}
+                        title={collationEditable ? "Collation" : "Collation non offerte après le CM2"}
+                        onChange={(e) => setEditCollation(e.target.checked)}
+                        className="size-4 rounded border-[color:var(--color-border)] accent-[color:var(--color-brand-600)]"
+                      />
+                    ) : r.collation ? (
+                      <Check className="mx-auto size-4 text-[color:var(--color-brand-600)]" aria-label="Oui" />
+                    ) : (
+                      <span className="text-[color:var(--color-foreground-subtle)]">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-1.5 text-center">
+                    {isEditing ? (
+                      <input
+                        type="checkbox"
+                        checked={editCantine}
+                        onChange={(e) => setEditCantine(e.target.checked)}
+                        className="size-4 rounded border-[color:var(--color-border)] accent-[color:var(--color-brand-600)]"
+                      />
+                    ) : r.cantine ? (
+                      <Check className="mx-auto size-4 text-[color:var(--color-brand-600)]" aria-label="Oui" />
+                    ) : (
+                      <span className="text-[color:var(--color-foreground-subtle)]">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-1.5 text-end">
+                    {isEditing ? (
+                      <span className="inline-flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditingId(null)}
+                          disabled={pending}
+                          aria-label="Annuler"
+                          className="inline-flex size-7 items-center justify-center rounded text-[color:var(--color-foreground-muted)] transition-colors duration-150 ease-out hover:bg-[color:var(--color-surface-hover)] hover:text-[color:var(--color-foreground)]"
+                        >
+                          <X className="size-4" aria-hidden />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => saveEdit(r)}
+                          disabled={pending}
+                          className="inline-flex h-7 items-center gap-1 rounded bg-[color:var(--color-brand-600)] px-2 text-xs font-medium text-[color:var(--color-foreground-onbrand)] transition-colors duration-150 ease-out hover:bg-[color:var(--color-brand-700)] disabled:opacity-60"
+                        >
+                          {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Check className="size-3.5" aria-hidden />}
+                          OK
+                        </button>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(r)}
+                          disabled={pending}
+                          aria-label={`Modifier ${r.name}`}
+                          className="inline-flex size-7 items-center justify-center rounded text-[color:var(--color-foreground-subtle)] transition-colors duration-150 ease-out hover:bg-[color:var(--color-surface-hover)] hover:text-[color:var(--color-foreground)]"
+                        >
+                          <Pencil className="size-3.5" aria-hidden />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => remove(r)}
+                          disabled={pending}
+                          aria-label={`Retirer ${r.name}`}
+                          className="inline-flex size-7 items-center justify-center rounded text-[color:var(--color-foreground-subtle)] transition-colors duration-150 ease-out hover:bg-[color:var(--color-surface-hover)] hover:text-red-600 dark:hover:text-red-400"
+                        >
+                          <Trash2 className="size-3.5" aria-hidden />
+                        </button>
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-3 py-8 text-center text-sm text-[color:var(--color-foreground-subtle)]">
+                <td colSpan={5} className="px-3 py-8 text-center text-sm text-[color:var(--color-foreground-subtle)]">
                   Aucun élève ne correspond.
                 </td>
               </tr>

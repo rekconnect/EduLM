@@ -243,6 +243,20 @@ export function StudentYearView({
     // Bus flag: explicit registration value, else infer from billing for an
     // enrolled year so the toggle starts on the right state.
     f.autocar = r.autocar || (isEnrolled && billingTransport ? "yes" : "");
+    // Restauration: editable now — seeded from billing for enrolled years,
+    // from the registration answers otherwise. Saved back into BOTH
+    // services_by_year (module Cantine) and the registration keys.
+    const lvlHasCollation = COLLATION_LEVELS.has(p?.level ?? "");
+    f.svc_collation = isEnrolled
+      ? lvlHasCollation && (p?.services ?? "").includes("Collation")
+        ? "yes"
+        : "no"
+      : (r.collations ?? "");
+    f.svc_cantine = isEnrolled
+      ? (p?.services ?? "").includes("Cantine")
+        ? "yes"
+        : "no"
+      : (r.repas_chaud ?? "");
     return f;
   }
   function openEdit() {
@@ -357,6 +371,21 @@ export function StudentYearView({
         <div className="space-y-5">
           <div className="space-y-3">
             <h5 className="text-[0.7rem] font-semibold uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
+              Restauration
+            </h5>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {collationOffered || !enrolled ? (
+                <FieldLabel label="Collation">
+                  <YesNo k="svc_collation" />
+                </FieldLabel>
+              ) : null}
+              <FieldLabel label="Cantine (repas chaud)">
+                <YesNo k="svc_cantine" />
+              </FieldLabel>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <h5 className="text-[0.7rem] font-semibold uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
               Transport
             </h5>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -427,8 +456,8 @@ export function StudentYearView({
             </div>
           </div>
           <p className="text-xs text-[color:var(--color-foreground-subtle)]">
-            Collation et cantine proviennent de la facturation et ne sont pas
-            modifiables ici.
+            Collation et cantine sont synchronisées avec le module Cantine —
+            une modification ici met à jour sa liste aussi.
           </p>
         </div>
       ) : (

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Loader2,
   Search,
+  Plus,
   Bus,
   MapPin,
   Banknote,
@@ -50,6 +51,9 @@ export type BusRow = {
   bus_station_soir: string;
   bus_activite_matin: string; // "yes" → trajet d'activité (hors circuits ordinaires)
   bus_activite_soir: string;
+  bus_act_bus: string; // activity section: 3rd bus / name / days
+  bus_act_nom: string;
+  bus_act_jours: string;
   bus_remarques: string;
   // Read-only, from the Dars tarif export.
   bus_tel: string;
@@ -71,6 +75,9 @@ type Edit = {
   bus_zoneno_soir: string;
   bus_zone_soir: string;
   bus_station_soir: string;
+  bus_act_bus: string;
+  bus_act_nom: string;
+  bus_act_jours: string;
   bus_remarques: string;
 };
 
@@ -97,6 +104,9 @@ const pick = (r: BusRow): Edit => ({
   bus_zoneno_soir: r.bus_zoneno_soir,
   bus_zone_soir: r.bus_zone_soir,
   bus_station_soir: r.bus_station_soir,
+  bus_act_bus: r.bus_act_bus,
+  bus_act_nom: r.bus_act_nom,
+  bus_act_jours: r.bus_act_jours,
   bus_remarques: r.bus_remarques,
 });
 
@@ -115,17 +125,25 @@ export function TransportManager({
   years,
   selectedYearId,
   trim,
+  candidates,
   onSave,
   onDelete,
+  onRegister,
 }: {
   rows: BusRow[];
   years: YearOption[];
   selectedYearId: string;
   trim: string;
+  candidates: Array<{ id: string; name: string; className: string }>;
   onSave: (
     updates: Array<{ studentId: string } & Edit>,
   ) => Promise<{ ok: boolean; error?: string }>;
   onDelete: (studentId: string) => Promise<{ ok: boolean; error?: string }>;
+  onRegister: (input: {
+    studentId: string;
+    as: boolean;
+    rs: boolean;
+  }) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -141,6 +159,12 @@ export function TransportManager({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Edit | null>(null);
   const [pending, start] = useTransition();
+  // "Inscrire un élève" panel.
+  const [registering, setRegistering] = useState(false);
+  const [regQuery, setRegQuery] = useState("");
+  const [regStudent, setRegStudent] = useState("");
+  const [regAs, setRegAs] = useState(true);
+  const [regRs, setRegRs] = useState(true);
 
   useEffect(() => {
     setPage(1);
@@ -296,6 +320,31 @@ export function TransportManager({
       }
     });
   }
+  function submitRegister() {
+    if (!regStudent) {
+      toast.error("Choisis un élève");
+      return;
+    }
+    if (!regAs && !regRs) {
+      toast.error("Choisis aller, retour ou les deux");
+      return;
+    }
+    start(async () => {
+      const res = await onRegister({ studentId: regStudent, as: regAs, rs: regRs });
+      if (res.ok) {
+        toast.success("Élève inscrit au transport — visible aussi sur son dossier");
+        setRegistering(false);
+        setRegQuery("");
+        setRegStudent("");
+        setRegAs(true);
+        setRegRs(true);
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "Échec de l'inscription");
+      }
+    });
+  }
+
   function deleteRow(r: BusRow) {
     if (
       !window.confirm(
@@ -480,12 +529,20 @@ export function TransportManager({
         </Select>
       </div>
 
-      {/* Count + exports */}
+      {/* Count + register + exports */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-[color:var(--color-foreground-muted)]">
           <span className="font-medium text-[color:var(--color-foreground)]">{filtered.length}</span> élève(s)
         </span>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setRegistering((v) => !v)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[color:var(--color-brand-600)] px-3 text-sm font-medium text-[color:var(--color-foreground-onbrand)] transition-colors duration-150 ease-out hover:bg-[color:var(--color-brand-700)]"
+          >
+            {registering ? <X className="size-4" aria-hidden /> : <Plus className="size-4" aria-hidden />}
+            {registering ? "Annuler" : "Inscrire un élève"}
+          </button>
           <a
             href={`/transport/export${exportQs}`}
             className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[color:var(--color-border)] px-3 text-sm font-medium text-[color:var(--color-foreground)] transition-colors duration-150 ease-out hover:bg-[color:var(--color-surface-hover)]"
@@ -505,9 +562,72 @@ export function TransportManager({
         </div>
       </div>
 
+      {/* Register panel */}
+      {registering ? (
+        <div className="flex flex-wrap items-end gap-3 rounded-card border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] p-4 shadow-card">
+          <label className="flex flex-col gap-1 text-xs font-medium text-[color:var(--color-foreground-muted)]">
+            Rechercher
+            <Input
+              value={regQuery}
+              onChange={(e) => {
+                setRegQuery(e.target.value);
+                setRegStudent("");
+              }}
+              placeholder="Nom de l'élève…"
+              style={{ width: "14rem" }}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-[color:var(--color-foreground-muted)]">
+            Élève ({candidates.length} non inscrits)
+            <Select value={regStudent} onChange={(e) => setRegStudent(e.target.value)} style={{ width: "20rem" }}>
+              <option value="">— Choisir —</option>
+              {candidates
+                .filter((c) => !regQuery.trim() || c.name.toLowerCase().includes(regQuery.trim().toLowerCase()))
+                .slice(0, 80)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.className ? ` (${c.className})` : ""}
+                  </option>
+                ))}
+            </Select>
+          </label>
+          <label className="inline-flex items-center gap-2 pb-2 text-sm text-[color:var(--color-foreground)]">
+            <input
+              type="checkbox"
+              checked={regAs}
+              onChange={(e) => setRegAs(e.target.checked)}
+              className="size-4 rounded border-[color:var(--color-border)] accent-[color:var(--color-brand-600)]"
+            />
+            Aller (AS)
+          </label>
+          <label className="inline-flex items-center gap-2 pb-2 text-sm text-[color:var(--color-foreground)]">
+            <input
+              type="checkbox"
+              checked={regRs}
+              onChange={(e) => setRegRs(e.target.checked)}
+              className="size-4 rounded border-[color:var(--color-border)] accent-[color:var(--color-brand-600)]"
+            />
+            Retour (RS)
+          </label>
+          <button
+            type="button"
+            onClick={submitRegister}
+            disabled={pending}
+            className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[color:var(--color-brand-600)] px-4 text-sm font-medium text-[color:var(--color-foreground-onbrand)] transition-colors duration-150 ease-out hover:bg-[color:var(--color-brand-700)] disabled:opacity-60"
+          >
+            {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Plus className="size-4" aria-hidden />}
+            Inscrire
+          </button>
+          <p className="basis-full text-xs text-[color:var(--color-foreground-subtle)]">
+            L&apos;inscription apparaît immédiatement sur le dossier de l&apos;élève (Services &amp; autorisations : autocar, aller/retour). Bus, zone et station se complètent ensuite via le crayon de la ligne.
+          </p>
+        </div>
+      ) : null}
+
       {/* Table */}
       <div className="max-h-[68vh] overflow-auto rounded-lg border border-[color:var(--color-border-subtle)]">
-        <table className="w-full min-w-[1980px] text-sm">
+        <table className="w-full min-w-[2280px] text-sm">
           <thead>
             <tr className="text-xs uppercase tracking-wider text-[color:var(--color-foreground-subtle)] [&>th]:sticky [&>th]:top-0 [&>th]:z-10 [&>th]:h-8 [&>th]:border-b [&>th]:border-[color:var(--color-border-subtle)] [&>th]:bg-[color:var(--color-surface-raised)]">
               <th className="px-3" colSpan={2} />
@@ -516,6 +636,12 @@ export function TransportManager({
               </th>
               <th className="border-s border-[color:var(--color-border-subtle)] px-3 text-start font-semibold" colSpan={5}>
                 <span className="inline-flex items-center gap-1"><Sunset className="size-3.5" aria-hidden /> RS — Retour (soir)</span>
+              </th>
+              <th className="border-s border-[color:var(--color-border-subtle)] px-3 text-start font-semibold" colSpan={3}>
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-flex size-4 items-center justify-center rounded bg-amber-500/15 text-[10px] font-bold text-amber-600 dark:text-amber-400">A</span>
+                  Activité (3ᵉ bus)
+                </span>
               </th>
               <th className="border-s border-[color:var(--color-border-subtle)] px-3 text-start font-semibold" colSpan={5}>
                 Contacts & facturation
@@ -535,6 +661,9 @@ export function TransportManager({
               <th className="px-3 py-2 text-start font-semibold">Zone</th>
               <SortTh label="Quartier" k="zone_soir" />
               <th className="px-3 py-2 text-start font-semibold">Station</th>
+              <th className="border-s border-[color:var(--color-border-subtle)] px-3 py-2 text-start font-semibold">Bus N°</th>
+              <th className="px-3 py-2 text-start font-semibold">Activité</th>
+              <th className="px-3 py-2 text-start font-semibold">Jours</th>
               <th className="border-s border-[color:var(--color-border-subtle)] px-3 py-2 text-start font-semibold">Tel</th>
               <th className="px-3 py-2 text-start font-semibold">Emails</th>
               <th className="px-3 py-2 text-start font-semibold">Montant</th>
@@ -578,16 +707,7 @@ export function TransportManager({
                         className="size-4 rounded border-[color:var(--color-border)] accent-[color:var(--color-brand-600)]"
                       />
                     ) : as ? (
-                      r.bus_activite_matin === "yes" ? (
-                        <span
-                          title="Trajet d'activité (hors circuits ordinaires)"
-                          className="mx-auto inline-flex size-5 items-center justify-center rounded bg-amber-500/15 text-[11px] font-bold text-amber-600 dark:text-amber-400"
-                        >
-                          A
-                        </span>
-                      ) : (
-                        <Check className="mx-auto size-4 text-[color:var(--color-brand-600)]" aria-label="Oui" />
-                      )
+                      <Check className="mx-auto size-4 text-[color:var(--color-brand-600)]" aria-label="Oui" />
                     ) : (
                       <span className="text-[color:var(--color-foreground-subtle)]">—</span>
                     )}
@@ -631,16 +751,7 @@ export function TransportManager({
                         className="size-4 rounded border-[color:var(--color-border)] accent-[color:var(--color-brand-600)]"
                       />
                     ) : rs ? (
-                      r.bus_activite_soir === "yes" ? (
-                        <span
-                          title="Trajet d'activité (hors circuits ordinaires)"
-                          className="mx-auto inline-flex size-5 items-center justify-center rounded bg-amber-500/15 text-[11px] font-bold text-amber-600 dark:text-amber-400"
-                        >
-                          A
-                        </span>
-                      ) : (
-                        <Check className="mx-auto size-4 text-[color:var(--color-brand-600)]" aria-label="Oui" />
-                      )
+                      <Check className="mx-auto size-4 text-[color:var(--color-brand-600)]" aria-label="Oui" />
                     ) : (
                       <span className="text-[color:var(--color-foreground-subtle)]">—</span>
                     )}
@@ -669,6 +780,42 @@ export function TransportManager({
                       </td>
                       <td className="max-w-[180px] truncate px-3 py-1.5 text-xs text-[color:var(--color-foreground-muted)]" title={r.bus_station_soir}>
                         {rs && r.bus_station_soir ? r.bus_station_soir : "—"}
+                      </td>
+                    </>
+                  )}
+
+                  {/* ── Activité (3ᵉ bus) ── */}
+                  {isEditing ? (
+                    <>
+                      <td className="w-16 border-s border-[color:var(--color-border-subtle)] px-2 py-1.5">
+                        <Input value={form!.bus_act_bus} placeholder="—" onChange={(ev) => set("bus_act_bus", ev.target.value)} className="h-8" />
+                      </td>
+                      <td className="w-36 px-2 py-1.5">
+                        <Input value={form!.bus_act_nom} placeholder="Activité" onChange={(ev) => set("bus_act_nom", ev.target.value)} className="h-8" />
+                      </td>
+                      <td className="w-32 px-2 py-1.5">
+                        <Input value={form!.bus_act_jours} placeholder="Jours" onChange={(ev) => set("bus_act_jours", ev.target.value)} className="h-8" />
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="whitespace-nowrap border-s border-[color:var(--color-border-subtle)] px-3 py-1.5 tabular-nums text-[color:var(--color-foreground)]">
+                        {r.bus_act_bus || r.bus_act_nom || r.bus_act_jours ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="inline-flex size-4 items-center justify-center rounded bg-amber-500/15 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                              A
+                            </span>
+                            {r.bus_act_bus || "—"}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="max-w-[150px] truncate px-3 py-1.5 text-xs text-[color:var(--color-foreground-muted)]" title={r.bus_act_nom}>
+                        {r.bus_act_nom || "—"}
+                      </td>
+                      <td className="max-w-[130px] truncate px-3 py-1.5 text-xs text-[color:var(--color-foreground-muted)]" title={r.bus_act_jours}>
+                        {r.bus_act_jours || "—"}
                       </td>
                     </>
                   )}
@@ -772,7 +919,7 @@ export function TransportManager({
             })}
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={19} className="px-3 py-8 text-center text-sm text-[color:var(--color-foreground-subtle)]">
+                <td colSpan={22} className="px-3 py-8 text-center text-sm text-[color:var(--color-foreground-subtle)]">
                   Aucun élève ne correspond.
                 </td>
               </tr>

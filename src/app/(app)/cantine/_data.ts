@@ -12,7 +12,19 @@ const COLLATION_LEVELS = new Set([
  * services_by_year. Used by the page, the Excel export route and the print
  * view. Must run inside a tenant session/context.
  */
-export async function loadCantineRows(): Promise<{ rows: ServiceRow[]; yearLabel: string }> {
+export async function loadCantineRows(): Promise<{
+  rows: ServiceRow[];
+  yearLabel: string;
+  /** Enrolled students missing at least one service — the "Inscrire" picker. */
+  candidates: Array<{
+    id: string;
+    name: string;
+    className: string;
+    level: string;
+    hasCantine: boolean;
+    hasCollation: boolean;
+  }>;
+}> {
   const activeYear = await db.academicYear.findFirst({
     where: { isActive: true },
     select: { label: true },
@@ -37,6 +49,14 @@ export async function loadCantineRows(): Promise<{ rows: ServiceRow[]; yearLabel
   });
 
   const rows: ServiceRow[] = [];
+  const candidates: Array<{
+    id: string;
+    name: string;
+    className: string;
+    level: string;
+    hasCantine: boolean;
+    hasCollation: boolean;
+  }> = [];
   for (const s of students) {
     const ca = (s.customAnswers ?? {}) as Record<string, unknown>;
     let services = "";
@@ -49,6 +69,17 @@ export async function loadCantineRows(): Promise<{ rows: ServiceRow[]; yearLabel
     const level = s.enrollments[0]?.class.level ?? "";
     const collation = COLLATION_LEVELS.has(level) && services.includes("Collation");
     const cantine = services.includes("Cantine");
+    const collationPossible = COLLATION_LEVELS.has(level);
+    if (!cantine || (collationPossible && !collation)) {
+      candidates.push({
+        id: s.id,
+        name: `${s.lastName} ${s.firstName}`,
+        className: s.enrollments[0]?.class.name ?? "",
+        level,
+        hasCantine: cantine,
+        hasCollation: collation,
+      });
+    }
     if (!collation && !cantine) continue;
     rows.push({
       id: s.id,
@@ -60,7 +91,7 @@ export async function loadCantineRows(): Promise<{ rows: ServiceRow[]; yearLabel
       cantine,
     });
   }
-  return { rows, yearLabel: label };
+  return { rows, yearLabel: label, candidates };
 }
 
 export const CANTINE_EXPORT_COLUMNS = [

@@ -270,6 +270,16 @@ export default async function StudentDetailPage({
           "RS — Retour (soir)",
           busPeriod.rs === "yes" ? soirParts.join(" · ") || "Oui" : "",
         ],
+        [
+          "Activité (3ᵉ bus)",
+          [
+            busPeriod.act_bus ? `Bus ${busPeriod.act_bus}` : "",
+            busPeriod.act_nom,
+            busPeriod.act_jours,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        ],
         ["Remarques", busPeriod.remarques],
       ] as Array<[string, string | undefined]>
     ).filter(([, v]) => v && v.trim()) as Array<[string, string]>;

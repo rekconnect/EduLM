@@ -25,8 +25,11 @@ export type BusPeriod = Partial<{
   zoneno_soir: string;
   zone_soir: string;
   station_soir: string;
-  activite_matin: string; // "yes" → trajet d'activité (hors circuits ordinaires Dars)
-  activite_soir: string;
+  activite_matin: string; // unused in practice — activities only produce evening returns
+  activite_soir: string; // "yes" → retour d'activité (act_* fields filled)
+  act_bus: string; // 3rd bus — the activity (College-run) bus number
+  act_nom: string; // activity name(s), e.g. "Chorale / Escrime"
+  act_jours: string; // matching day(s), e.g. "Lundi / Mercredi, Vendredi"
   remarques: string;
   tel: string;
   montant: string; // brut
@@ -79,6 +82,9 @@ export async function loadBusRows(opts?: {
   period: string;
   years: Array<{ id: string; label: string; isActive: boolean }>;
   selectedYearId: string;
+  /** Enrolled students WITHOUT an active trajet this period — the "Inscrire
+   *  un élève" picker. */
+  candidates: Array<{ id: string; name: string; className: string }>;
 }> {
   const years = await db.academicYear.findMany({
     orderBy: { startDate: "desc" },
@@ -123,6 +129,7 @@ export async function loadBusRows(opts?: {
   });
 
   const rows: BusRow[] = [];
+  const candidates: Array<{ id: string; name: string; className: string }> = [];
   for (const s of students) {
     const ca = (s.customAnswers ?? {}) as Record<string, unknown>;
     let registered = false;
@@ -146,6 +153,14 @@ export async function loadBusRows(opts?: {
     const periods = parsePeriods(ca);
     const p: BusPeriod =
       periods[period] ?? (legacyApplies ? (legacyPeriod(ca) ?? {}) : {});
+    // Any enrolled student without an active trajet can be newly registered.
+    if (p.as !== "yes" && p.rs !== "yes") {
+      candidates.push({
+        id: s.id,
+        name: `${s.lastName} ${s.firstName}`,
+        className: s.enrollments[0]?.class.name ?? "",
+      });
+    }
     // A student with an assignment this period belongs on the page even if the
     // service-registration detection (billing/autocar) missed them.
     if (!registered && p.as !== "yes" && p.rs !== "yes") continue;
@@ -171,6 +186,9 @@ export async function loadBusRows(opts?: {
       bus_station_soir: p.station_soir ?? "",
       bus_activite_matin: p.activite_matin ?? "",
       bus_activite_soir: p.activite_soir ?? "",
+      bus_act_bus: p.act_bus ?? "",
+      bus_act_nom: p.act_nom ?? "",
+      bus_act_jours: p.act_jours ?? "",
       bus_remarques: p.remarques ?? "",
       bus_tel: p.tel ?? "",
       bus_montant: p.montant ?? "",
@@ -196,6 +214,7 @@ export async function loadBusRows(opts?: {
     period,
     years,
     selectedYearId,
+    candidates,
   };
 }
 
@@ -214,6 +233,9 @@ export const BUS_EXPORT_COLUMNS = [
   { key: "bus_zoneno_soir", header: "Zone soir", width: 9 },
   { key: "bus_zone_soir", header: "Quartier soir", width: 18 },
   { key: "bus_station_soir", header: "Station soir", width: 24 },
+  { key: "bus_act_bus", header: "Bus activité", width: 10 },
+  { key: "bus_act_nom", header: "Activité", width: 18 },
+  { key: "bus_act_jours", header: "Jours activité", width: 16 },
   { key: "bus_tel", header: "Tel", width: 20 },
   { key: "email_pere", header: "Email père", width: 26 },
   { key: "email_mere", header: "Email mère", width: 26 },
@@ -317,6 +339,9 @@ export function toExportRows(rows: BusRow[]): Array<Record<string, string>> {
       bus_zoneno_soir: r.bus_zoneno_soir,
       bus_zone_soir: r.bus_zone_soir,
       bus_station_soir: r.bus_station_soir,
+      bus_act_bus: r.bus_act_bus,
+      bus_act_nom: r.bus_act_nom,
+      bus_act_jours: r.bus_act_jours,
       bus_tel: r.bus_tel,
       email_pere: r.email_pere,
       email_mere: r.email_mere,

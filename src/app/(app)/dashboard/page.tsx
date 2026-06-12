@@ -20,7 +20,9 @@ export default async function DashboardPage() {
     const [students, classes, teachers, parents, activeYear, absencesWeek, disciplineWeek] =
       await Promise.all([
         db.student.count({ where: { status: "ENROLLED" } }),
-        db.class.count(),
+        // Only the ACTIVE year's classes — each year carries its own Class
+        // rows, so a bare count() sums all years (268 instead of ~67).
+        db.class.count({ where: { academicYear: { isActive: true } } }),
         db.user.count({ where: { role: "TEACHER" } }),
         db.user.count({ where: { role: "PARENT" } }),
         db.academicYear.findFirst({ where: { isActive: true }, select: { label: true } }),

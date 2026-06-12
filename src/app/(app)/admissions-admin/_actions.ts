@@ -9,6 +9,7 @@ import { runWithTenant } from "@/lib/tenant-context";
 import { decimalStringToCents } from "@/lib/money";
 import { sendApplicationDecidedEmail } from "@/lib/emails/notifications";
 import { linkStudentToGuardianFamily } from "@/lib/family";
+import { applyDossierToStudent } from "./_apply-dossier";
 
 // ── Admission cycle CRUD ────────────────────────────────────
 
@@ -561,6 +562,17 @@ export async function decideApplication(
       include: {
         cycle: { select: { targetYearLabel: true } },
         submittedBy: { select: { id: true, email: true, name: true } },
+        contacts: {
+          select: {
+            kind: true,
+            firstName: true,
+            lastName: true,
+            relation: true,
+            phoneMobile: true,
+            phoneHome: true,
+          },
+          orderBy: { order: "asc" },
+        },
       },
     });
     if (!app) return { error: "not-found" };
@@ -660,6 +672,23 @@ export async function decideApplication(
               classId: klass.id,
               academicYearId: klass.academicYearId,
             },
+          });
+
+          // FIELD MATCHING — pour the online dossier into the student record
+          // for the cycle's target year (transport, restauration, santé,
+          // custom fields, personnes autorisées). Works for any future
+          // cycle/year, not just 2026-2027.
+          // The tenant-scoped client's tx is structurally a TransactionClient;
+          // the extension wrapper just hides that from the type system.
+          await applyDossierToStudent(tx as unknown as Parameters<typeof applyDossierToStudent>[0], {
+            tenantId,
+            studentId,
+            yearLabel: app.cycle.targetYearLabel,
+            dossierAnswers: app.dossierAnswers,
+            studentAnswers: app.studentAnswers,
+            parentAnswers: app.parentAnswers,
+            submittedByUserId: app.submittedByUserId,
+            contacts: app.contacts,
           });
 
           await tx.application.update({

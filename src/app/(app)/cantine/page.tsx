@@ -1,6 +1,8 @@
 import { PageHeader } from "@/components/shell/page-header";
 import { withTenantSession } from "@/lib/session";
+import { registerCantineStudent, setCantineServices } from "../students/_actions";
 import { ServicesList } from "./_list";
+import { CantineRegister } from "./_register";
 import { loadCantineRows } from "./_data";
 
 /**
@@ -21,7 +23,7 @@ export default async function CantinePage() {
       );
     }
 
-    const { rows, yearLabel } = await loadCantineRows();
+    const { rows, yearLabel, candidates } = await loadCantineRows();
 
     return (
       <main className="mx-auto max-w-6xl space-y-6 px-6 py-10">
@@ -29,7 +31,8 @@ export default async function CantinePage() {
           title="Cantine / Collation"
           description={`Inscrits aux services de restauration · ${yearLabel}`}
         />
-        <ServicesList rows={rows} />
+        <CantineRegister candidates={candidates} onRegister={registerCantineStudent} />
+        <ServicesList rows={rows} onSet={setCantineServices} />
       </main>
     );
   });

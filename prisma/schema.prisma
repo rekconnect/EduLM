@@ -121,6 +121,9 @@ model Tenant {
   medicalRecords          StudentMedicalRecord[]
   immunizations           StudentImmunization[]
   medicalVisits           MedicalVisit[]
+  busAttendances          BusAttendance[]
+  autocars                Autocar[]
+  busCircuits             BusCircuit[]
 }
 
 model User {
@@ -315,6 +318,7 @@ model Student {
   medicalRecord            StudentMedicalRecord?
   immunizations            StudentImmunization[]
   medicalVisits            MedicalVisit[]
+  busAttendances           BusAttendance[]
 
   @@index([tenantId, lastName, firstName])
   @@index([tenantId, familyId])
@@ -428,6 +432,73 @@ model MedicalVisit {
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, studentId, visitDate])
+}
+
+/// Daily bus-run attendance ("app bus"): one status per student per bus per
+/// day, set from the Autocars tab. Status: present | absent | retard |
+/// depart_autorise | activite.
+model BusAttendance {
+  id        String @id @default(cuid())
+  tenantId  String
+  studentId String
+
+  date   String // "YYYY-MM-DD" (local school day)
+  bus    String // bus number the attendance was taken on
+  status String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, studentId, date, bus])
+  @@index([tenantId, date, bus])
+}
+
+/// The bus fleet ("Listes des autocars") — managed from the transport module.
+model Autocar {
+  id       String @id @default(cuid())
+  tenantId String
+
+  number           String // bus number as used everywhere (0-24 today)
+  type             String? // bus | minibus | van
+  capacity         Int?
+  plate            String? // plaque d'immatriculation
+  cylinders        Int?
+  couleur          String?
+  dateAchat        String? // "YYYY-MM-DD"
+  moteur           String?
+  fuel             String? // diesel | essence | hybride | electrique
+  modele           String?
+  anneeFabrication Int?
+  vin              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+}
+
+/// "Autocar - Circuit": a circuit run by an autocar — label rendered as
+/// "<autocarNumber> - <activite>" (Dars naming, e.g. "8 - Ordinaire").
+model BusCircuit {
+  id       String @id @default(cuid())
+  tenantId String
+
+  autocarNumber String
+  activite      String @default("Ordinaire")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, autocarNumber, activite])
+  @@index([tenantId])
 }
 
 model Guardian {

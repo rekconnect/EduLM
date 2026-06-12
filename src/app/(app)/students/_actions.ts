@@ -243,20 +243,49 @@ export async function saveStudentRegistrationYear(
         byYear = {};
       }
     }
+    // svc_collation / svc_cantine are special: they also drive the BILLING
+    // tokens (services_by_year) so the Cantine module and the fiche stay in
+    // sync — editable from the dossier now that manual registration exists.
+    const { svc_collation, svc_cantine, ...regFields } = fields;
+
     const current: Record<string, string> = { ...(byYear[year] ?? {}) };
-    for (const [k, v] of Object.entries(fields)) {
+    for (const [k, v] of Object.entries(regFields)) {
       const t = (v ?? "").trim();
       if (t === "") delete current[k];
       else current[k] = t;
     }
+    // Mirror the restauration choices into the registration answers too
+    // (the display for non-enrolled years reads these keys).
+    if (svc_collation === "yes" || svc_collation === "no") current.collations = svc_collation;
+    if (svc_cantine === "yes" || svc_cantine === "no") current.repas_chaud = svc_cantine;
     byYear[year] = current;
     answers.registration_by_year = JSON.stringify(byYear);
+
+    if (svc_collation === "yes" || svc_collation === "no" || svc_cantine === "yes" || svc_cantine === "no") {
+      let sby: Record<string, string> = {};
+      if (typeof answers.services_by_year === "string") {
+        try {
+          sby = JSON.parse(answers.services_by_year) as Record<string, string>;
+        } catch { /* ignore */ }
+      }
+      let tokens = (sby[year] ?? "")
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      if (svc_collation === "yes" && !tokens.includes("Collation")) tokens.push("Collation");
+      if (svc_collation === "no") tokens = tokens.filter((t) => t !== "Collation");
+      if (svc_cantine === "yes" && !tokens.includes("Cantine")) tokens.push("Cantine");
+      if (svc_cantine === "no") tokens = tokens.filter((t) => t !== "Cantine");
+      sby[year] = tokens.join(", ");
+      answers.services_by_year = JSON.stringify(sby);
+    }
 
     await db.student.update({
       where: { id: studentId },
       data: { customAnswers: answers },
     });
     revalidatePath(`/students/${studentId}`);
+    revalidatePath("/cantine");
     return { ok: true };
   });
 }
@@ -326,6 +355,9 @@ export async function saveBusAssignments(
     bus_zoneno_soir: string;
     bus_zone_soir: string;
     bus_station_soir: string;
+    bus_act_bus: string; // activity section: 3rd bus
+    bus_act_nom: string; // activity name(s)
+    bus_act_jours: string; // day(s)
     bus_remarques: string;
   }>,
 ): Promise<{ ok: boolean; error?: string }> {
@@ -385,10 +417,15 @@ export async function saveBusAssignments(
         zoneno_soir: rs ? zno(u.bus_zoneno_soir) : "",
         zone_soir: rs ? (u.bus_zone_soir ?? "").trim().slice(0, 80) : "",
         station_soir: rs ? (u.bus_station_soir ?? "").trim().slice(0, 160) : "",
-        // Activité flags are derived/imported — keep them, but only while the
-        // direction stays on.
-        activite_matin: as ? ((prev.activite_matin as string) ?? "") : "",
-        activite_soir: rs ? ((prev.activite_soir as string) ?? "") : "",
+        // Activity section (3rd bus): the flag derives from the fields.
+        act_bus: (u.bus_act_bus ?? "").trim().slice(0, 20),
+        act_nom: (u.bus_act_nom ?? "").trim().slice(0, 120),
+        act_jours: (u.bus_act_jours ?? "").trim().slice(0, 120),
+        activite_matin: "",
+        activite_soir:
+          (u.bus_act_bus ?? "").trim() || (u.bus_act_nom ?? "").trim() || (u.bus_act_jours ?? "").trim()
+            ? "yes"
+            : "",
         remarques: (u.bus_remarques ?? "").trim().slice(0, 400),
       };
       ca.bus_periods = JSON.stringify(periods);
@@ -400,6 +437,210 @@ export async function saveBusAssignments(
     }
     revalidatePath("/transport");
     for (const u of updates) revalidatePath(`/students/${u.studentId}`);
+    return { ok: true };
+  });
+}
+
+/**
+ * Register a student to transport from /transport (Inscription tab):
+ * creates the bus_periods entry (aller / retour / aller-retour) AND flags
+ * the year registration (registration_by_year: autocar + legs) so the
+ * student dossier immediately shows "inscrit transport".
+ */
+export async function registerBusStudent(
+  period: string, // "<yearLabel>|T1/T2/T3"
+  input: { studentId: string; as: boolean; rs: boolean },
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+  if (!/^.+\|T[123]$/.test(period)) return { ok: false, error: "bad-period" };
+  if (!input.as && !input.rs) return { ok: false, error: "Choisis aller, retour ou les deux" };
+  const yearLabel = period.split("|")[0]!;
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const st = await db.student.findUnique({
+      where: { id: input.studentId },
+      select: { customAnswers: true, firstName: true, lastName: true },
+    });
+    if (!st) return { ok: false, error: "Élève introuvable" };
+    const ca: Record<string, unknown> =
+      st.customAnswers && typeof st.customAnswers === "object"
+        ? { ...(st.customAnswers as Record<string, unknown>) }
+        : {};
+
+    let periods: Record<string, Record<string, string>> = {};
+    if (typeof ca.bus_periods === "string") {
+      try {
+        periods = JSON.parse(ca.bus_periods) as Record<string, Record<string, string>>;
+      } catch { /* ignore */ }
+    }
+    const prev = periods[period] ?? {};
+    if (prev.as === "yes" || prev.rs === "yes") {
+      return { ok: false, error: `${st.lastName} ${st.firstName} est déjà inscrit(e) au bus sur cette période` };
+    }
+    periods[period] = {
+      ...prev,
+      as: input.as ? "yes" : "",
+      rs: input.rs ? "yes" : "",
+      car_matin: "", zoneno_matin: "", zone_matin: "", station_matin: "",
+      car_soir: "", zoneno_soir: "", zone_soir: "", station_soir: "",
+      activite_matin: "", activite_soir: "",
+      remarques: prev.remarques ?? "",
+    };
+    ca.bus_periods = JSON.stringify(periods);
+
+    // Year registration → the dossier's "Services & autorisations".
+    let reg: Record<string, Record<string, string>> = {};
+    if (typeof ca.registration_by_year === "string") {
+      try {
+        reg = JSON.parse(ca.registration_by_year) as Record<string, Record<string, string>>;
+      } catch { /* ignore */ }
+    }
+    // The fiche's per-year keys store the MODE ("Avec bus" / "Avec parent"),
+    // not yes/no — a direction not taken by bus means the parents drive.
+    reg[yearLabel] = {
+      ...(reg[yearLabel] ?? {}),
+      autocar: "yes",
+      transport_aller: input.as ? "Avec bus" : "Avec parent",
+      transport_retour: input.rs ? "Avec bus" : "Avec parent",
+    };
+    ca.registration_by_year = JSON.stringify(reg);
+
+    await db.student.update({
+      where: { id: input.studentId },
+      data: { customAnswers: ca },
+    });
+    revalidatePath("/transport");
+    revalidatePath(`/students/${input.studentId}`);
+    return { ok: true };
+  });
+}
+
+/**
+ * Register a student to Cantine and/or Collation from /cantine — appends the
+ * billing tokens to services_by_year so the module list AND the student
+ * dossier both show the service.
+ */
+export async function registerCantineStudent(input: {
+  studentId: string;
+  cantine: boolean;
+  collation: boolean;
+}): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+  if (!input.cantine && !input.collation) {
+    return { ok: false, error: "Choisis cantine, collation ou les deux" };
+  }
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const year = await db.academicYear.findFirst({
+      where: { isActive: true },
+      select: { label: true },
+    });
+    if (!year) return { ok: false, error: "Aucune année active" };
+    const st = await db.student.findUnique({
+      where: { id: input.studentId },
+      select: { customAnswers: true },
+    });
+    if (!st) return { ok: false, error: "Élève introuvable" };
+    const ca: Record<string, unknown> =
+      st.customAnswers && typeof st.customAnswers === "object"
+        ? { ...(st.customAnswers as Record<string, unknown>) }
+        : {};
+    let sby: Record<string, string> = {};
+    if (typeof ca.services_by_year === "string") {
+      try {
+        sby = JSON.parse(ca.services_by_year) as Record<string, string>;
+      } catch { /* ignore */ }
+    }
+    const tokens = (sby[year.label] ?? "")
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    if (input.cantine && !tokens.includes("Cantine")) tokens.push("Cantine");
+    if (input.collation && !tokens.includes("Collation")) tokens.push("Collation");
+    sby[year.label] = tokens.join(", ");
+    ca.services_by_year = JSON.stringify(sby);
+
+    await db.student.update({
+      where: { id: input.studentId },
+      data: { customAnswers: ca },
+    });
+    revalidatePath("/cantine");
+    revalidatePath(`/students/${input.studentId}`);
+    return { ok: true };
+  });
+}
+
+/**
+ * SET a student's restauration services for the active year (edit/delete from
+ * the Cantine dashboard): adds/removes the "Cantine"/"Collation" billing
+ * tokens and mirrors the registration answers. Both false = removed from the
+ * module list entirely.
+ */
+export async function setCantineServices(input: {
+  studentId: string;
+  cantine: boolean;
+  collation: boolean;
+}): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const year = await db.academicYear.findFirst({
+      where: { isActive: true },
+      select: { label: true },
+    });
+    if (!year) return { ok: false, error: "Aucune année active" };
+    const st = await db.student.findUnique({
+      where: { id: input.studentId },
+      select: { customAnswers: true },
+    });
+    if (!st) return { ok: false, error: "Élève introuvable" };
+    const ca: Record<string, unknown> =
+      st.customAnswers && typeof st.customAnswers === "object"
+        ? { ...(st.customAnswers as Record<string, unknown>) }
+        : {};
+
+    let sby: Record<string, string> = {};
+    if (typeof ca.services_by_year === "string") {
+      try {
+        sby = JSON.parse(ca.services_by_year) as Record<string, string>;
+      } catch { /* ignore */ }
+    }
+    let tokens = (sby[year.label] ?? "")
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    tokens = tokens.filter((t) => t !== "Cantine" && t !== "Collation");
+    if (input.cantine) tokens.push("Cantine");
+    if (input.collation) tokens.push("Collation");
+    sby[year.label] = tokens.join(", ");
+    ca.services_by_year = JSON.stringify(sby);
+
+    // Mirror into the registration answers (the fiche's future-year display).
+    let reg: Record<string, Record<string, string>> = {};
+    if (typeof ca.registration_by_year === "string") {
+      try {
+        reg = JSON.parse(ca.registration_by_year) as Record<string, Record<string, string>>;
+      } catch { /* ignore */ }
+    }
+    reg[year.label] = {
+      ...(reg[year.label] ?? {}),
+      repas_chaud: input.cantine ? "yes" : "no",
+      collations: input.collation ? "yes" : "no",
+    };
+    ca.registration_by_year = JSON.stringify(reg);
+
+    await db.student.update({
+      where: { id: input.studentId },
+      data: { customAnswers: ca },
+    });
+    revalidatePath("/cantine");
+    revalidatePath(`/students/${input.studentId}`);
     return { ok: true };
   });
 }

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { unscopedDb } from "@/lib/db";
 import { requireRole, requireUser } from "@/lib/session";
 import { LOCALES, type Locale } from "@/i18n/config";
@@ -455,7 +456,7 @@ export async function updateParentCreateConfig(
         builtin: parsed.data.builtin,
         categories: parsed.data.categories,
         fields: finalFields,
-      } as unknown as Record<string, unknown>,
+      } as unknown as Prisma.InputJsonValue,
     },
   });
   revalidatePath("/settings");
@@ -502,8 +503,8 @@ export async function updateEntityFieldsConfig(
     where: { id: user.tenantId },
     data:
       parsed.data.entity === "parent"
-        ? { parentFieldsConfig: next as unknown as Record<string, unknown> }
-        : { studentFieldsConfig: next as unknown as Record<string, unknown> },
+        ? { parentFieldsConfig: next as unknown as Prisma.InputJsonValue }
+        : { studentFieldsConfig: next as unknown as Prisma.InputJsonValue },
   });
   revalidatePath("/settings");
   return { ok: true };

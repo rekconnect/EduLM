@@ -12,7 +12,7 @@
  *   npx tsx scripts/dars-import/phase1c-enrich.ts --tenant-name="Lycée Montaigne"
  *   npx tsx scripts/dars-import/phase1c-enrich.ts --tenant-name="Lycée Montaigne" --confirm
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { darsQuery, closeDars, DARS_COLLEGE_ID as C } from "./lib/dars-pool.js";
 import { CodesTable } from "./lib/codes.js";
 import { parseFlags, resolveTenant } from "./lib/tenant.js";
@@ -379,7 +379,7 @@ async function main() {
     const existing = (p.customAnswers && typeof p.customAnswers === "object" ? p.customAnswers : {}) as Record<string, unknown>;
     await prisma.user.update({
       where: { id: p.id },
-      data: { customAnswers: { ...existing, ...parentAnswers(d) } },
+      data: { customAnswers: { ...existing, ...parentAnswers(d) } as Prisma.InputJsonValue },
     });
   });
   await runChunked(eduStudents, 5, "students", async (s) => {
@@ -388,7 +388,7 @@ async function main() {
     const existing = (s.customAnswers && typeof s.customAnswers === "object" ? s.customAnswers : {}) as Record<string, unknown>;
     await prisma.student.update({
       where: { id: s.id },
-      data: { customAnswers: { ...existing, ...studentAnswers(d) } },
+      data: { customAnswers: { ...existing, ...studentAnswers(d) } as Prisma.InputJsonValue },
     });
   });
 

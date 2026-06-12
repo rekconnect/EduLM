@@ -62,6 +62,7 @@ async function main() {
       current.find((p) => p.status === "ACTIVE" && isReal(p.email)) ??
       current.find((p) => isReal(p.email)) ??
       current[0];
+    if (!primary) continue;
 
     // All enrolled kids across the parent's current families.
     const kidMap = new Map<string, string>();

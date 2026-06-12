@@ -21,6 +21,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { unscopedDb } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import {
@@ -161,7 +162,7 @@ export async function resetFieldOverride(
         fieldKey,
         action: "RESET",
         previousValue: previousValue as unknown as object | undefined,
-        newValue: null,
+        newValue: Prisma.JsonNull,
       },
     });
   } catch (e) {

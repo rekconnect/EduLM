@@ -127,6 +127,7 @@ async function main() {
   w("## 2. Parents with multiple accounts");
   for (const g of multi) {
     const p0 = g[0];
+    if (!p0) continue;
     w(`- **${p0.firstName} ${p0.lastName}** — ${g.length} accounts:`);
     for (const p of g) {
       const kids = p.guardianProfile?.childLinks ?? [];

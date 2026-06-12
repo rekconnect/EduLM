@@ -16,7 +16,7 @@
  *   npx tsx scripts/dars-import/phase1-families.ts --tenant-name="Lycée Montaigne" --confirm
  *   (optional) --since-year=2021
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { darsQuery, closeDars, DARS_COLLEGE_ID } from "./lib/dars-pool.js";
 import { CodesTable } from "./lib/codes.js";
 import { parseFlags, resolveTenant } from "./lib/tenant.js";
@@ -453,8 +453,8 @@ async function main() {
     };
     const student = await prisma.student.upsert({
       where: { darsStudentId: sid },
-      update: { ...data, familyId, customAnswers: extras },
-      create: { tenantId: tenant.id, darsStudentId: sid, familyId, customAnswers: extras, ...data },
+      update: { ...data, familyId, customAnswers: extras as Prisma.InputJsonValue },
+      create: { tenantId: tenant.id, darsStudentId: sid, familyId, customAnswers: extras as Prisma.InputJsonValue, ...data },
       select: { id: true },
     });
     studentIdByDars.set(sid, student.id);

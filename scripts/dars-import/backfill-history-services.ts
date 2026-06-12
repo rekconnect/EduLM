@@ -7,7 +7,7 @@
  *
  * DRY RUN by default; --confirm to apply.
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { darsQuery, closeDars, DARS_COLLEGE_ID as C } from "./lib/dars-pool.js";
 import { parseFlags, resolveTenant } from "./lib/tenant.js";
 
@@ -74,7 +74,7 @@ async function main() {
         const map = build(Number(s.darsStudentId));
         const ca = { ...((s.customAnswers ?? {}) as Record<string, unknown>) };
         if (Object.keys(map).length) ca.services_by_year = JSON.stringify(map);
-        return prisma.student.update({ where: { id: s.id }, data: { customAnswers: ca } });
+        return prisma.student.update({ where: { id: s.id }, data: { customAnswers: ca as Prisma.InputJsonValue } });
       }),
     );
     done += Math.min(SZ, students.length - i);

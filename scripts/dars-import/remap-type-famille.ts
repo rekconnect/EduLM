@@ -5,7 +5,7 @@
  *
  * DRY RUN by default; --confirm to apply.
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { parseFlags, resolveTenant } from "./lib/tenant.js";
 
 const prisma = new PrismaClient();
@@ -44,7 +44,7 @@ async function main() {
       todo.slice(i, i + 10).map((p) => {
         const ca = { ...(p.customAnswers as Record<string, unknown>) };
         ca.type_famille = MAP[ca.type_famille as string];
-        return prisma.user.update({ where: { id: p.id }, data: { customAnswers: ca } });
+        return prisma.user.update({ where: { id: p.id }, data: { customAnswers: ca as Prisma.InputJsonValue } });
       }),
     );
     done += Math.min(10, todo.length - i);

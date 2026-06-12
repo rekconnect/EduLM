@@ -5,7 +5,7 @@
  *
  * DRY RUN by default; --confirm to apply.
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { darsQuery, closeDars, DARS_COLLEGE_ID as C } from "./lib/dars-pool.js";
 import { parseFlags, resolveTenant } from "./lib/tenant.js";
 
@@ -54,7 +54,7 @@ async function main() {
         const next: Record<string, unknown> = { ...existing, actuel: f.Actual ? "yes" : "no" };
         if (f.IsDead) next.decede = "yes";
         if (f.SecondMarriage) next.second_mariage = "yes";
-        return prisma.user.update({ where: { id: p.id }, data: { customAnswers: next } });
+        return prisma.user.update({ where: { id: p.id }, data: { customAnswers: next as Prisma.InputJsonValue } });
       }),
     );
     done += Math.min(size, parents.length - i);

@@ -64,10 +64,6 @@ function evaluateFoyerComplete(
     addressCaza: string;
     addressVillage: string;
     addressStreet: string;
-    imageRightsSite: boolean | null;
-    imageRightsBook: boolean | null;
-    imageRightsSocial: boolean | null;
-    imageRightsRadio: boolean | null;
   },
   tenantConfig: TenantInscriptionFormConfig | null,
 ): boolean {
@@ -75,10 +71,24 @@ function evaluateFoyerComplete(
   if (need("foyer.address.caza") && !a.addressCaza.trim()) return false;
   if (need("foyer.address.village") && !a.addressVillage.trim()) return false;
   if (need("foyer.address.street") && !a.addressStreet.trim()) return false;
-  // Image-rights toggles default to non-required in the registry but
-  // the baseline completion rule (legacy isFoyerComplete) needs all
-  // four answered. Treat each as "needs an answer" UNLESS admin
-  // explicitly set required=false in the override (then we skip).
+  return true;
+}
+
+/**
+ * "Autorisations" tab completion — the four image-rights consents (moved
+ * out of Foyer into their own tab). Each must be answered unless admin
+ * explicitly set required=false or hid it. Registry keys are unchanged
+ * (foyer.imageRights.*) so existing WYSIWYG overrides still apply.
+ */
+function evaluateAutorisationsComplete(
+  a: {
+    imageRightsSite: boolean | null;
+    imageRightsBook: boolean | null;
+    imageRightsSocial: boolean | null;
+    imageRightsRadio: boolean | null;
+  },
+  tenantConfig: TenantInscriptionFormConfig | null,
+): boolean {
   const imgKeys = [
     ["foyer.imageRights.site", a.imageRightsSite],
     ["foyer.imageRights.book", a.imageRightsBook],
@@ -88,8 +98,6 @@ function evaluateFoyerComplete(
   for (const [key, value] of imgKeys) {
     const resolved = resolveField(key, tenantConfig, "fr");
     if (resolved?.hidden) continue;
-    // If admin explicitly set required=false, respect it. Otherwise
-    // the legacy "must be answered" rule applies.
     if (resolved?.hasOverride && resolved.required === false) continue;
     if (value === null) return false;
   }
@@ -1117,10 +1125,6 @@ export async function saveFoyerTab(
     addressFloor: string;
     addressDetails: string;
     addressNotes: string;
-    imageRightsSite: boolean | null;
-    imageRightsBook: boolean | null;
-    imageRightsSocial: boolean | null;
-    imageRightsRadio: boolean | null;
     siblings: Array<{
       firstName: string;
       birthYear: number | null;
@@ -1158,12 +1162,6 @@ export async function saveFoyerTab(
           addressPostal: null,
           addressCity: payload.addressCaza || null,
           addressCountry: "Liban",
-          imageRightsSite: payload.imageRightsSite,
-          imageRightsBook: payload.imageRightsBook,
-          imageRightsSocial: payload.imageRightsSocial,
-          imageRightsRadio: payload.imageRightsRadio,
-          imageRightsAnsweredAt:
-            payload.imageRightsSite !== null ? new Date() : null,
         },
       });
     }
@@ -1205,10 +1203,6 @@ export async function saveFoyerTab(
         addressCaza: payload.addressCaza,
         addressVillage: payload.addressVillage,
         addressStreet: payload.addressStreet,
-        imageRightsSite: payload.imageRightsSite,
-        imageRightsBook: payload.imageRightsBook,
-        imageRightsSocial: payload.imageRightsSocial,
-        imageRightsRadio: payload.imageRightsRadio,
       },
       tenantFormConfig,
     );
@@ -1222,6 +1216,63 @@ export async function saveFoyerTab(
           foyerExtras,
         ),
         tabsCompleted: mergeTabsCompleted(app.tabsCompleted, "foyer", complete),
+      },
+    });
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    return { ok: true };
+  });
+}
+
+// Autorisations (droits à l'image) ───────────────────────
+
+export async function saveAutorisationsTab(
+  applicationId: string,
+  payload: {
+    imageRightsSite: boolean | null;
+    imageRightsBook: boolean | null;
+    imageRightsSocial: boolean | null;
+    imageRightsRadio: boolean | null;
+  },
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await loadApplicationOwnedBy(applicationId, user.id);
+    if (!app) return { ok: false, error: "not-found" };
+
+    // Image rights are household-level → saved on the Family so siblings
+    // registered later inherit the same consents.
+    const guardian = await db.guardian.findUnique({
+      where: { userId: user.id },
+      select: { familyId: true },
+    });
+    if (guardian?.familyId) {
+      await db.family.update({
+        where: { id: guardian.familyId },
+        data: {
+          imageRightsSite: payload.imageRightsSite,
+          imageRightsBook: payload.imageRightsBook,
+          imageRightsSocial: payload.imageRightsSocial,
+          imageRightsRadio: payload.imageRightsRadio,
+          imageRightsAnsweredAt:
+            payload.imageRightsSite !== null ? new Date() : null,
+        },
+      });
+    }
+
+    const tenantFormConfig = await loadInscriptionFormConfig(tenantId);
+    const complete = evaluateAutorisationsComplete(payload, tenantFormConfig);
+
+    await db.application.update({
+      where: { id: applicationId },
+      data: {
+        tabsCompleted: mergeTabsCompleted(
+          app.tabsCompleted,
+          "autorisations",
+          complete,
+        ),
       },
     });
     revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
@@ -1584,6 +1635,124 @@ export async function deleteContact(
     }
     await db.applicationContact.delete({ where: { id: contactId } });
     await refreshContactsCompletion(applicationId, app, tenantId);
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    return { ok: true };
+  });
+}
+
+// ── Responsables (père / mère / tuteur) ──────────────────────────
+
+const responsableSchema = z.object({
+  kind: z.enum(["PERE", "MERE", "TUTEUR", "AUTRE"]),
+  civility: z.string().trim().max(10).optional(),
+  firstName: z.string().trim().max(80).optional(),
+  lastName: z.string().trim().min(1).max(80),
+  firstNameAr: z.string().trim().max(80).optional(),
+  lastNameAr: z.string().trim().max(80).optional(),
+  isLebanese: z.boolean().nullable().optional(),
+  nationality1: z.string().trim().max(60).optional(),
+  email: z.string().trim().max(160).optional(),
+  phoneMobile: z.string().trim().max(40).optional(),
+  phoneHome: z.string().trim().max(40).optional(),
+  profession: z.string().trim().max(120).optional(),
+  employer: z.string().trim().max(120).optional(),
+});
+
+export async function saveResponsable(
+  applicationId: string,
+  responsableId: string | null,
+  payload: unknown,
+): Promise<{ ok: boolean; error?: string; errors?: Record<string, string> }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  const parsed = responsableSchema.safeParse(payload);
+  if (!parsed.success) {
+    const flat = z.flattenError(parsed.error).fieldErrors as Record<
+      string,
+      string[] | undefined
+    >;
+    const errors: Record<string, string> = {};
+    for (const [k, v] of Object.entries(flat)) if (v?.[0]) errors[k] = v[0];
+    return { ok: false, errors };
+  }
+  const d = parsed.data;
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id: applicationId, submittedByUserId: user.id },
+      select: { id: true, status: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
+      return { ok: false, error: "locked" };
+    }
+
+    const data = {
+      kind: d.kind,
+      civility: d.civility || null,
+      firstName: d.firstName || null,
+      lastName: d.lastName,
+      firstNameAr: d.firstNameAr || null,
+      lastNameAr: d.lastNameAr || null,
+      isLebanese: d.isLebanese ?? null,
+      nationality1: d.nationality1 || null,
+      email: d.email || null,
+      phoneMobile: d.phoneMobile || null,
+      phoneHome: d.phoneHome || null,
+      profession: d.profession || null,
+      employer: d.employer || null,
+    };
+
+    if (responsableId) {
+      const existing = await db.applicationResponsable.findUnique({
+        where: { id: responsableId },
+        select: { applicationId: true },
+      });
+      if (!existing || existing.applicationId !== applicationId) {
+        return { ok: false, error: "not-found" };
+      }
+      await db.applicationResponsable.update({ where: { id: responsableId }, data });
+    } else {
+      const maxOrder = await db.applicationResponsable.aggregate({
+        where: { applicationId },
+        _max: { order: true },
+      });
+      await db.applicationResponsable.create({
+        data: { tenantId, applicationId, order: (maxOrder._max.order ?? -1) + 1, ...data },
+      });
+    }
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    return { ok: true };
+  });
+}
+
+export async function deleteResponsable(
+  applicationId: string,
+  responsableId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id: applicationId, submittedByUserId: user.id },
+      select: { id: true, status: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
+      return { ok: false, error: "locked" };
+    }
+    const existing = await db.applicationResponsable.findUnique({
+      where: { id: responsableId },
+      select: { applicationId: true },
+    });
+    if (!existing || existing.applicationId !== applicationId) {
+      return { ok: false, error: "not-found" };
+    }
+    await db.applicationResponsable.delete({ where: { id: responsableId } });
     revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
     return { ok: true };
   });

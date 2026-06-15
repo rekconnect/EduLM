@@ -295,7 +295,11 @@ export function EleveEtatCivilSection({
                   disabled={disabled}
                 >
                   <option value="">—</option>
-                  {COUNTRIES_FR.map((c) => (
+                  {(data.childBirthCountry &&
+                  !COUNTRIES_FR.includes(data.childBirthCountry)
+                    ? [data.childBirthCountry, ...COUNTRIES_FR]
+                    : COUNTRIES_FR
+                  ).map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>

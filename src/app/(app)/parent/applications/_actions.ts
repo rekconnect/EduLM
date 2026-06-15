@@ -11,6 +11,7 @@ import {
 import { db, unscopedDb } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
+import { COUNTRIES_FR } from "@/lib/lookups";
 import { sendApplicationSubmittedEmail } from "@/lib/emails/notifications";
 import { uploadDocument, deleteFromStorage } from "@/lib/storage";
 import {
@@ -870,10 +871,37 @@ export async function startRenewal(formData: FormData): Promise<void> {
           take: 1,
           select: { class: { select: { level: true, name: true } } },
         },
+        family: {
+          select: {
+            students: {
+              where: { status: "ENROLLED" },
+              select: {
+                id: true,
+                firstName: true,
+                dob: true,
+                enrollments: {
+                  orderBy: { enrolledAt: "desc" },
+                  take: 1,
+                  select: { class: { select: { name: true } } },
+                },
+              },
+            },
+          },
+        },
         guardianLinks: {
           include: {
             guardian: {
-              include: { user: { select: { name: true, email: true } } },
+              include: {
+                user: {
+                  select: {
+                    name: true,
+                    email: true,
+                    firstName: true,
+                    lastName: true,
+                    customAnswers: true,
+                  },
+                },
+              },
             },
           },
         },
@@ -881,7 +909,21 @@ export async function startRenewal(formData: FormData): Promise<void> {
     });
     if (!student) return;
 
+    const tenantRow = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { name: true },
+    });
+    const schoolName = tenantRow?.name ?? "";
+
     const primaryGuardian = student.guardianLinks[0]?.guardian.user;
+    // Relation of the parent doing the renewal (père / mère / tuteur), so the
+    // Responsables tab shows it instead of a blank.
+    const submitterRelation =
+      student.guardianLinks.find(
+        (l) => l.guardian.user.email === user.email,
+      )?.guardian.relation ??
+      student.guardianLinks.find((l) => l.isPrimary)?.guardian.relation ??
+      null;
 
     // Richest prefill source: the most-recent prior dossier for THIS child —
     // the application that first enrolled them, or last year's renewal. On a
@@ -905,6 +947,89 @@ export async function startRenewal(formData: FormData): Promise<void> {
     // customAnswers (identity + last year's transport/meals).
     const ca = (student.customAnswers ?? {}) as Record<string, unknown>;
     const caStr = (k: string) => (typeof ca[k] === "string" ? (ca[k] as string) : "");
+    // Lebanese Oui/Non — derive from the stored flag or a "Libanaise"
+    // nationality so the parent doesn't have to answer it again.
+    const lebanese =
+      ca.isLebanese === true ||
+      ca.isLebanese === "yes" ||
+      ca.isLebanese === "true" ||
+      /liban/i.test(caStr("nationalite")) ||
+      /liban/i.test(caStr("nationalite2"));
+    // Match the Dars birth-country casing ("AUSTRALIE") to the dropdown
+    // option ("Australie") so it shows selected.
+    const normCountry = (v: string): string => {
+      const hit = COUNTRIES_FR.find((c) => c.toLowerCase() === v.toLowerCase());
+      return hit ?? v;
+    };
+
+    // Siblings: the family's other enrolled children (this school), merged
+    // with any external-school siblings from the prior dossier (deduped by
+    // first name). Gives the parent a ready list to confirm.
+    const derivedSiblings = (student.family?.students ?? [])
+      .filter((sib) => sib.id !== studentId)
+      .map((sib) => ({
+        firstName: sib.firstName,
+        birthYear: sib.dob ? sib.dob.getFullYear() : null,
+        className: sib.enrollments[0]?.class.name ?? null,
+        schoolName,
+      }));
+    const seenSib = new Set<string>();
+    const siblingRows = [
+      ...(priorApp?.siblings ?? []).map((s) => ({
+        firstName: s.firstName,
+        birthYear: s.birthYear,
+        className: s.className,
+        schoolName: s.schoolName,
+      })),
+      ...derivedSiblings,
+    ].filter((s) => {
+      const k = s.firstName.trim().toLowerCase();
+      if (!k || seenSib.has(k)) return false;
+      seenSib.add(k);
+      return true;
+    });
+
+    // Responsables: copy the prior dossier's rows if any; otherwise build
+    // père + mère from the family's guardians so both show prefilled.
+    const relKind: Record<string, "PERE" | "MERE" | "TUTEUR" | "AUTRE"> = {
+      pere: "PERE",
+      "père": "PERE",
+      mere: "MERE",
+      "mère": "MERE",
+      tuteur: "TUTEUR",
+      parent: "AUTRE",
+    };
+    const guardianResponsables =
+      priorApp && priorApp.responsables.length
+        ? []
+        : student.guardianLinks.map((l, idx) => {
+            const u = l.guardian.user;
+            const pca = (u.customAnswers ?? {}) as Record<string, unknown>;
+            const ps = (k: string) => (typeof pca[k] === "string" ? (pca[k] as string) : "");
+            let fn = u.firstName ?? "";
+            let ln = u.lastName ?? "";
+            if (!fn && !ln && u.name) {
+              const parts = u.name.trim().split(/\s+/);
+              ln = parts.length > 1 ? (parts[parts.length - 1] ?? "") : (parts[0] ?? "");
+              fn = parts.length > 1 ? parts.slice(0, -1).join(" ") : "";
+            }
+            const firstPhone = ps("telephones").split(/[,;/]/)[0]?.trim() ?? "";
+            const realEmail = u.email && !/@import\./i.test(u.email) ? u.email : "";
+            return {
+              tenantId,
+              order: idx,
+              kind: relKind[(l.guardian.relation ?? "").toLowerCase()] ?? "AUTRE",
+              firstName: fn || null,
+              lastName: ln || null,
+              firstNameAr: ps("prenom_ar") || null,
+              lastNameAr: ps("nom_ar") || null,
+              nationality1: ps("nationalite") || null,
+              email: realEmail || null,
+              phoneMobile: firstPhone || null,
+              profession: ps("profession") || null,
+              employer: ps("societe") || null,
+            };
+          });
 
     // dossierAnswers: copy the prior dossier wholesale (foyer extras,
     // transport, santé…); else seed transport/meals from last registration.
@@ -930,16 +1055,18 @@ export async function startRenewal(formData: FormData): Promise<void> {
         childGender: priorApp?.childGender ?? student.gender ?? null,
         childPlaceOfBirth:
           priorApp?.childPlaceOfBirth ?? student.placeOfBirth ?? (caStr("lieu_naissance") || null),
-        childBirthCountry: priorApp?.childBirthCountry ?? (caStr("pays_naissance") || null),
+        childBirthCountry:
+          priorApp?.childBirthCountry ??
+          (caStr("pays_naissance") ? normCountry(caStr("pays_naissance")) : null),
         childNationality:
           priorApp?.childNationality ?? student.nationality ?? (caStr("nationalite") || null),
         childNationality2: priorApp?.childNationality2 ?? (caStr("nationalite2") || null),
         childFirstNameAr: priorApp?.childFirstNameAr ?? null,
         childLastNameAr: priorApp?.childLastNameAr ?? null,
-        childIsLebanese: priorApp?.childIsLebanese ?? null,
+        childIsLebanese: priorApp?.childIsLebanese ?? (lebanese ? true : null),
         childPassportLebanese: priorApp?.childPassportLebanese ?? null,
         // ── Responsable identity carried from the prior dossier ──
-        submitterRelation: priorApp?.submitterRelation ?? null,
+        submitterRelation: priorApp?.submitterRelation ?? submitterRelation,
         submitterIsLebanese: priorApp?.submitterIsLebanese ?? null,
         submitterPassportLebanese: priorApp?.submitterPassportLebanese ?? null,
         submitterNationality: priorApp?.submitterNationality ?? null,
@@ -977,16 +1104,18 @@ export async function startRenewal(formData: FormData): Promise<void> {
         // ── Sub-rows recreated from the prior dossier ──
         ...(priorApp && priorApp.responsables.length
           ? { responsables: { create: priorApp.responsables.map((r) => copyResponsable(r, tenantId)) } }
-          : {}),
+          : guardianResponsables.length
+            ? { responsables: { create: guardianResponsables } }
+            : {}),
         ...(priorApp && priorApp.contacts.length
           ? { contacts: { create: priorApp.contacts.map((c) => copyContact(c, tenantId)) } }
           : {}),
-        ...(priorApp && priorApp.siblings.length
+        ...(siblingRows.length
           ? {
               siblings: {
-                create: priorApp.siblings.map((s) => ({
+                create: siblingRows.map((s, idx) => ({
                   tenantId,
-                  order: s.order,
+                  order: idx,
                   firstName: s.firstName,
                   birthYear: s.birthYear,
                   className: s.className,

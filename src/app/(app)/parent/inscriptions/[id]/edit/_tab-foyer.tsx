@@ -28,23 +28,7 @@ type FoyerInitial = {
   addressFloor: string;
   addressDetails: string;
   addressNotes: string;
-  imageRightsSite: boolean | null;
-  imageRightsBook: boolean | null;
-  imageRightsSocial: boolean | null;
-  imageRightsRadio: boolean | null;
   siblings: Sibling[];
-};
-
-const IMAGE_KINDS = ["Site", "Book", "Social", "Radio"] as const;
-type ImageKind = (typeof IMAGE_KINDS)[number];
-
-// Map UI kind → registry key (lowercase tail) for the per-image
-// rights toggle row.
-const IMAGE_FIELD_KEY: Record<ImageKind, string> = {
-  Site: "foyer.imageRights.site",
-  Book: "foyer.imageRights.book",
-  Social: "foyer.imageRights.social",
-  Radio: "foyer.imageRights.radio",
 };
 
 /**
@@ -82,13 +66,6 @@ export function DossierTabFoyer({
   const [addressDetails, setAddressDetails] = useState(initial.addressDetails);
   const [addressNotes, setAddressNotes] = useState(initial.addressNotes);
 
-  const [imageRights, setImageRights] = useState({
-    Site: initial.imageRightsSite,
-    Book: initial.imageRightsBook,
-    Social: initial.imageRightsSocial,
-    Radio: initial.imageRightsRadio,
-  });
-
   const [siblings, setSiblings] = useState<Sibling[]>(initial.siblings);
 
   // Per-field config — Address card.
@@ -107,23 +84,18 @@ export function DossierTabFoyer({
   const fSibClass = useField("foyer.siblings.className");
   const fSibSchool = useField("foyer.siblings.schoolName");
 
-  // Image rights — one toggle per kind.
-  const fImageSite = useField("foyer.imageRights.site");
-  const fImageBook = useField("foyer.imageRights.book");
-  const fImageSocial = useField("foyer.imageRights.social");
-  const fImageRadio = useField("foyer.imageRights.radio");
-  const imageFieldByKind: Record<ImageKind, ReturnType<typeof useField>> = {
-    Site: fImageSite,
-    Book: fImageBook,
-    Social: fImageSocial,
-    Radio: fImageRadio,
-  };
-
-  const villageOptions = LEBANON_TOWNS_BY_KAZA[addressCaza] ?? [];
-
-  function setImage(kind: ImageKind, val: boolean) {
-    setImageRights((p) => ({ ...p, [kind]: val }));
-  }
+  const villageBase = LEBANON_TOWNS_BY_KAZA[addressCaza] ?? [];
+  // A prefilled value (e.g. a Dars town stored as the caza, or a town not in
+  // our lookup) that isn't one of the listed options would silently blank the
+  // <Select>. Surface it as a selectable option so prefill stays visible.
+  const cazaOptions =
+    addressCaza && !LEBANON_REGIONS_FR.includes(addressCaza)
+      ? [addressCaza, ...LEBANON_REGIONS_FR]
+      : LEBANON_REGIONS_FR;
+  const villageOptions =
+    addressVillage && !villageBase.includes(addressVillage)
+      ? [addressVillage, ...villageBase]
+      : villageBase;
 
   function addSibling() {
     setSiblings((p) => [
@@ -152,10 +124,6 @@ export function DossierTabFoyer({
         addressFloor,
         addressDetails,
         addressNotes,
-        imageRightsSite: imageRights.Site,
-        imageRightsBook: imageRights.Book,
-        imageRightsSocial: imageRights.Social,
-        imageRightsRadio: imageRights.Radio,
         siblings: siblings
           .filter((s) => s.firstName.trim().length > 0)
           .map((s) => {
@@ -171,39 +139,6 @@ export function DossierTabFoyer({
       if (r.ok) toast.success(tCommon("saved"));
       else toast.error(t("saveError"));
     });
-  }
-
-  // Image rights row — uses a custom wrapper instead of <Field> because
-  // it's a label + yes/no row, not a label + input. We render the label
-  // ourselves and respect the override's required indicator.
-  function ImageRightsRow({ kind }: { kind: ImageKind }) {
-    const cfg = imageFieldByKind[kind];
-    if (cfg?.hidden) return null;
-    const v = imageRights[kind];
-    return (
-      <EditableField fieldKey={IMAGE_FIELD_KEY[kind]}>
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface)] px-3 py-2">
-          <span className="text-sm font-medium text-[color:var(--color-foreground)]">
-            {cfg?.label ?? t(`foyer.imageRights${kind}` as never)}
-            {cfg?.required ? (
-              <span className="ms-0.5 text-[color:var(--color-danger)]">
-                *
-              </span>
-            ) : null}
-          </span>
-          <div className="flex items-center gap-2">
-            <YesNoChoice
-              name={`image-${kind}`}
-              value={v}
-              onChange={(val) => setImage(kind, val)}
-              yesLabel={tCommon("yes")}
-              noLabel={tCommon("no")}
-              disabled={disabled}
-            />
-          </div>
-        </div>
-      </EditableField>
-    );
   }
 
   return (
@@ -232,7 +167,7 @@ export function DossierTabFoyer({
                     disabled={disabled}
                   >
                     <option value="">—</option>
-                    {LEBANON_REGIONS_FR.map((c) => (
+                    {cazaOptions.map((c) => (
                       <option key={c} value={c}>
                         {c}
                       </option>
@@ -487,19 +422,6 @@ export function DossierTabFoyer({
         </EditableField>
       )}
 
-      {/* ── Image rights — four separate yes/no per Montaigne form ── */}
-      <Card>
-        <CardHeader
-          title={t("foyer.imageRightsTitle")}
-          description={t("foyer.imageRightsHint")}
-        />
-        <CardBody className="space-y-3">
-          {IMAGE_KINDS.map((kind) => (
-            <ImageRightsRow key={kind} kind={kind} />
-          ))}
-        </CardBody>
-      </Card>
-
       {!disabled ? (
         <div className="flex justify-end">
           <Button
@@ -521,43 +443,3 @@ export function DossierTabFoyer({
   );
 }
 
-function YesNoChoice({
-  name,
-  value,
-  onChange,
-  yesLabel,
-  noLabel,
-  disabled,
-}: {
-  name: string;
-  value: boolean | null;
-  onChange: (val: boolean) => void;
-  yesLabel: string;
-  noLabel: string;
-  disabled: boolean;
-}) {
-  return (
-    <div className="inline-flex items-center gap-3">
-      <label className="inline-flex items-center gap-1 text-sm">
-        <input
-          type="radio"
-          name={name}
-          checked={value === true}
-          onChange={() => onChange(true)}
-          disabled={disabled}
-        />
-        {yesLabel}
-      </label>
-      <label className="inline-flex items-center gap-1 text-sm">
-        <input
-          type="radio"
-          name={name}
-          checked={value === false}
-          onChange={() => onChange(false)}
-          disabled={disabled}
-        />
-        {noLabel}
-      </label>
-    </div>
-  );
-}

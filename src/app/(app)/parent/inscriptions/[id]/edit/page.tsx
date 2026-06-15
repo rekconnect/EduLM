@@ -30,6 +30,8 @@ import { DossierEditClient } from "./_client";
 import { DossierTabPlaceholder } from "./_tab-placeholder";
 import { CancelApplicationDialog } from "./_cancel-dialog";
 import { DossierTabFoyer } from "./_tab-foyer";
+import { DossierResponsablesList } from "./_tab-responsables-list";
+import { DossierTabAutorisations } from "./_tab-autorisations";
 import { DossierTabScolarite } from "./_tab-scolarite";
 import { DossierTabTransport } from "./_tab-transport";
 import { EleveEtatCivilSection } from "./_section-eleve-etat-civil";
@@ -153,6 +155,25 @@ export default async function DossierEditPage({
               relation: true,
               phoneMobile: true,
               phoneHome: true,
+            },
+          },
+          responsables: {
+            orderBy: { order: "asc" },
+            select: {
+              id: true,
+              kind: true,
+              civility: true,
+              firstName: true,
+              lastName: true,
+              firstNameAr: true,
+              lastNameAr: true,
+              isLebanese: true,
+              nationality1: true,
+              email: true,
+              phoneMobile: true,
+              phoneHome: true,
+              profession: true,
+              employer: true,
             },
           },
         },
@@ -352,6 +373,14 @@ export default async function DossierEditPage({
           ) : null}
 
           {currentTab === "responsables" ? (
+            <DossierResponsablesList
+              applicationId={app.id}
+              disabled={!editable}
+              initial={app.responsables}
+            />
+          ) : null}
+
+          {currentTab === "responsables" ? (
             <ResponsableLebaneseSection
               applicationId={app.id}
               disabled={!editable}
@@ -437,10 +466,6 @@ export default async function DossierEditPage({
                     typeof foyerExtras.notes === "string"
                       ? foyerExtras.notes
                       : "",
-                  imageRightsSite: fam?.imageRightsSite ?? null,
-                  imageRightsBook: fam?.imageRightsBook ?? null,
-                  imageRightsSocial: fam?.imageRightsSocial ?? null,
-                  imageRightsRadio: fam?.imageRightsRadio ?? null,
                   siblings: app.siblings.map((s) => ({
                     firstName: s.firstName,
                     birthYear: s.birthYear != null ? String(s.birthYear) : "",
@@ -476,6 +501,19 @@ export default async function DossierEditPage({
               />
             );
           })() : null}
+
+          {currentTab === "autorisations" ? (
+            <DossierTabAutorisations
+              applicationId={app.id}
+              disabled={!editable}
+              initial={{
+                imageRightsSite: guardian?.family?.imageRightsSite ?? null,
+                imageRightsBook: guardian?.family?.imageRightsBook ?? null,
+                imageRightsSocial: guardian?.family?.imageRightsSocial ?? null,
+                imageRightsRadio: guardian?.family?.imageRightsRadio ?? null,
+              }}
+            />
+          ) : null}
 
           {currentTab === "transport" ? (() => {
             const dossier =

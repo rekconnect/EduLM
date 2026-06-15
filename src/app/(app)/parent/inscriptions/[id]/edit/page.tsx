@@ -26,17 +26,16 @@ import {
   loadEntityFieldsConfig,
   listEstablishments,
 } from "../../../../settings/_actions";
-import { DossierEditClient } from "./_client";
 import { DossierTabPlaceholder } from "./_tab-placeholder";
 import { CancelApplicationDialog } from "./_cancel-dialog";
 import { DossierTabFoyer } from "./_tab-foyer";
-import { DossierResponsablesList } from "./_tab-responsables-list";
+import { DossierResponsablesParents } from "./_tab-responsables-parents";
+import { relKindOf, guardianToParentAnswers } from "@/lib/guardian-prefill";
 import { DossierTabAutorisations } from "./_tab-autorisations";
 import { DossierTabScolarite } from "./_tab-scolarite";
 import { DossierTabTransport } from "./_tab-transport";
 import { EleveEtatCivilSection } from "./_section-eleve-etat-civil";
 import { ElevePassportSection } from "./_section-eleve-passport";
-import { ResponsableLebaneseSection } from "./_section-responsable-lebanese";
 import { ResponsableFooter } from "./_section-responsable-footer";
 import {
   parseScolarite,
@@ -160,22 +159,7 @@ export default async function DossierEditPage({
           },
           responsables: {
             orderBy: { order: "asc" },
-            select: {
-              id: true,
-              kind: true,
-              civility: true,
-              firstName: true,
-              lastName: true,
-              firstNameAr: true,
-              lastNameAr: true,
-              isLebanese: true,
-              nationality1: true,
-              email: true,
-              phoneMobile: true,
-              phoneHome: true,
-              profession: true,
-              employer: true,
-            },
+            select: { id: true, kind: true, customAnswers: true },
           },
         },
       }),
@@ -213,20 +197,6 @@ export default async function DossierEditPage({
     if (!app) notFound();
     if (app.submittedByUserId !== user.id) notFound();
 
-    // Need User columns (firstName / lastName / email) for parent-field
-    // userBoundTo pre-fill. Session only has limited User data, so do a
-    // tenant-scoped read.
-    const sessionUser = await db.user.findUnique({
-      where: { id: user.id },
-      select: {
-        firstName: true,
-        lastName: true,
-        name: true,
-        email: true,
-        customAnswers: true,
-      },
-    });
-
     // Coerce JSON answers to flat string maps for the renderer.
     const coerceAnswers = (raw: unknown): Record<string, string> => {
       if (!raw || typeof raw !== "object") return {};
@@ -237,23 +207,6 @@ export default async function DossierEditPage({
       }
       return out;
     };
-
-    // Parent custom fields read from Application.parentAnswers, keyed by
-    // entity-field id. When that's empty (a renewal / new dossier from a
-    // parent who already has a profile), fall back to the parent's own stored
-    // customAnswers — the ids match the keys, so profession / téléphones /
-    // nom_ar / situation_famille… show prefilled instead of blank. Saving the
-    // Responsables tab then persists them. authorized_persons is a JSON blob,
-    // not a form field — drop it.
-    const parentAnswersStored = coerceAnswers(app.parentAnswers);
-    const parentInitial =
-      Object.keys(parentAnswersStored).length > 0
-        ? parentAnswersStored
-        : (() => {
-            const fromProfile = coerceAnswers(sessionUser?.customAnswers);
-            delete fromProfile.authorized_persons;
-            return fromProfile;
-          })();
 
     const establishmentsForRenderer = establishmentsRaw
       .filter((e) => e.isActive)
@@ -269,6 +222,59 @@ export default async function DossierEditPage({
     // is only meaningful for a brand-new pupil. Hide it for re-inscriptions so
     // the parent isn't asked to re-fill it and it doesn't block submission.
     const isRenewal = app.existingStudentId != null;
+
+    // Two-parent editor rows. Real ApplicationResponsable rows if they exist;
+    // otherwise synthesize prefilled rows from the family's guardians so the
+    // parent sees them filled — saving a card then persists the real row.
+    // Renewal → the student's guardians; new inscription → the submitting
+    // parent's family guardians (created at sign-up).
+    let responsableRows = app.responsables.map((r) => ({
+      id: r.id,
+      kind: r.kind as "PERE" | "MERE" | "TUTEUR" | "AUTRE",
+      answers: coerceAnswers(r.customAnswers),
+    }));
+    if (responsableRows.length === 0) {
+      const guardianSelect = {
+        relation: true,
+        nationality1: true,
+        nationality2: true,
+        user: {
+          select: { firstName: true, lastName: true, name: true, email: true, customAnswers: true },
+        },
+      } as const;
+      let sourceGuardians: Array<{
+        relation: string | null;
+        nationality1: string | null;
+        nationality2: string | null;
+        user: { firstName: string | null; lastName: string | null; name: string | null; email: string; customAnswers: unknown };
+      }> = [];
+      if (app.existingStudentId) {
+        const links = await db.studentGuardian.findMany({
+          where: { studentId: app.existingStudentId },
+          orderBy: { isPrimary: "desc" },
+          select: { guardian: { select: guardianSelect } },
+        });
+        sourceGuardians = links.map((l) => l.guardian);
+      } else {
+        // New inscription: the submitter's family guardians (incl. the one(s)
+        // entered at sign-up). Fall back to the submitter's own account.
+        const me = await db.guardian.findUnique({
+          where: { userId: user.id },
+          select: {
+            ...guardianSelect,
+            family: { select: { guardians: { select: guardianSelect } } },
+          },
+        });
+        if (me?.family?.guardians?.length) sourceGuardians = me.family.guardians;
+        else if (me) sourceGuardians = [me];
+      }
+      responsableRows = sourceGuardians.map((g, i) => ({
+        id: `new-${relKindOf(g.relation).toLowerCase()}-${i}`,
+        kind: relKindOf(g.relation),
+        answers: guardianToParentAnswers(g),
+      }));
+    }
+
     const baseTabsConfig = parseTabsConfig(tenant?.inscriptionTabsConfig);
     const tabsConfig = isRenewal
       ? { ...baseTabsConfig, scolarite: false }
@@ -398,52 +404,12 @@ export default async function DossierEditPage({
           ) : null}
 
           {currentTab === "responsables" ? (
-            <DossierResponsablesList
+            <DossierResponsablesParents
               applicationId={app.id}
               disabled={!editable}
-              initial={app.responsables}
-            />
-          ) : null}
-
-          {currentTab === "responsables" ? (
-            <ResponsableLebaneseSection
-              applicationId={app.id}
-              disabled={!editable}
-              initial={{
-                submitterRelation: app.submitterRelation,
-                submitterIsLebanese: app.submitterIsLebanese,
-                submitterPassportLebanese: app.submitterPassportLebanese ?? "",
-                submitterNationality: app.submitterNationality ?? "",
-                submitterNationality2: app.submitterNationality2 ?? "",
-              }}
-            />
-          ) : null}
-
-          {currentTab === "responsables" ? (
-            <DossierEditClient
-              applicationId={app.id}
-              status={app.status}
-              section="parent"
               parentConfig={parentFieldsConfig}
-              studentConfig={studentFieldsConfig}
-              parentInitial={parentInitial}
-              studentInitial={coerceAnswers(app.studentAnswers)}
               establishments={establishmentsForRenderer}
-              user={{
-                firstName: sessionUser?.firstName ?? null,
-                lastName: sessionUser?.lastName ?? null,
-                name: sessionUser?.name ?? null,
-                email: sessionUser?.email ?? null,
-              }}
-              dossier={{
-                childFirstName: app.childFirstName ?? null,
-                childLastName: app.childLastName ?? null,
-                childDob: app.childDob
-                  ? app.childDob.toISOString().slice(0, 10)
-                  : null,
-                establishment: app.establishment?.name ?? null,
-                niveau: app.niveau ?? null,
-              }}
+              initial={responsableRows}
             />
           ) : null}
 

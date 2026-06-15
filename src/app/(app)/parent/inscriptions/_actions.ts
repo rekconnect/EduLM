@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { db, unscopedDb } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
@@ -950,7 +951,6 @@ export async function submitDossier(
       tenant?.studentFieldsConfig,
     );
 
-    const parentAns = (app.parentAnswers ?? {}) as Record<string, string>;
     const studentAns = (app.studentAnswers ?? {}) as Record<string, string>;
 
     // ── Bound-source value resolvers ───────────────────────────────
@@ -973,22 +973,6 @@ export async function submitDossier(
           return "";
       }
     }
-    // userBoundTo (parent side) — pull from the submitter's User row.
-    function resolveUserBound(prop: string): string {
-      const u = app!.submittedBy;
-      switch (prop) {
-        case "firstName":
-          return u.firstName?.trim() ?? "";
-        case "lastName":
-          return u.lastName?.trim() ?? "";
-        case "name":
-          return u.name?.trim() ?? "";
-        case "email":
-          return u.email?.trim() ?? "";
-        default:
-          return "";
-      }
-    }
 
     // Collect labels of required fields the parent left empty.
     //
@@ -1003,19 +987,37 @@ export async function submitDossier(
     // is intentionally empty for those keys since the parent fills
     // them via the hardcoded surface.
     const missing: string[] = [];
-    for (const f of parentConfig.fields) {
-      if (!f.required) continue;
-      if (!evaluateShowIf(f, parentAns)) continue;
-      let value: string;
-      if (f.userBoundTo) {
-        value = resolveUserBound(f.userBoundTo);
-      } else if (f.dossierBoundTo) {
-        value = resolveDossierBound(f.dossierBoundTo);
-      } else {
-        value = (parentAns[f.id] ?? "").trim();
+
+    // ── Parent side: validate the Responsables (Père/Mère) editor ─────
+    // The two-responsable editor stores each parent's answers on its own
+    // ApplicationResponsable.customAnswers row — Application.parentAnswers
+    // is no longer the source. At least ONE responsable must satisfy the
+    // required parent fields. If none do, surface the missing fields of
+    // the responsable closest to complete so the parent sees exactly what
+    // is left to fill.
+    const responsables = await db.applicationResponsable.findMany({
+      where: { applicationId },
+      select: { customAnswers: true },
+      orderBy: { order: "asc" },
+    });
+    const responsableAnswers = responsables.map((r) => {
+      const ca = (r.customAnswers ?? {}) as Record<string, unknown>;
+      const ans: Record<string, string> = {};
+      for (const [k, v] of Object.entries(ca)) if (typeof v === "string") ans[k] = v;
+      return ans;
+    });
+    if (responsableAnswers.length === 0) {
+      missing.push(...missingResponsableFields({}, parentConfig));
+    } else {
+      let best: string[] | null = null;
+      for (const ans of responsableAnswers) {
+        const m = missingResponsableFields(ans, parentConfig);
+        if (best === null || m.length < best.length) best = m;
+        if (best.length === 0) break;
       }
-      if (value === "") missing.push(f.label);
+      missing.push(...(best ?? []));
     }
+
     for (const f of studentConfig.fields) {
       if (!f.required) continue;
       if (!evaluateShowIf(f, studentAns)) continue;
@@ -1419,12 +1421,21 @@ export async function saveTransportTab(
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
   const { parseTransport } = await import("@/lib/dossier-content");
+  const { isMaternelleNiveau } = await import("@/lib/pedagogique");
 
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await loadApplicationOwnedBy(applicationId, user.id);
     if (!app) return { ok: false, error: "not-found" };
 
     const data = parseTransport(payload);
+
+    // Maternelle (PS/MS/GS) → collation obligatoire: force Oui so it neither
+    // blocks completion nor can be saved as Non.
+    const appNiveau = await db.application.findUnique({
+      where: { id: applicationId },
+      select: { niveau: true },
+    });
+    if (isMaternelleNiveau(appNiveau?.niveau)) data.collation = true;
 
     // Phase 4: completion respects tenant per-field overrides.
     const tenantFormConfig = await loadInscriptionFormConfig(tenantId);
@@ -1743,6 +1754,129 @@ export async function saveResponsable(
   });
 }
 
+/**
+ * Save a responsable's FULL parent-field answer set (the two-parent editor on
+ * the Responsables tab). Answers are keyed by parent entity-field id and live
+ * in ApplicationResponsable.customAnswers; kind = Père/Mère/Tuteur. Creates
+ * the row when responsableId is null. firstName/lastName are mirrored from
+ * the prenom/nom answers for the card title + acceptance bridge.
+ */
+/** Labels of the required parent fields a responsable left empty (incl. the
+ *  name, which is always required even if not flagged in the config). Empty
+ *  array ⇒ this responsable is complete. */
+function missingResponsableFields(
+  answers: Record<string, string>,
+  parentConfig: EntityFieldsConfig,
+): string[] {
+  const missing: string[] = [];
+  if (!(answers.nom && answers.nom.trim())) {
+    missing.push(parentConfig.fields.find((f) => f.id === "nom")?.label ?? "Nom");
+  }
+  for (const f of parentConfig.fields) {
+    if (f.id === "nom") continue; // handled above
+    if (!f.required || !evaluateShowIf(f, answers)) continue;
+    if ((answers[f.id]?.trim().length ?? 0) === 0) missing.push(f.label);
+  }
+  return missing;
+}
+
+/** A responsable's saved answers satisfy the required parent fields (+ a name). */
+function responsableComplete(
+  answers: Record<string, string>,
+  parentConfig: EntityFieldsConfig,
+): boolean {
+  return missingResponsableFields(answers, parentConfig).length === 0;
+}
+
+/** Recompute the Responsables tab badge: complete when ≥1 saved responsable
+ *  satisfies the required parent fields. */
+async function refreshResponsablesCompletion(
+  applicationId: string,
+  tabsCompleted: unknown,
+  tenantId: string,
+): Promise<void> {
+  const tenant = await unscopedDb().tenant.findUnique({
+    where: { id: tenantId },
+    select: { parentFieldsConfig: true },
+  });
+  const cfg = parseEntityFieldsConfig(tenant?.parentFieldsConfig);
+  const rows = await db.applicationResponsable.findMany({
+    where: { applicationId },
+    select: { customAnswers: true },
+  });
+  const anyComplete = rows.some((r) => {
+    const ca = (r.customAnswers ?? {}) as Record<string, unknown>;
+    const ans: Record<string, string> = {};
+    for (const [k, v] of Object.entries(ca)) if (typeof v === "string") ans[k] = v;
+    return responsableComplete(ans, cfg);
+  });
+  await db.application.update({
+    where: { id: applicationId },
+    data: { tabsCompleted: mergeTabsCompleted(tabsCompleted, "responsables", anyComplete) },
+  });
+}
+
+export async function saveResponsableAnswers(
+  applicationId: string,
+  responsableId: string | null,
+  payload: { kind: string; answers: Record<string, string> },
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+  const kind = (["PERE", "MERE", "TUTEUR", "AUTRE"] as const).includes(
+    payload.kind as "PERE" | "MERE" | "TUTEUR" | "AUTRE",
+  )
+    ? (payload.kind as "PERE" | "MERE" | "TUTEUR" | "AUTRE")
+    : "AUTRE";
+
+  // Keep only non-empty string answers.
+  const answers: Record<string, string> = {};
+  for (const [k, v] of Object.entries(payload.answers ?? {})) {
+    if (typeof v === "string" && v.trim()) answers[k] = v.trim();
+  }
+  const firstName = (answers.prenom ?? "").slice(0, 80) || null;
+  const lastName = (answers.nom ?? "").slice(0, 80) || null;
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id: applicationId, submittedByUserId: user.id },
+      select: { id: true, status: true, tabsCompleted: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
+      return { ok: false, error: "locked" };
+    }
+    const data = {
+      kind,
+      firstName,
+      lastName,
+      customAnswers: answers as Prisma.InputJsonValue,
+    };
+    if (responsableId) {
+      const existing = await db.applicationResponsable.findUnique({
+        where: { id: responsableId },
+        select: { applicationId: true },
+      });
+      if (!existing || existing.applicationId !== applicationId) {
+        return { ok: false, error: "not-found" };
+      }
+      await db.applicationResponsable.update({ where: { id: responsableId }, data });
+    } else {
+      const maxOrder = await db.applicationResponsable.aggregate({
+        where: { applicationId },
+        _max: { order: true },
+      });
+      await db.applicationResponsable.create({
+        data: { tenantId, applicationId, order: (maxOrder._max.order ?? -1) + 1, ...data },
+      });
+    }
+    await refreshResponsablesCompletion(applicationId, app.tabsCompleted, tenantId);
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    return { ok: true };
+  });
+}
+
 export async function deleteResponsable(
   applicationId: string,
   responsableId: string,
@@ -1754,7 +1888,7 @@ export async function deleteResponsable(
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await db.application.findUnique({
       where: { id: applicationId, submittedByUserId: user.id },
-      select: { id: true, status: true },
+      select: { id: true, status: true, tabsCompleted: true },
     });
     if (!app) return { ok: false, error: "not-found" };
     if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
@@ -1768,6 +1902,7 @@ export async function deleteResponsable(
       return { ok: false, error: "not-found" };
     }
     await db.applicationResponsable.delete({ where: { id: responsableId } });
+    await refreshResponsablesCompletion(applicationId, app.tabsCompleted, tenantId);
     revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
     return { ok: true };
   });

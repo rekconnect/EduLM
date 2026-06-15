@@ -13,6 +13,7 @@ import {
   type TransportData,
   type TransportMode,
 } from "@/lib/dossier-content";
+import { isMaternelleNiveau } from "@/lib/pedagogique";
 import { useField } from "@/components/dossier/tenant-config-context";
 import { EditableField } from "@/components/dossier/preview-edit-mode-context";
 import { saveTransportTab } from "../../_actions";
@@ -45,9 +46,8 @@ export function DossierTabTransport({
   const [pending, startTransition] = useTransition();
   const [data, setData] = useState<TransportData>(initial);
 
-  // Crude maternelle detection — Montaigne uses TPS/PS/MS/GS/PSM/etc.
-  const isMaternelle =
-    !!niveau && /^(TPS|PS|MS|GS|PSM|Maternelle)/i.test(niveau);
+  // Maternelle (TPS/PS/MS/GS) → collation is obligatory (forced Oui, locked).
+  const isMaternelle = isMaternelleNiveau(niveau);
 
   const fAller = useField("transport.mode.aller");
   const fRetour = useField("transport.mode.retour");
@@ -74,7 +74,9 @@ export function DossierTabTransport({
       return;
     }
     startTransition(async () => {
-      const r = await saveTransportTab(applicationId, data);
+      // Maternelle: collation is obligatory — always send Oui.
+      const payload = isMaternelle ? { ...data, collation: true } : data;
+      const r = await saveTransportTab(applicationId, payload);
       if (r.ok) toast.success(tCommon("saved"));
       else toast.error(t("saveError"));
     });
@@ -316,13 +318,18 @@ export function DossierTabTransport({
                 hint={t("transport.collationHint")}
               >
                 <YesNo
-                  value={data.collation}
+                  value={isMaternelle ? true : data.collation}
                   onChange={(v) => patch({ collation: v })}
                   name="collation"
-                  disabled={disabled}
+                  disabled={disabled || isMaternelle}
                   yesLabel={tCommon("yes")}
                   noLabel={tCommon("no")}
                 />
+                {isMaternelle ? (
+                  <p className="mt-1 text-xs text-[color:var(--color-foreground-subtle)]">
+                    {t("transport.collationObligatoire")}
+                  </p>
+                ) : null}
               </Field>
             </EditableField>
           )}

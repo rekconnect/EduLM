@@ -150,12 +150,20 @@ export function FieldsRenderer({
   onChange,
   extras,
   disabled = false,
+  unlockBound = false,
 }: {
   config: EntityFieldsConfig;
   answers: FieldAnswers;
   onChange: (fieldId: string, value: string) => void;
   extras?: FieldExtras;
   disabled?: boolean;
+  /**
+   * When true, fields mirrored from a canonical column (guardian / family /
+   * dossier) stay EDITABLE instead of being force-locked. Used by the parent
+   * inscription form, where the parent IS the source of truth — unlike the
+   * admin fiche, where the column is canonical and the mirror is read-only.
+   */
+  unlockBound?: boolean;
 }) {
   const grouped = fieldsByCategory(config);
   const sortedCategories = [...config.categories]
@@ -188,6 +196,7 @@ export function FieldsRenderer({
                   extras={extras}
                   allAnswers={answers}
                   disabled={disabled}
+                  unlockBound={unlockBound}
                 />
               ))}
             </div>
@@ -205,6 +214,7 @@ function FieldInput({
   extras,
   allAnswers,
   disabled,
+  unlockBound = false,
 }: {
   field: FieldDef;
   value: string;
@@ -213,13 +223,15 @@ function FieldInput({
   /** Full answer map — needed by cross-field-source types like lebanon_town_for_kaza. */
   allAnswers: FieldAnswers;
   disabled: boolean;
+  unlockBound?: boolean;
 }) {
   // Fields bound to a canonical column (dossier identity, Guardian, or
-  // Family) are read-only — the canonical edit happens on the dedicated
-  // surface. Force disabled regardless of the section-level prop.
+  // Family) are read-only on the fiche — the canonical edit happens on the
+  // dedicated surface. In the parent inscription form (unlockBound) they stay
+  // editable, since the parent is the one entering the data.
   const isMirrored =
     !!field.dossierBoundTo || !!field.guardianBoundTo || !!field.familyBoundTo;
-  const effectiveDisabled = disabled || isMirrored;
+  const effectiveDisabled = disabled || (isMirrored && !unlockBound);
 
   const commonProps = {
     id: `f-${field.id}`,

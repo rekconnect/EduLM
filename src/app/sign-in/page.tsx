@@ -1,8 +1,12 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { AuthError } from "next-auth";
 import { getTranslations } from "next-intl/server";
 import { auth, signIn } from "@/lib/auth";
+import { unscopedDb } from "@/lib/db";
+import { extractTenantSlugFromHost } from "@/lib/tenant-resolve";
 import { postSignInPath } from "@/lib/post-signin-redirect";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -22,6 +26,30 @@ export default async function SignInPage({
   const t = await getTranslations("signIn");
   const tCommon = await getTranslations("common");
   const tApp = await getTranslations("app");
+
+  // Tenant-aware sign-up link + the open admission cycle's year for the
+  // "first-time parent" CTA. Slug comes from the subdomain (prod) or the
+  // /t/<slug>/ path (dev) — both surfaced as the x-tenant-slug header.
+  const h = await headers();
+  // Slug from the subdomain (prod) or /t/<slug>/ path (dev), both surfaced as
+  // x-tenant-slug; fall back to the ?tenant= query. Empty = root marketing
+  // domain → no school context, so the sign-up CTA is hidden (you can't enrol
+  // without choosing a school).
+  const slug = (h.get("x-tenant-slug") ?? "").trim() || (tenant ?? "").trim();
+  const onSubdomain = !!extractTenantSlugFromHost(h.get("host"));
+  const signUpHref = onSubdomain ? "/sign-up" : `/t/${slug}/sign-up`;
+  const openCycle = slug
+    ? await unscopedDb().admissionCycle.findFirst({
+        where: {
+          tenant: { slug },
+          isActive: true,
+          OR: [{ closeAt: null }, { closeAt: { gte: new Date() } }],
+        },
+        orderBy: { createdAt: "desc" },
+        select: { targetYearLabel: true },
+      })
+    : null;
+  const cycleYear = openCycle?.targetYearLabel ?? "";
 
   async function authenticate(formData: FormData) {
     "use server";
@@ -112,6 +140,26 @@ export default async function SignInPage({
             {t("forgot")}
           </Link>
         </p>
+
+        {/* First-time parent → inscription CTA. Only with a school context —
+            at the root marketing domain there's no tenant to enrol into. */}
+        {slug ? (
+        <div className="mt-6 rounded-[0.75rem] border border-[color:var(--color-brand-200)] bg-[color:var(--color-brand-50)] p-5 text-center">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[color:var(--color-brand-700)]">
+            {cycleYear ? t("noAccountTitle", { year: cycleYear }) : t("noAccountTitleGeneric")}
+          </p>
+          <p className="mt-1.5 text-sm text-[color:var(--color-foreground-muted)]">
+            {t("noAccountLead")}
+          </p>
+          <Link
+            href={signUpHref}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-[color:var(--color-brand-600)] px-4 py-2 text-sm font-semibold text-[color:var(--color-foreground-onbrand)] shadow-card transition-all duration-200 ease-out hover:bg-[color:var(--color-brand-700)] active:scale-[0.98]"
+          >
+            {t("createAccount")}
+            <ArrowRight className="size-4 rtl:rotate-180" aria-hidden />
+          </Link>
+        </div>
+        ) : null}
       </div>
     </main>
   );

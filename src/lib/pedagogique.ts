@@ -56,6 +56,12 @@ export function isFirstYearNiveau(niveau: string | null | undefined): boolean {
   return n === "ps" || n === "tps" || n.endsWith("ps") || n.includes("petitesection");
 }
 
+/** Maternelle (TPS/PS/MS/GS) — collation is obligatory at these levels. */
+export function isMaternelleNiveau(niveau: string | null | undefined): boolean {
+  if (!niveau) return false;
+  return /^(tps|ps|ms|gs|psm|maternelle)/.test(norm(niveau));
+}
+
 export function classifyNiveau(niveau: string | null | undefined): NiveauGroup {
   if (!niveau) return null;
   const n = norm(niveau);

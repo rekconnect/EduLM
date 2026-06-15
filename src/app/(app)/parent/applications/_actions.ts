@@ -84,6 +84,8 @@ function copyContact(c: ApplicationContact, tenantId: string) {
 type GuardianLink = {
   guardian: {
     relation: string | null;
+    nationality1?: string | null;
+    nationality2?: string | null;
     user: {
       firstName: string | null;
       lastName: string | null;
@@ -124,6 +126,21 @@ function buildGuardianResponsables(links: GuardianLink[], tenantId: string) {
     }
     const firstPhone = ps("telephones").split(/[,;/]/)[0]?.trim() ?? "";
     const realEmail = u.email && !/@import\./i.test(u.email) ? u.email : "";
+
+    // Full answer set keyed by parent entity-field id — drives the two-parent
+    // editor. Start from the guardian's stored customAnswers (ids already
+    // match the field keys), then layer name/email/nationalité from columns.
+    const answers: Record<string, string> = {};
+    for (const [k, v] of Object.entries(pca)) {
+      if (k === "authorized_persons") continue;
+      if (typeof v === "string" && v.trim()) answers[k] = v;
+    }
+    if (fn) answers.prenom = answers.prenom || fn;
+    if (ln) answers.nom = answers.nom || ln;
+    if (realEmail) answers.email = answers.email || realEmail;
+    if (l.guardian.nationality1) answers.nationalite1 = answers.nationalite1 || l.guardian.nationality1;
+    if (l.guardian.nationality2) answers.nationalite2 = answers.nationalite2 || l.guardian.nationality2;
+
     return {
       tenantId,
       order: idx,
@@ -132,11 +149,12 @@ function buildGuardianResponsables(links: GuardianLink[], tenantId: string) {
       lastName: ln || null,
       firstNameAr: ps("prenom_ar") || null,
       lastNameAr: ps("nom_ar") || null,
-      nationality1: ps("nationalite") || null,
+      nationality1: l.guardian.nationality1 ?? ps("nationalite") ?? null,
       email: realEmail || null,
       phoneMobile: firstPhone || null,
       profession: ps("profession") || null,
       employer: ps("societe") || null,
+      customAnswers: answers as Prisma.InputJsonValue,
     };
   });
 }
@@ -910,7 +928,7 @@ export async function startRenewal(formData: FormData): Promise<void> {
         status: true,
         parentAnswers: true,
         submitterRelation: true,
-        _count: { select: { responsables: true } },
+        responsables: { select: { id: true, customAnswers: true } },
       },
     });
     if (existing) {
@@ -926,6 +944,8 @@ export async function startRenewal(formData: FormData): Promise<void> {
             guardian: {
               select: {
                 relation: true,
+                nationality1: true,
+                nationality2: true,
                 user: {
                   select: { firstName: true, lastName: true, name: true, email: true, customAnswers: true },
                 },
@@ -959,8 +979,17 @@ export async function startRenewal(formData: FormData): Promise<void> {
         if (Object.keys(data).length) {
           await db.application.update({ where: { id: existing.id }, data });
         }
-        // Responsables (père + mère) — create from guardians if none yet.
-        if (existing._count.responsables === 0 && links.length) {
+        // Responsables (père + mère) — (re)create from guardians when there
+        // are none, or when the existing rows are bare (empty customAnswers
+        // from an earlier backfill). Never touches rows the parent filled.
+        const respEmpty = existing.responsables.every((r) => {
+          const ca = r.customAnswers;
+          return !ca || typeof ca !== "object" || Object.keys(ca as object).length === 0;
+        });
+        if (links.length && (existing.responsables.length === 0 || respEmpty)) {
+          if (existing.responsables.length) {
+            await db.applicationResponsable.deleteMany({ where: { applicationId: existing.id } });
+          }
           await db.applicationResponsable.createMany({
             data: buildGuardianResponsables(links, tenantId).map((r) => ({
               ...r,

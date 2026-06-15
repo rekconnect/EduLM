@@ -3,6 +3,11 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import {
+  Prisma,
+  type ApplicationResponsable,
+  type ApplicationContact,
+} from "@prisma/client";
 import { db, unscopedDb } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
@@ -47,6 +52,65 @@ async function getPriorFamilyInfo(userId: string) {
       country: true,
     },
   });
+}
+
+/** Recreate a responsable row onto a fresh application (renewal prefill). */
+function copyResponsable(r: ApplicationResponsable, tenantId: string) {
+  const { id, applicationId, createdAt, updatedAt, tenantId: _t, customAnswers, ...rest } = r;
+  void id;
+  void applicationId;
+  void createdAt;
+  void updatedAt;
+  void _t;
+  return { ...rest, tenantId, customAnswers: (customAnswers ?? {}) as Prisma.InputJsonValue };
+}
+
+/** Recreate a contact row onto a fresh application (renewal prefill). */
+function copyContact(c: ApplicationContact, tenantId: string) {
+  return {
+    tenantId,
+    kind: c.kind,
+    order: c.order,
+    firstName: c.firstName,
+    lastName: c.lastName,
+    relation: c.relation,
+    photoUrl: c.photoUrl,
+    phoneMobile: c.phoneMobile,
+    phoneHome: c.phoneHome,
+  };
+}
+
+/** Last year's transport / restauration from the student's stored
+ *  registration — used to seed a renewal when there's no prior EduLM dossier
+ *  (Dars-imported students). Returns null when nothing is known. */
+function transportFromStudent(ca: Record<string, unknown>): Record<string, unknown> | null {
+  const str = (k: string) => (typeof ca[k] === "string" ? (ca[k] as string) : "");
+  let reg: Record<string, Record<string, string>> = {};
+  let sby: Record<string, string> = {};
+  try {
+    reg = JSON.parse(str("registration_by_year") || "{}") as Record<string, Record<string, string>>;
+  } catch {
+    /* ignore */
+  }
+  try {
+    sby = JSON.parse(str("services_by_year") || "{}") as Record<string, string>;
+  } catch {
+    /* ignore */
+  }
+  const regYears = Object.keys(reg).sort();
+  const last = regYears.length ? (reg[regYears[regYears.length - 1]!] ?? {}) : {};
+  const svcYears = Object.keys(sby).sort();
+  const lastSvc = svcYears.length ? (sby[svcYears[svcYears.length - 1]!] ?? "") : "";
+
+  const modeAller =
+    last.transport_aller === "Avec bus" ? "bus" : last.transport_aller === "Avec parent" ? "parents" : "";
+  const modeRetour =
+    last.transport_retour === "Avec bus" ? "bus" : last.transport_retour === "Avec parent" ? "parents" : "";
+  const collation = last.collations === "yes" || lastSvc.includes("Collation");
+  const cantine = last.repas_chaud === "yes" || lastSvc.includes("Cantine");
+
+  if (!modeAller && !modeRetour && !collation && !cantine && last.autocar == null) return null;
+  return { modeAller, modeRetour, collation, cantine };
 }
 
 export async function startApplication(formData: FormData): Promise<void> {
@@ -793,6 +857,14 @@ export async function startRenewal(formData: FormData): Promise<void> {
         firstName: true,
         lastName: true,
         dob: true,
+        gender: true,
+        nationality: true,
+        placeOfBirth: true,
+        address: true,
+        city: true,
+        postalCode: true,
+        country: true,
+        customAnswers: true,
         enrollments: {
           orderBy: { enrolledAt: "desc" },
           take: 1,
@@ -811,9 +883,38 @@ export async function startRenewal(formData: FormData): Promise<void> {
 
     const primaryGuardian = student.guardianLinks[0]?.guardian.user;
 
-    // Pre-fill family contact info from the most-recent prior application —
-    // the parent has given us this already; don't make them retype it.
+    // Richest prefill source: the most-recent prior dossier for THIS child —
+    // the application that first enrolled them, or last year's renewal. On a
+    // renewal almost nothing changes, so we carry the whole dossier over.
+    const priorApp = await db.application.findFirst({
+      where: {
+        OR: [{ existingStudentId: studentId }, { resultingStudentId: studentId }],
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        responsables: { orderBy: { order: "asc" } },
+        contacts: { orderBy: { order: "asc" } },
+        siblings: { orderBy: { order: "asc" } },
+      },
+    });
+
+    // Family contact columns from the most-recent application of this parent.
     const prior = await getPriorFamilyInfo(user.id);
+
+    // Dars-imported students have NO prior EduLM dossier — fall back to their
+    // customAnswers (identity + last year's transport/meals).
+    const ca = (student.customAnswers ?? {}) as Record<string, unknown>;
+    const caStr = (k: string) => (typeof ca[k] === "string" ? (ca[k] as string) : "");
+
+    // dossierAnswers: copy the prior dossier wholesale (foyer extras,
+    // transport, santé…); else seed transport/meals from last registration.
+    let dossierAnswers: Record<string, unknown> | undefined;
+    if (priorApp?.dossierAnswers && typeof priorApp.dossierAnswers === "object") {
+      dossierAnswers = priorApp.dossierAnswers as Record<string, unknown>;
+    } else {
+      const t = transportFromStudent(ca);
+      if (t) dossierAnswers = { transport: t };
+    }
 
     const created = await db.application.create({
       data: {
@@ -822,25 +923,78 @@ export async function startRenewal(formData: FormData): Promise<void> {
         submittedByUserId: user.id,
         existingStudentId: studentId,
         status: "DRAFT",
+        // ── Child identity: prior app → Student column → Dars customAnswers ──
         childFirstName: student.firstName,
         childLastName: student.lastName,
         childDob: student.dob,
+        childGender: priorApp?.childGender ?? student.gender ?? null,
+        childPlaceOfBirth:
+          priorApp?.childPlaceOfBirth ?? student.placeOfBirth ?? (caStr("lieu_naissance") || null),
+        childBirthCountry: priorApp?.childBirthCountry ?? (caStr("pays_naissance") || null),
+        childNationality:
+          priorApp?.childNationality ?? student.nationality ?? (caStr("nationalite") || null),
+        childNationality2: priorApp?.childNationality2 ?? (caStr("nationalite2") || null),
+        childFirstNameAr: priorApp?.childFirstNameAr ?? null,
+        childLastNameAr: priorApp?.childLastNameAr ?? null,
+        childIsLebanese: priorApp?.childIsLebanese ?? null,
+        childPassportLebanese: priorApp?.childPassportLebanese ?? null,
+        // ── Responsable identity carried from the prior dossier ──
+        submitterRelation: priorApp?.submitterRelation ?? null,
+        submitterIsLebanese: priorApp?.submitterIsLebanese ?? null,
+        submitterPassportLebanese: priorApp?.submitterPassportLebanese ?? null,
+        submitterNationality: priorApp?.submitterNationality ?? null,
+        submitterNationality2: priorApp?.submitterNationality2 ?? null,
+        monoParental: priorApp?.monoParental ?? false,
+        // ── Custom answers + dossier carried over ──
+        ...(priorApp?.parentAnswers != null
+          ? { parentAnswers: priorApp.parentAnswers as Prisma.InputJsonValue }
+          : {}),
+        ...(priorApp?.studentAnswers != null
+          ? { studentAnswers: priorApp.studentAnswers as Prisma.InputJsonValue }
+          : {}),
+        ...(dossierAnswers != null
+          ? { dossierAnswers: dossierAnswers as Prisma.InputJsonValue }
+          : {}),
+        // Carry the prior tab-completion so the renewal opens review-ready
+        // (everything prefilled) rather than "À COMPLÉTER" on every tab.
+        ...(priorApp?.tabsCompleted != null
+          ? { tabsCompleted: priorApp.tabsCompleted as Prisma.InputJsonValue }
+          : {}),
+        // ── Family contact ──
         primaryParentName:
-          prior?.primaryParentName ||
-          primaryGuardian?.name ||
-          user.name ||
-          "",
+          prior?.primaryParentName || primaryGuardian?.name || user.name || "",
         primaryParentEmail:
           prior?.primaryParentEmail || primaryGuardian?.email || user.email,
         primaryParentPhone: prior?.primaryParentPhone ?? null,
         secondaryParentName: prior?.secondaryParentName ?? null,
         secondaryParentPhone: prior?.secondaryParentPhone ?? null,
         secondaryParentEmail: prior?.secondaryParentEmail ?? null,
-        address: prior?.address ?? null,
-        city: prior?.city ?? null,
-        postalCode: prior?.postalCode ?? null,
-        country: prior?.country ?? null,
+        address: prior?.address ?? student.address ?? null,
+        city: prior?.city ?? student.city ?? null,
+        postalCode: prior?.postalCode ?? student.postalCode ?? null,
+        country: prior?.country ?? student.country ?? null,
         currentLevel: student.enrollments[0]?.class.level ?? null,
+        // ── Sub-rows recreated from the prior dossier ──
+        ...(priorApp && priorApp.responsables.length
+          ? { responsables: { create: priorApp.responsables.map((r) => copyResponsable(r, tenantId)) } }
+          : {}),
+        ...(priorApp && priorApp.contacts.length
+          ? { contacts: { create: priorApp.contacts.map((c) => copyContact(c, tenantId)) } }
+          : {}),
+        ...(priorApp && priorApp.siblings.length
+          ? {
+              siblings: {
+                create: priorApp.siblings.map((s) => ({
+                  tenantId,
+                  order: s.order,
+                  firstName: s.firstName,
+                  birthYear: s.birthYear,
+                  className: s.className,
+                  schoolName: s.schoolName,
+                })),
+              },
+            }
+          : {}),
       },
       select: { id: true },
     });

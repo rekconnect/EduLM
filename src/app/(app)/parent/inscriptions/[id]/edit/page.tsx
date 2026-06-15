@@ -101,6 +101,7 @@ export default async function DossierEditPage({
           id: true,
           status: true,
           submittedByUserId: true,
+          existingStudentId: true,
           childFirstName: true,
           childLastName: true,
           childDob: true,
@@ -219,7 +220,14 @@ export default async function DossierEditPage({
           : [],
       }));
 
-    const tabsConfig = parseTabsConfig(tenant?.inscriptionTabsConfig);
+    // Renewal: the schooling tab (établissement précédent, EBEP, examens…)
+    // is only meaningful for a brand-new pupil. Hide it for re-inscriptions so
+    // the parent isn't asked to re-fill it and it doesn't block submission.
+    const isRenewal = app.existingStudentId != null;
+    const baseTabsConfig = parseTabsConfig(tenant?.inscriptionTabsConfig);
+    const tabsConfig = isRenewal
+      ? { ...baseTabsConfig, scolarite: false }
+      : baseTabsConfig;
     const tabsCompleted = parseTabsCompleted(app.tabsCompleted);
 
     // WYSIWYG editor (Phase 2) — parse the tenant's per-field overrides
@@ -444,7 +452,7 @@ export default async function DossierEditPage({
             );
           })() : null}
 
-          {currentTab === "scolarite" ? (() => {
+          {currentTab === "scolarite" && !isRenewal ? (() => {
             const dossier =
               app.dossierAnswers &&
               typeof app.dossierAnswers === "object"

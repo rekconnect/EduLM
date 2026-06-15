@@ -116,6 +116,7 @@ export default async function DossierEditPage({
           childNationality2: true,
           childFirstNameAr: true,
           childLastNameAr: true,
+          childPlaceOfBirthAr: true,
           submitterIsLebanese: true,
           submitterPassportLebanese: true,
           submitterNationality: true,
@@ -217,7 +218,13 @@ export default async function DossierEditPage({
     // tenant-scoped read.
     const sessionUser = await db.user.findUnique({
       where: { id: user.id },
-      select: { firstName: true, lastName: true, name: true, email: true },
+      select: {
+        firstName: true,
+        lastName: true,
+        name: true,
+        email: true,
+        customAnswers: true,
+      },
     });
 
     // Coerce JSON answers to flat string maps for the renderer.
@@ -230,6 +237,23 @@ export default async function DossierEditPage({
       }
       return out;
     };
+
+    // Parent custom fields read from Application.parentAnswers, keyed by
+    // entity-field id. When that's empty (a renewal / new dossier from a
+    // parent who already has a profile), fall back to the parent's own stored
+    // customAnswers — the ids match the keys, so profession / téléphones /
+    // nom_ar / situation_famille… show prefilled instead of blank. Saving the
+    // Responsables tab then persists them. authorized_persons is a JSON blob,
+    // not a form field — drop it.
+    const parentAnswersStored = coerceAnswers(app.parentAnswers);
+    const parentInitial =
+      Object.keys(parentAnswersStored).length > 0
+        ? parentAnswersStored
+        : (() => {
+            const fromProfile = coerceAnswers(sessionUser?.customAnswers);
+            delete fromProfile.authorized_persons;
+            return fromProfile;
+          })();
 
     const establishmentsForRenderer = establishmentsRaw
       .filter((e) => e.isActive)
@@ -356,6 +380,7 @@ export default async function DossierEditPage({
                   childBirthCountry: app.childBirthCountry ?? "",
                   childFirstNameAr: app.childFirstNameAr ?? "",
                   childLastNameAr: app.childLastNameAr ?? "",
+                  childPlaceOfBirthAr: app.childPlaceOfBirthAr ?? "",
                 }}
               />
 
@@ -401,7 +426,7 @@ export default async function DossierEditPage({
               section="parent"
               parentConfig={parentFieldsConfig}
               studentConfig={studentFieldsConfig}
-              parentInitial={coerceAnswers(app.parentAnswers)}
+              parentInitial={parentInitial}
               studentInitial={coerceAnswers(app.studentAnswers)}
               establishments={establishmentsForRenderer}
               user={{
@@ -502,18 +527,30 @@ export default async function DossierEditPage({
             );
           })() : null}
 
-          {currentTab === "autorisations" ? (
-            <DossierTabAutorisations
-              applicationId={app.id}
-              disabled={!editable}
-              initial={{
-                imageRightsSite: guardian?.family?.imageRightsSite ?? null,
-                imageRightsBook: guardian?.family?.imageRightsBook ?? null,
-                imageRightsSocial: guardian?.family?.imageRightsSocial ?? null,
-                imageRightsRadio: guardian?.family?.imageRightsRadio ?? null,
-              }}
-            />
-          ) : null}
+          {currentTab === "autorisations" ? (() => {
+            const dossier =
+              app.dossierAnswers && typeof app.dossierAnswers === "object"
+                ? (app.dossierAnswers as Record<string, unknown>)
+                : {};
+            const autz =
+              dossier.autorisations && typeof dossier.autorisations === "object"
+                ? (dossier.autorisations as Record<string, unknown>)
+                : {};
+            return (
+              <DossierTabAutorisations
+                applicationId={app.id}
+                disabled={!editable}
+                initial={{
+                  imageRightsSite: guardian?.family?.imageRightsSite ?? null,
+                  imageRightsBook: guardian?.family?.imageRightsBook ?? null,
+                  imageRightsSocial: guardian?.family?.imageRightsSocial ?? null,
+                  imageRightsRadio: guardian?.family?.imageRightsRadio ?? null,
+                  quitterSeul:
+                    typeof autz.quitterSeul === "boolean" ? autz.quitterSeul : null,
+                }}
+              />
+            );
+          })() : null}
 
           {currentTab === "transport" ? (() => {
             const dossier =

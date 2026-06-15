@@ -689,6 +689,7 @@ export async function decideApplication(
             parentAnswers: app.parentAnswers,
             submittedByUserId: app.submittedByUserId,
             contacts: app.contacts,
+            childPlaceOfBirthAr: app.childPlaceOfBirthAr,
           });
 
           await tx.application.update({

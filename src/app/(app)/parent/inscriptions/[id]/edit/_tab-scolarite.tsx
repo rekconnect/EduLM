@@ -17,6 +17,7 @@ import {
 } from "@/lib/dossier-content";
 import {
   classifyNiveau,
+  isFirstYearNiveau,
   type PedagogiqueData,
 } from "@/lib/pedagogique";
 import { useField } from "@/components/dossier/tenant-config-context";
@@ -80,6 +81,9 @@ export function DossierTabScolarite({
   const [niveau, setNiveau] = useState<string>(initialNiveau);
   const [pedagogique, setPedagogique] = useState<PedagogiqueData>(initialPedagogique);
   const niveauGroup = classifyNiveau(niveau);
+  // PS / TPS = first year: no previous school, history, or Lebanese-exam
+  // dispensation. Hidden in the real form; always shown in the admin preview.
+  const hideAnteriorite = !editMode && isFirstYearNiveau(niveau);
 
   const selectedEst = useMemo(
     () => establishments.find((e) => e.id === establishmentId),
@@ -177,7 +181,8 @@ export function DossierTabScolarite({
         disabled={disabled}
       />
 
-      {/* ── Établissement précédent ── */}
+      {/* ── Établissement précédent ── (hidden for PS/TPS — first year) */}
+      {hideAnteriorite ? null : (
       <Card>
         <CardHeader title={t("scolarite.previousTitle")} />
         <CardBody>
@@ -266,9 +271,10 @@ export function DossierTabScolarite({
           </FormRow>
         </CardBody>
       </Card>
+      )}
 
       {/* ── Scolarité antérieure (3 dernières années) — dynamic list ── */}
-      {fHistoryList?.hidden ? null : (
+      {hideAnteriorite || fHistoryList?.hidden ? null : (
         <EditableField fieldKey="scolarite.history.list">
           <Card>
             <CardHeader
@@ -474,8 +480,8 @@ export function DossierTabScolarite({
         </CardBody>
       </Card>
 
-      {/* ── Dispense des examens libanais ── */}
-      {fDispense?.hidden ? null : (
+      {/* ── Dispense des examens libanais ── (CE2+ only → hidden for PS/TPS) */}
+      {hideAnteriorite || fDispense?.hidden ? null : (
         <Card>
           <CardHeader
             title={t("scolarite.dispenseTitle")}

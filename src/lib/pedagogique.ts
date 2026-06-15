@@ -48,6 +48,14 @@ const CE2_3EME = new Set([
   "3eme",
 ]);
 
+/** First year of schooling (Petite Section / Toute Petite Section) — these
+ *  pupils have no previous school, so the "antériorité" block is irrelevant. */
+export function isFirstYearNiveau(niveau: string | null | undefined): boolean {
+  if (!niveau) return false;
+  const n = norm(niveau);
+  return n === "ps" || n === "tps" || n.endsWith("ps") || n.includes("petitesection");
+}
+
 export function classifyNiveau(niveau: string | null | undefined): NiveauGroup {
   if (!niveau) return null;
   const n = norm(niveau);

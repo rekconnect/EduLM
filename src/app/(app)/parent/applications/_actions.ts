@@ -81,6 +81,66 @@ function copyContact(c: ApplicationContact, tenantId: string) {
   };
 }
 
+type GuardianLink = {
+  guardian: {
+    relation: string | null;
+    user: {
+      firstName: string | null;
+      lastName: string | null;
+      name: string | null;
+      email: string;
+      customAnswers: unknown;
+    };
+  };
+};
+
+function relKindOf(relation: string | null): "PERE" | "MERE" | "TUTEUR" | "AUTRE" {
+  const m: Record<string, "PERE" | "MERE" | "TUTEUR" | "AUTRE"> = {
+    pere: "PERE",
+    "père": "PERE",
+    mere: "MERE",
+    "mère": "MERE",
+    tuteur: "TUTEUR",
+    parent: "AUTRE",
+  };
+  return m[(relation ?? "").toLowerCase()] ?? "AUTRE";
+}
+
+/** Build ApplicationResponsable create-rows (père / mère / tuteur) from the
+ *  family's guardians — Dars stores names/relation/profession/phones on each
+ *  guardian's User.customAnswers. Shared by the create path and the
+ *  existing-draft backfill. */
+function buildGuardianResponsables(links: GuardianLink[], tenantId: string) {
+  return links.map((l, idx) => {
+    const u = l.guardian.user;
+    const pca = (u.customAnswers ?? {}) as Record<string, unknown>;
+    const ps = (k: string) => (typeof pca[k] === "string" ? (pca[k] as string) : "");
+    let fn = u.firstName ?? "";
+    let ln = u.lastName ?? "";
+    if (!fn && !ln && u.name) {
+      const parts = u.name.trim().split(/\s+/);
+      ln = parts.length > 1 ? (parts[parts.length - 1] ?? "") : (parts[0] ?? "");
+      fn = parts.length > 1 ? parts.slice(0, -1).join(" ") : "";
+    }
+    const firstPhone = ps("telephones").split(/[,;/]/)[0]?.trim() ?? "";
+    const realEmail = u.email && !/@import\./i.test(u.email) ? u.email : "";
+    return {
+      tenantId,
+      order: idx,
+      kind: relKindOf(l.guardian.relation),
+      firstName: fn || null,
+      lastName: ln || null,
+      firstNameAr: ps("prenom_ar") || null,
+      lastNameAr: ps("nom_ar") || null,
+      nationality1: ps("nationalite") || null,
+      email: realEmail || null,
+      phoneMobile: firstPhone || null,
+      profession: ps("profession") || null,
+      employer: ps("societe") || null,
+    };
+  });
+}
+
 /** Last year's transport / restauration from the student's stored
  *  registration — used to seed a renewal when there's no prior EduLM dossier
  *  (Dars-imported students). Returns null when nothing is known. */
@@ -845,10 +905,70 @@ export async function startRenewal(formData: FormData): Promise<void> {
     // Reuse an existing draft / non-final app if any (idempotent).
     const existing = await db.application.findFirst({
       where: { cycleId, existingStudentId: studentId },
-      select: { id: true },
+      select: {
+        id: true,
+        status: true,
+        parentAnswers: true,
+        submitterRelation: true,
+        _count: { select: { responsables: true } },
+      },
     });
     if (existing) {
       appId = existing.id;
+      const editable = existing.status === "DRAFT" || existing.status === "SUBMITTED";
+      if (editable) {
+        // Backfill anything a pre-prefill draft left blank — safe, only fills
+        // empties, never overwrites the parent's edits.
+        const links = await db.studentGuardian.findMany({
+          where: { studentId },
+          select: {
+            isPrimary: true,
+            guardian: {
+              select: {
+                relation: true,
+                user: {
+                  select: { firstName: true, lastName: true, name: true, email: true, customAnswers: true },
+                },
+              },
+            },
+          },
+        });
+
+        // Parent custom fields (from the submitter's stored profile).
+        const pa = existing.parentAnswers as Record<string, unknown> | null;
+        const hasParent = !!pa && typeof pa === "object" && Object.keys(pa).length > 0;
+        const data: Record<string, unknown> = {};
+        if (!hasParent) {
+          const me = links.find((l) => l.guardian.user.email === user.email)?.guardian.user;
+          const ca = (me?.customAnswers ?? {}) as Record<string, unknown>;
+          const ans: Record<string, string> = {};
+          for (const [k, v] of Object.entries(ca)) {
+            if (k === "authorized_persons") continue;
+            if (typeof v === "string" && v.trim()) ans[k] = v;
+          }
+          if (Object.keys(ans).length) data.parentAnswers = ans as Prisma.InputJsonValue;
+        }
+        // Submitter relation (so the dropdown is pre-selected).
+        if (!existing.submitterRelation) {
+          const rel =
+            links.find((l) => l.guardian.user.email === user.email)?.guardian.relation ??
+            links.find((l) => l.isPrimary)?.guardian.relation ??
+            null;
+          if (rel) data.submitterRelation = rel;
+        }
+        if (Object.keys(data).length) {
+          await db.application.update({ where: { id: existing.id }, data });
+        }
+        // Responsables (père + mère) — create from guardians if none yet.
+        if (existing._count.responsables === 0 && links.length) {
+          await db.applicationResponsable.createMany({
+            data: buildGuardianResponsables(links, tenantId).map((r) => ({
+              ...r,
+              applicationId: existing.id,
+            })),
+          });
+        }
+      }
       return;
     }
 
@@ -918,12 +1038,23 @@ export async function startRenewal(formData: FormData): Promise<void> {
     const primaryGuardian = student.guardianLinks[0]?.guardian.user;
     // Relation of the parent doing the renewal (père / mère / tuteur), so the
     // Responsables tab shows it instead of a blank.
-    const submitterRelation =
-      student.guardianLinks.find(
-        (l) => l.guardian.user.email === user.email,
-      )?.guardian.relation ??
-      student.guardianLinks.find((l) => l.isPrimary)?.guardian.relation ??
-      null;
+    const submitterLink =
+      student.guardianLinks.find((l) => l.guardian.user.email === user.email) ??
+      student.guardianLinks.find((l) => l.isPrimary);
+    const submitterRelation = submitterLink?.guardian.relation ?? null;
+
+    // The parent custom fields in the form read from Application.parentAnswers,
+    // keyed by entity-field id — and those ids are exactly the parent's stored
+    // customAnswers keys (profession, telephones, nom_ar, situation_famille…).
+    // So copy the submitter's stored answers so the form prefills, not just
+    // the account-bound email/first/last name.
+    const submitterCa =
+      (submitterLink?.guardian.user.customAnswers ?? {}) as Record<string, unknown>;
+    const submitterAnswers: Record<string, string> = {};
+    for (const [k, v] of Object.entries(submitterCa)) {
+      if (k === "authorized_persons") continue; // JSON blob, not a form field
+      if (typeof v === "string" && v.trim()) submitterAnswers[k] = v;
+    }
 
     // Richest prefill source: the most-recent prior dossier for THIS child —
     // the application that first enrolled them, or last year's renewal. On a
@@ -991,45 +1122,10 @@ export async function startRenewal(formData: FormData): Promise<void> {
 
     // Responsables: copy the prior dossier's rows if any; otherwise build
     // père + mère from the family's guardians so both show prefilled.
-    const relKind: Record<string, "PERE" | "MERE" | "TUTEUR" | "AUTRE"> = {
-      pere: "PERE",
-      "père": "PERE",
-      mere: "MERE",
-      "mère": "MERE",
-      tuteur: "TUTEUR",
-      parent: "AUTRE",
-    };
     const guardianResponsables =
       priorApp && priorApp.responsables.length
         ? []
-        : student.guardianLinks.map((l, idx) => {
-            const u = l.guardian.user;
-            const pca = (u.customAnswers ?? {}) as Record<string, unknown>;
-            const ps = (k: string) => (typeof pca[k] === "string" ? (pca[k] as string) : "");
-            let fn = u.firstName ?? "";
-            let ln = u.lastName ?? "";
-            if (!fn && !ln && u.name) {
-              const parts = u.name.trim().split(/\s+/);
-              ln = parts.length > 1 ? (parts[parts.length - 1] ?? "") : (parts[0] ?? "");
-              fn = parts.length > 1 ? parts.slice(0, -1).join(" ") : "";
-            }
-            const firstPhone = ps("telephones").split(/[,;/]/)[0]?.trim() ?? "";
-            const realEmail = u.email && !/@import\./i.test(u.email) ? u.email : "";
-            return {
-              tenantId,
-              order: idx,
-              kind: relKind[(l.guardian.relation ?? "").toLowerCase()] ?? "AUTRE",
-              firstName: fn || null,
-              lastName: ln || null,
-              firstNameAr: ps("prenom_ar") || null,
-              lastNameAr: ps("nom_ar") || null,
-              nationality1: ps("nationalite") || null,
-              email: realEmail || null,
-              phoneMobile: firstPhone || null,
-              profession: ps("profession") || null,
-              employer: ps("societe") || null,
-            };
-          });
+        : buildGuardianResponsables(student.guardianLinks, tenantId);
 
     // dossierAnswers: copy the prior dossier wholesale (foyer extras,
     // transport, santé…); else seed transport/meals from last registration.
@@ -1038,7 +1134,19 @@ export async function startRenewal(formData: FormData): Promise<void> {
       dossierAnswers = priorApp.dossierAnswers as Record<string, unknown>;
     } else {
       const t = transportFromStudent(ca);
-      if (t) dossierAnswers = { transport: t };
+      // Seed "autorisé à quitter seul" from last year's registration.
+      let quitterSeul: boolean | null = null;
+      try {
+        const reg = JSON.parse(caStr("registration_by_year") || "{}") as Record<string, Record<string, string>>;
+        const yrs = Object.keys(reg).sort();
+        const last = yrs.length ? (reg[yrs[yrs.length - 1]!] ?? {}) : {};
+        if (last.quitter_seul === "yes") quitterSeul = true;
+        else if (last.quitter_seul === "no") quitterSeul = false;
+      } catch { /* ignore */ }
+      const seed: Record<string, unknown> = {};
+      if (t) seed.transport = t;
+      if (quitterSeul !== null) seed.autorisations = { quitterSeul };
+      if (Object.keys(seed).length) dossierAnswers = seed;
     }
 
     const created = await db.application.create({
@@ -1063,6 +1171,8 @@ export async function startRenewal(formData: FormData): Promise<void> {
         childNationality2: priorApp?.childNationality2 ?? (caStr("nationalite2") || null),
         childFirstNameAr: priorApp?.childFirstNameAr ?? null,
         childLastNameAr: priorApp?.childLastNameAr ?? null,
+        childPlaceOfBirthAr:
+          priorApp?.childPlaceOfBirthAr ?? (caStr("lieu_naissance_ar") || null),
         childIsLebanese: priorApp?.childIsLebanese ?? (lebanese ? true : null),
         childPassportLebanese: priorApp?.childPassportLebanese ?? null,
         // ── Responsable identity carried from the prior dossier ──
@@ -1075,7 +1185,9 @@ export async function startRenewal(formData: FormData): Promise<void> {
         // ── Custom answers + dossier carried over ──
         ...(priorApp?.parentAnswers != null
           ? { parentAnswers: priorApp.parentAnswers as Prisma.InputJsonValue }
-          : {}),
+          : Object.keys(submitterAnswers).length
+            ? { parentAnswers: submitterAnswers as Prisma.InputJsonValue }
+            : {}),
         ...(priorApp?.studentAnswers != null
           ? { studentAnswers: priorApp.studentAnswers as Prisma.InputJsonValue }
           : {}),

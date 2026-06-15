@@ -479,6 +479,7 @@ const eleveEtatCivilSchema = z.object({
   childBirthCountry: z.string().trim().max(80).optional(),
   childFirstNameAr: z.string().trim().max(80).optional(),
   childLastNameAr: z.string().trim().max(80).optional(),
+  childPlaceOfBirthAr: z.string().trim().max(80).optional(),
 });
 
 export async function saveEleveEtatCivil(
@@ -522,6 +523,7 @@ export async function saveEleveEtatCivil(
         childBirthCountry: parsed.data.childBirthCountry || null,
         childFirstNameAr: parsed.data.childFirstNameAr || null,
         childLastNameAr: parsed.data.childLastNameAr || null,
+        childPlaceOfBirthAr: parsed.data.childPlaceOfBirthAr || null,
       },
     });
 
@@ -1232,6 +1234,7 @@ export async function saveAutorisationsTab(
     imageRightsBook: boolean | null;
     imageRightsSocial: boolean | null;
     imageRightsRadio: boolean | null;
+    quitterSeul: boolean | null;
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await requireRole("PARENT");
@@ -1268,6 +1271,11 @@ export async function saveAutorisationsTab(
     await db.application.update({
       where: { id: applicationId },
       data: {
+        // quitter_seul isn't a Family field — keep it in dossierAnswers so the
+        // acceptance bridge can write it to the year's registration.
+        dossierAnswers: mergeDossierAnswers(app.dossierAnswers, "autorisations", {
+          quitterSeul: payload.quitterSeul,
+        }),
         tabsCompleted: mergeTabsCompleted(
           app.tabsCompleted,
           "autorisations",
@@ -1293,6 +1301,7 @@ export async function saveScolariteTab(
   const { parseScolarite } = await import("@/lib/dossier-content");
   const {
     classifyNiveau,
+    isFirstYearNiveau,
     parsePedagogique,
     isPedagogiqueCompleteFor,
   } = await import("@/lib/pedagogique");
@@ -1348,14 +1357,20 @@ export async function saveScolariteTab(
       if (value === null || value === undefined || value === "") return true;
       return false;
     };
+    // PS / TPS = first year: previous school, history and Lebanese-exam
+    // dispensation don't apply, so they don't block the tab.
+    const firstYear = isFirstYearNiveau(newNiveau);
+    const anterioriteOk =
+      firstYear ||
+      (!missing("scolarite.previous.school", data.previousSchool) &&
+        !missing("scolarite.previous.class", data.previousClass) &&
+        !(need("scolarite.previous.attendedMlfBefore") &&
+          data.attendedMlfBefore === null));
     const scolariteFieldsComplete =
-      !missing("scolarite.previous.school", data.previousSchool) &&
-      !missing("scolarite.previous.class", data.previousClass) &&
-      !(need("scolarite.previous.attendedMlfBefore") &&
-        data.attendedMlfBefore === null) &&
+      anterioriteOk &&
       !(need("scolarite.ebep.previous") && data.ebepPrevious === null) &&
       !(need("scolarite.ebep.current") && data.ebepCurrent === null) &&
-      !(need("scolarite.dispense.libanais") && !data.dispenseLibanais) &&
+      !(firstYear === false && need("scolarite.dispense.libanais") && !data.dispenseLibanais) &&
       !missing("scolarite.wishlist.entryDate", data.entryDate) &&
       !(need("scolarite.wishlist.establishment") && !newEstablishmentId) &&
       !(need("scolarite.wishlist.niveau") && !newNiveau?.trim());

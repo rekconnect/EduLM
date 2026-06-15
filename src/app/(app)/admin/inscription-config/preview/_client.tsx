@@ -64,6 +64,7 @@ const MOCK_ELEVE = {
   childBirthCountry: "Liban",
   childFirstNameAr: "مايا",
   childLastNameAr: "الحاج",
+  childPlaceOfBirthAr: "بيروت",
 };
 const MOCK_PASSPORT = {
   childIsLebanese: true as boolean | null,

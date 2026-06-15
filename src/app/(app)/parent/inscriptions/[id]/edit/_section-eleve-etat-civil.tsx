@@ -22,6 +22,7 @@ type Initial = {
   childBirthCountry: string;
   childFirstNameAr: string;
   childLastNameAr: string;
+  childPlaceOfBirthAr: string;
 };
 
 /**
@@ -72,6 +73,7 @@ export function EleveEtatCivilSection({
   const fGender = useField("eleve.etatCivil.gender");
   const fPlaceOfBirth = useField("eleve.etatCivil.placeOfBirth");
   const fBirthCountry = useField("eleve.etatCivil.birthCountry");
+  const fPlaceOfBirthAr = useField("eleve.etatCivil.placeOfBirthAr");
 
   function patch(p: Partial<Initial>) {
     setData((prev) => ({ ...prev, ...p }));
@@ -94,6 +96,7 @@ export function EleveEtatCivilSection({
         childBirthCountry: data.childBirthCountry || undefined,
         childFirstNameAr: data.childFirstNameAr || undefined,
         childLastNameAr: data.childLastNameAr || undefined,
+        childPlaceOfBirthAr: data.childPlaceOfBirthAr || undefined,
       });
       if (r.ok) toast.success(tCommon("saved"));
       else toast.error(t("saveError"));
@@ -309,6 +312,28 @@ export function EleveEtatCivilSection({
             </EditableField>
           )}
         </FormRow>
+
+        {/* Arabic place of birth — RTL, optional. */}
+        {fPlaceOfBirthAr?.hidden ? null : (
+          <div dir="rtl">
+            <EditableField fieldKey="eleve.etatCivil.placeOfBirthAr">
+              <Field
+                label={fPlaceOfBirthAr?.label ?? "مكان الولادة (Lieu de naissance en arabe)"}
+                htmlFor="childPlaceOfBirthAr"
+                required={fPlaceOfBirthAr?.required ?? false}
+              >
+                <Input
+                  id="childPlaceOfBirthAr"
+                  value={data.childPlaceOfBirthAr}
+                  onChange={(e) => patch({ childPlaceOfBirthAr: e.target.value })}
+                  lang="ar"
+                  dir="rtl"
+                  disabled={disabled}
+                />
+              </Field>
+            </EditableField>
+          </div>
+        )}
 
         {!disabled ? (
           <div className="flex justify-end pt-2">

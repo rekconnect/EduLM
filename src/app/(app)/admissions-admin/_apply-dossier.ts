@@ -47,6 +47,7 @@ export async function applyDossierToStudent(
     parentAnswers: unknown;
     submittedByUserId: string;
     contacts: ContactRow[];
+    childPlaceOfBirthAr?: string | null;
   },
 ): Promise<void> {
   const { tenantId, studentId, yearLabel } = opts;
@@ -94,6 +95,14 @@ export async function applyDossierToStudent(
   }
   if (transport.collation !== null) year.collations = transport.collation ? "yes" : "no";
   if (transport.cantine !== null) year.repas_chaud = transport.cantine ? "yes" : "no";
+  // "Autorisé à quitter seul" — from the Autorisations tab.
+  const autz =
+    dossier.autorisations && typeof dossier.autorisations === "object"
+      ? (dossier.autorisations as Record<string, unknown>)
+      : {};
+  if (typeof autz.quitterSeul === "boolean") {
+    year.quitter_seul = autz.quitterSeul ? "yes" : "no";
+  }
   reg[yearLabel] = year;
   ca.registration_by_year = JSON.stringify(reg);
 
@@ -153,6 +162,11 @@ export async function applyDossierToStudent(
       const t = typeof v === "string" ? v.trim() : String(v);
       if (t !== "") ca[k] = t;
     }
+  }
+
+  // Arabic place of birth (form field) → fiche key lieu_naissance_ar.
+  if (opts.childPlaceOfBirthAr && opts.childPlaceOfBirthAr.trim()) {
+    ca.lieu_naissance_ar = opts.childPlaceOfBirthAr.trim();
   }
 
   await tx.student.update({

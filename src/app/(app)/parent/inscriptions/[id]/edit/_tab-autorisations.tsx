@@ -15,6 +15,7 @@ type Initial = {
   imageRightsBook: boolean | null;
   imageRightsSocial: boolean | null;
   imageRightsRadio: boolean | null;
+  quitterSeul: boolean | null;
 };
 
 const IMAGE_KINDS = ["Site", "Book", "Social", "Radio"] as const;
@@ -53,6 +54,7 @@ export function DossierTabAutorisations({
     Social: initial.imageRightsSocial,
     Radio: initial.imageRightsRadio,
   });
+  const [quitterSeul, setQuitterSeul] = useState<boolean | null>(initial.quitterSeul);
 
   const fImageSite = useField("foyer.imageRights.site");
   const fImageBook = useField("foyer.imageRights.book");
@@ -80,6 +82,7 @@ export function DossierTabAutorisations({
         imageRightsBook: imageRights.Book,
         imageRightsSocial: imageRights.Social,
         imageRightsRadio: imageRights.Radio,
+        quitterSeul,
       });
       if (r.ok) toast.success(tCommon("saved"));
       else toast.error(t("saveError"));
@@ -137,6 +140,39 @@ export function DossierTabAutorisations({
           {IMAGE_KINDS.map((kind) => (
             <ImageRightsRow key={kind} kind={kind} />
           ))}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="Autorisation de sortie" />
+        <CardBody>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface)] px-3 py-2">
+            <span className="text-sm font-medium text-[color:var(--color-foreground)]">
+              Autorisé(e) à quitter seul(e) l&apos;établissement
+            </span>
+            <div className="inline-flex items-center gap-3">
+              <label className="inline-flex items-center gap-1 text-sm">
+                <input
+                  type="radio"
+                  name="quitter-seul"
+                  checked={quitterSeul === true}
+                  onChange={() => setQuitterSeul(true)}
+                  disabled={disabled}
+                />
+                {tCommon("yes")}
+              </label>
+              <label className="inline-flex items-center gap-1 text-sm">
+                <input
+                  type="radio"
+                  name="quitter-seul"
+                  checked={quitterSeul === false}
+                  onChange={() => setQuitterSeul(false)}
+                  disabled={disabled}
+                />
+                {tCommon("no")}
+              </label>
+            </div>
+          </div>
         </CardBody>
       </Card>
 

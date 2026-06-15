@@ -193,6 +193,17 @@ export const INSCRIPTION_FIELDS_REGISTRY = {
     },
     defaultRequired: true,
   },
+  "eleve.etatCivil.placeOfBirthAr": {
+    tab: "eleve",
+    section: "etatCivil",
+    type: "text",
+    defaultLabel: {
+      fr: "مكان الولادة (Lieu de naissance en arabe)",
+      en: "مكان الولادة (Place of birth in Arabic)",
+      ar: "مكان الولادة",
+    },
+    defaultRequired: false,
+  },
 
   // Section: Passeport / Carte d'identité
   "eleve.passport.isLebanese": {

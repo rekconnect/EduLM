@@ -837,6 +837,8 @@ model Application {
   // الاسم / الشهرة — Arabic first + last name per the official ID.
   childFirstNameAr  String?
   childLastNameAr   String?
+  // مكان الولادة — Arabic place of birth (Montaigne/Dars capture it).
+  childPlaceOfBirthAr String?
 
   // Family (Step 2)
   primaryParentName    String

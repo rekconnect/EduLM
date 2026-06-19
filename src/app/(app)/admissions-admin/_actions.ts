@@ -562,6 +562,7 @@ export async function decideApplication(
       include: {
         cycle: { select: { targetYearLabel: true } },
         submittedBy: { select: { id: true, email: true, name: true } },
+        responsables: { select: { kind: true, customAnswers: true }, orderBy: { order: "asc" } },
         contacts: {
           select: {
             kind: true,
@@ -601,11 +602,24 @@ export async function decideApplication(
       const isRenewal = !!app.existingStudentId;
 
       // Look up existing guardian (if any) BEFORE writes, so we can decide
-      // inside the transaction whether to create one.
+      // inside the transaction whether to create one. Pull the family's image
+      // rights too — they live on Family and feed the student's per-year
+      // auth_site/livre/reseaux/radio in the bridge.
       const existingGuardian = await db.guardian.findUnique({
         where: { userId: app.submittedByUserId },
-        select: { id: true },
+        select: {
+          id: true,
+          family: {
+            select: {
+              imageRightsSite: true,
+              imageRightsBook: true,
+              imageRightsSocial: true,
+              imageRightsRadio: true,
+            },
+          },
+        },
       });
+      const fam = existingGuardian?.family ?? null;
 
       // Now do all the writes in a single transaction. If anything throws,
       // Prisma rolls back — no orphan Student rows, no half-accepted apps.
@@ -688,8 +702,29 @@ export async function decideApplication(
             studentAnswers: app.studentAnswers,
             parentAnswers: app.parentAnswers,
             submittedByUserId: app.submittedByUserId,
+            submitterEmail: app.submittedBy.email,
             contacts: app.contacts,
             childPlaceOfBirthAr: app.childPlaceOfBirthAr,
+            childCivil: {
+              birthCountry: app.childBirthCountry,
+              placeOfBirth: app.childPlaceOfBirth,
+              nationality: app.childNationality,
+              nationality2: app.childNationality2,
+              firstNameAr: app.childFirstNameAr,
+              lastNameAr: app.childLastNameAr,
+              passportLebanese: app.childPassportLebanese,
+              isLebanese: app.childIsLebanese,
+            },
+            responsables: app.responsables,
+            imageRights: fam
+              ? {
+                  site: fam.imageRightsSite,
+                  book: fam.imageRightsBook,
+                  social: fam.imageRightsSocial,
+                  radio: fam.imageRightsRadio,
+                }
+              : undefined,
+            inscriptionDate: now.toISOString().slice(0, 10),
           });
 
           await tx.application.update({

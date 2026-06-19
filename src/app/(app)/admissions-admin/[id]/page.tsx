@@ -167,6 +167,10 @@ export default async function AdmissionsAdminDetailPage({
           select: { label: true, targetYearLabel: true, fieldConfig: true },
         },
         establishment: { select: { name: true } },
+        responsables: {
+          orderBy: { order: "asc" },
+          select: { id: true, kind: true, firstName: true, lastName: true, customAnswers: true },
+        },
         answers: { select: { questionId: true, value: true } },
         documents: {
           select: {
@@ -286,19 +290,45 @@ export default async function AdmissionsAdminDetailPage({
         ? (dossierRaw.validation as Record<string, unknown>)
         : {};
     const validationAck = validationRaw.acknowledged === true;
+    const autorisationsRaw =
+      dossierRaw.autorisations && typeof dossierRaw.autorisations === "object"
+        ? (dossierRaw.autorisations as Record<string, unknown>)
+        : {};
+    const quitterSeul = autorisationsRaw.quitterSeul === true;
 
-    // Coerce parentAnswers JSON into a flat string map for the renderer.
-    const parentAnswers: Record<string, string> = {};
-    if (app.parentAnswers && typeof app.parentAnswers === "object") {
-      for (const [k, v] of Object.entries(
-        app.parentAnswers as Record<string, unknown>,
-      )) {
-        if (typeof v === "string") parentAnswers[k] = v;
-        else if (Array.isArray(v))
-          parentAnswers[k] = v.filter((x) => typeof x === "string").join(", ");
-        else if (v != null) parentAnswers[k] = String(v);
+    // Each Père/Mère is stored on its own ApplicationResponsable.customAnswers
+    // row (the two-responsable editor). Coerce each into a flat string map for
+    // the renderer. The legacy Application.parentAnswers blob is no longer the
+    // source — fall back to it only when there are no responsable rows (old
+    // dossiers) so historic applications still display.
+    const coerce = (raw: unknown): Record<string, string> => {
+      const out: Record<string, string> = {};
+      if (raw && typeof raw === "object") {
+        for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+          if (typeof v === "string") out[k] = v;
+          else if (Array.isArray(v))
+            out[k] = v.filter((x) => typeof x === "string").join(", ");
+          else if (v != null) out[k] = String(v);
+        }
       }
-    }
+      return out;
+    };
+    const RESP_KIND_LABEL: Record<string, string> = {
+      PERE: "Père",
+      MERE: "Mère",
+      TUTEUR: "Tuteur",
+      AUTRE: "Autre responsable",
+    };
+    const responsableCards =
+      app.responsables.length > 0
+        ? app.responsables.map((r) => ({
+            id: r.id,
+            title: RESP_KIND_LABEL[r.kind] ?? "Responsable",
+            answers: coerce(r.customAnswers),
+          }))
+        : app.parentAnswers && Object.keys(app.parentAnswers).length > 0
+          ? [{ id: "legacy", title: "Responsable", answers: coerce(app.parentAnswers) }]
+          : [];
 
     // Foyer data — address lives on Family (linked via Guardian), the
     // sub-fields (building/floor/details/notes) live in dossierAnswers.
@@ -527,6 +557,10 @@ export default async function AdmissionsAdminDetailPage({
                 value={app.childPlaceOfBirth ?? ""}
               />
               <Row
+                label="مكان الولادة (ville AR)"
+                value={app.childPlaceOfBirthAr ?? ""}
+              />
+              <Row
                 label="Pays de naissance"
                 value={app.childBirthCountry ?? ""}
               />
@@ -551,65 +585,53 @@ export default async function AdmissionsAdminDetailPage({
 
         ) : null}
 
-        {/* ── Responsables (identity + custom parent answers + footer) ── */}
+        {/* ── Responsables — one card per Père/Mère, fields from each
+            responsable's customAnswers (the two-responsable editor). ── */}
         {currentTab === "responsables" ? (
-        <Card>
-          <CardHeader
-            title="Responsables"
-            description={app.submittedBy.name ?? app.submittedBy.email}
-          />
-          <CardBody>
-            <SectionLabel>Identité du responsable</SectionLabel>
-            <dl>
-              <Row
-                label="Relation avec l'enfant"
-                value={
-                  app.submitterRelation
-                    ? RESPONSABLE_RELATION_LABELS[app.submitterRelation] ??
-                      app.submitterRelation
-                    : ""
-                }
-              />
-              <Row
-                label="Nationalité libanaise"
-                value={yn(app.submitterIsLebanese)}
-              />
-              {app.submitterIsLebanese === true ? (
-                <Row
-                  label="N° passeport / CI libanaise"
-                  value={app.submitterPassportLebanese ?? ""}
-                />
-              ) : null}
-              <Row label="Email" value={app.submittedBy.email ?? ""} />
-            </dl>
-
-            {/* Custom parent fields configured per-tenant */}
-            {parentFieldsConfig.fields.length > 0 ? (
-              <>
-                <SectionLabel>Informations parent (personnalisé)</SectionLabel>
-                <dl>
-                  {parentFieldsConfig.fields
-                    .filter((f) => f.active !== false)
-                    .map((f) => (
-                      <Row
-                        key={f.id}
-                        label={f.label}
-                        value={parentAnswers[f.id] ?? ""}
-                      />
-                    ))}
-                </dl>
-              </>
-            ) : null}
-
-            <SectionLabel>Famille</SectionLabel>
-            <dl>
-              <Row
-                label="Famille monoparentale"
-                value={yn(app.monoParental)}
-              />
-            </dl>
-          </CardBody>
-        </Card>
+        <>
+          {responsableCards.length === 0 ? (
+            <Card>
+              <CardHeader title="Responsables" />
+              <CardBody>
+                <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                  Aucun responsable saisi.
+                </p>
+              </CardBody>
+            </Card>
+          ) : (
+            responsableCards.map((resp) => {
+              const fullName = [resp.answers.prenom, resp.answers.nom]
+                .filter(Boolean)
+                .join(" ");
+              return (
+                <Card key={resp.id}>
+                  <CardHeader title={resp.title} description={fullName || undefined} />
+                  <CardBody>
+                    <dl>
+                      {parentFieldsConfig.fields
+                        .filter((f) => f.active !== false)
+                        .map((f) => (
+                          <Row
+                            key={f.id}
+                            label={f.label}
+                            value={resp.answers[f.id] ?? ""}
+                          />
+                        ))}
+                    </dl>
+                  </CardBody>
+                </Card>
+              );
+            })
+          )}
+          <Card>
+            <CardHeader title="Famille" />
+            <CardBody>
+              <dl>
+                <Row label="Famille monoparentale" value={yn(app.monoParental)} />
+              </dl>
+            </CardBody>
+          </Card>
+        </>
         ) : null}
 
         {/* ── Foyer (address + siblings + image rights) ───────────── */}
@@ -660,7 +682,16 @@ export default async function AdmissionsAdminDetailPage({
                   </ul>
                 </>
               ) : null}
+            </CardBody>
+          </Card>
+        ) : null}
 
+        {/* ── Autorisations (image rights + quitter seul) — mirrors the
+            parent dossier's Autorisations tab. ──────────────────────── */}
+        {currentTab === "autorisations" ? (
+          <Card>
+            <CardHeader title="Autorisations" />
+            <CardBody>
               <SectionLabel>Autorisation de prise de vue</SectionLabel>
               <dl>
                 <Row label="Site internet" value={yn(foyer.imageRightsSite)} />
@@ -670,6 +701,13 @@ export default async function AdmissionsAdminDetailPage({
                   value={yn(foyer.imageRightsSocial)}
                 />
                 <Row label="Web Radio" value={yn(foyer.imageRightsRadio)} />
+              </dl>
+              <SectionLabel>Sortie de l&apos;établissement</SectionLabel>
+              <dl>
+                <Row
+                  label="Autorisé(e) à quitter seul(e)"
+                  value={yn(quitterSeul)}
+                />
               </dl>
             </CardBody>
           </Card>

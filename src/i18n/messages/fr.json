@@ -322,6 +322,7 @@
   "signIn": {
     "title": "Connexion",
     "subtitle": "Accédez à votre espace {tenantName}.",
+    "heroLead": "Le portail des parents et du personnel.",
     "email": "Adresse e-mail",
     "password": "Mot de passe",
     "submit": "Se connecter",
@@ -336,7 +337,9 @@
     "heading": "EduLM",
     "lead": "Un système de gestion scolaire complet — élèves, présences, discipline, facturation, portail parents.",
     "ctaSignIn": "Se connecter",
-    "ctaLearn": "En savoir plus"
+    "ctaSignUp": "Créer un compte",
+    "ctaLearn": "En savoir plus",
+    "signUpHint": "Première inscription ? Créez votre compte pour inscrire votre enfant."
   },
   "dashboard": {
     "welcome": "Bonjour, {name}",

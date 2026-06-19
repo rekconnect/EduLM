@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { parseTransport, parseSante } from "@/lib/dossier-content";
+import { parseTransport, parseSante, parseScolarite } from "@/lib/dossier-content";
 
 /**
  * The ACCEPTANCE BRIDGE — field matching between the online inscription /
@@ -36,6 +36,25 @@ type ContactRow = {
   phoneHome: string | null;
 };
 
+/** A Père/Mère row from the two-responsable editor. */
+type ResponsableRow = {
+  kind: string; // PERE | MERE | TUTEUR | AUTRE
+  customAnswers: unknown;
+};
+
+/** État-civil columns captured on the Application that have no dedicated
+ *  Student column — they map into Student.customAnswers fiche keys. */
+type ChildCivil = {
+  birthCountry?: string | null;
+  placeOfBirth?: string | null;
+  nationality?: string | null;
+  nationality2?: string | null;
+  firstNameAr?: string | null;
+  lastNameAr?: string | null;
+  passportLebanese?: string | null;
+  isLebanese?: boolean | null;
+};
+
 export async function applyDossierToStudent(
   tx: Tx,
   opts: {
@@ -46,8 +65,18 @@ export async function applyDossierToStudent(
     studentAnswers: unknown;
     parentAnswers: unknown;
     submittedByUserId: string;
+    submitterEmail?: string | null;
     contacts: ContactRow[];
     childPlaceOfBirthAr?: string | null;
+    childCivil?: ChildCivil;
+    responsables?: ResponsableRow[];
+    imageRights?: {
+      site: boolean | null;
+      book: boolean | null;
+      social: boolean | null;
+      radio: boolean | null;
+    };
+    inscriptionDate?: string | null; // yyyy-mm-dd
   },
 ): Promise<void> {
   const { tenantId, studentId, yearLabel } = opts;
@@ -57,11 +86,12 @@ export async function applyDossierToStudent(
       : {};
   const transport = parseTransport(dossier.transport);
   const sante = parseSante(dossier.sante);
+  const scolarite = parseScolarite(dossier.scolarite);
 
   // ── Student.customAnswers ──
   const st = await tx.student.findUnique({
     where: { id: studentId },
-    select: { customAnswers: true },
+    select: { customAnswers: true, previousSchool: true },
   });
   if (!st) return;
   const ca: Record<string, unknown> =
@@ -103,8 +133,33 @@ export async function applyDossierToStudent(
   if (typeof autz.quitterSeul === "boolean") {
     year.quitter_seul = autz.quitterSeul ? "yes" : "no";
   }
+  // Image rights live on Family; mirror them into the per-year authorizations
+  // (auth_site/livre/reseaux/radio) so the student fiche's "Autorisations" tab
+  // shows them, plus single fallback keys for stable display.
+  const ir = opts.imageRights;
+  if (ir) {
+    const ynOf = (b: boolean | null) => (b === true ? "yes" : b === false ? "no" : "");
+    const pairs: Array<[string, boolean | null]> = [
+      ["auth_site", ir.site],
+      ["auth_livre", ir.book],
+      ["auth_reseaux", ir.social],
+      ["auth_radio", ir.radio],
+    ];
+    for (const [key, b] of pairs) {
+      const v = ynOf(b);
+      if (v) {
+        year[key] = v;
+        ca[key] = v; // single fallback the fiche reads for enrolled years
+      }
+    }
+  }
   reg[yearLabel] = year;
   ca.registration_by_year = JSON.stringify(reg);
+
+  // Scolarité → fiche keys (date d'entrée / date d'inscription). The bound
+  // établissement/niveau come from the enrollment, not customAnswers.
+  if (scolarite.entryDate) ca.date_entree = scolarite.entryDate;
+  if (opts.inscriptionDate) ca.date_inscription = opts.inscriptionDate;
 
   // Billing tokens — the Cantine module reads these.
   if (transport.collation !== null || transport.cantine !== null) {
@@ -169,9 +224,39 @@ export async function applyDossierToStudent(
     ca.lieu_naissance_ar = opts.childPlaceOfBirthAr.trim();
   }
 
+  // 2b. État-civil columns captured on the Application but with no dedicated
+  // Student column → the fiche keys the student dossier renders from
+  // customAnswers (pays_naissance, nationalite, nationalite2, numero_identite,
+  // nom_prenom_ar, isLebanese). Without this the fiche shows them empty even
+  // though the parent filled them in. Only write non-empty values.
+  const civil = opts.childCivil ?? {};
+  const setCa = (key: string, v: string | null | undefined) => {
+    if (typeof v === "string" && v.trim()) ca[key] = v.trim();
+  };
+  setCa("pays_naissance", civil.birthCountry);
+  setCa("lieu_naissance", civil.placeOfBirth);
+  setCa("nationalite", civil.nationality);
+  setCa("nationalite2", civil.nationality2);
+  setCa("numero_identite", civil.passportLebanese);
+  const nomPrenomAr = [civil.lastNameAr, civil.firstNameAr]
+    .map((s) => (s ?? "").trim())
+    .filter(Boolean)
+    .join(" ");
+  if (nomPrenomAr) ca.nom_prenom_ar = nomPrenomAr;
+  if (typeof civil.isLebanese === "boolean") {
+    ca.isLebanese = civil.isLebanese ? "yes" : "no";
+  }
+
+  // Previous school (dossier) → Student.previousSchool column when the accept
+  // flow didn't already set it (it reads app.currentSchool, often empty).
+  const prevSchoolUpdate =
+    !st.previousSchool && scolarite.previousSchool
+      ? { previousSchool: scolarite.previousSchool }
+      : {};
+
   await tx.student.update({
     where: { id: studentId },
-    data: { customAnswers: ca as Prisma.InputJsonValue },
+    data: { customAnswers: ca as Prisma.InputJsonValue, ...prevSchoolUpdate },
   });
 
   // 3. Santé → infirmerie record (only fields the dossier actually filled).
@@ -209,7 +294,32 @@ export async function applyDossierToStudent(
     }
   }
 
-  // 4. Parent custom answers + authorized persons → submitting parent.
+  // 4. Parent answers + authorized persons → submitting parent's User +
+  // Guardian. The two-responsable editor stores each parent on its own
+  // ApplicationResponsable.customAnswers row — that's the real source now;
+  // the legacy parentAnswers blob is kept only as a fallback (empty for new
+  // dossiers). We merge the submitter's responsable answers into the parent's
+  // User.customAnswers (which is what the fiche + Arabic section read) and
+  // mirror the column-backed ones onto the Guardian row.
+  const submitterEmail = (opts.submitterEmail ?? "").trim().toLowerCase();
+  const responsables = Array.isArray(opts.responsables) ? opts.responsables : [];
+  const caOf = (r: ResponsableRow): Record<string, string> => {
+    const out: Record<string, string> = {};
+    if (r.customAnswers && typeof r.customAnswers === "object") {
+      for (const [k, v] of Object.entries(r.customAnswers as Record<string, unknown>)) {
+        if (typeof v === "string" && v.trim()) out[k] = v.trim();
+      }
+    }
+    return out;
+  };
+  // The responsable that corresponds to the submitting account: match by
+  // email, else the Père, else the first row.
+  const submitterResp =
+    responsables.find((r) => caOf(r).email?.toLowerCase() === submitterEmail && submitterEmail) ??
+    responsables.find((r) => r.kind === "PERE") ??
+    responsables[0] ??
+    null;
+
   const parent = await tx.user.findFirst({
     where: { id: opts.submittedByUserId, tenantId },
     select: { customAnswers: true },
@@ -220,6 +330,7 @@ export async function applyDossierToStudent(
         ? { ...(parent.customAnswers as Record<string, unknown>) }
         : {};
     let changed = false;
+    // Legacy blob (fallback).
     if (opts.parentAnswers && typeof opts.parentAnswers === "object") {
       for (const [k, v] of Object.entries(opts.parentAnswers as Record<string, unknown>)) {
         if (v == null) continue;
@@ -227,6 +338,43 @@ export async function applyDossierToStudent(
         if (t !== "") {
           pca[k] = t;
           changed = true;
+        }
+      }
+    }
+    // Responsable answers (the real source). These keys are the parent fiche
+    // field ids, so merging them populates every parent + Arabic fiche field.
+    if (submitterResp) {
+      const rca = caOf(submitterResp);
+      for (const [k, v] of Object.entries(rca)) {
+        pca[k] = v;
+        changed = true;
+      }
+      // Mirror the column-backed parent fields onto the Guardian row.
+      const guardian = await tx.guardian.findUnique({
+        where: { userId: opts.submittedByUserId },
+        select: { id: true },
+      });
+      if (guardian) {
+        const gData: Record<string, unknown> = {};
+        if (rca.portable) gData.phone = rca.portable.slice(0, 40);
+        if (rca.nationalite1) gData.nationality1 = rca.nationalite1;
+        if (rca.nationalite2) gData.nationality2 = rca.nationalite2;
+        if (rca.nationalite1) {
+          gData.isLebanese = /liban/i.test(rca.nationalite1);
+        }
+        // Set the relation so the student fiche's Arabic "father" block (which
+        // reads the guardian with relation === "pere") resolves it. The accept
+        // flow created the guardian with the generic relation "parent".
+        const relByKind: Record<string, string> = {
+          PERE: "pere",
+          MERE: "mere",
+          TUTEUR: "tuteur",
+          AUTRE: "autre",
+        };
+        const rel = relByKind[submitterResp.kind];
+        if (rel) gData.relation = rel;
+        if (Object.keys(gData).length > 0) {
+          await tx.guardian.update({ where: { id: guardian.id }, data: gData });
         }
       }
     }

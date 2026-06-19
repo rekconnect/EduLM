@@ -483,6 +483,30 @@ const eleveEtatCivilSchema = z.object({
   childPlaceOfBirthAr: z.string().trim().max(80).optional(),
 });
 
+/**
+ * Phase-1 Dars convergence: mirror the student état-civil / passeport inputs
+ * into Application.studentAnswers under the canonical Dars field ids, so the
+ * inscription form, the fiche, and the acceptance bridge all read the SAME
+ * field set. The legacy Application columns are still written in parallel
+ * (dropped in a later phase). prenom/nom/date_naissance stay column-bound
+ * (dossierBoundTo) so they are intentionally NOT duplicated here. An empty
+ * value clears the key.
+ */
+function mergeStudentDarsAnswers(
+  existing: unknown,
+  patch: Record<string, string | null | undefined>,
+): Prisma.InputJsonValue {
+  const out: Record<string, unknown> =
+    existing && typeof existing === "object"
+      ? { ...(existing as Record<string, unknown>) }
+      : {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (v == null || v.trim() === "") delete out[k];
+    else out[k] = v.trim();
+  }
+  return out as Prisma.InputJsonValue;
+}
+
 export async function saveEleveEtatCivil(
   applicationId: string,
   payload: unknown,
@@ -505,13 +529,18 @@ export async function saveEleveEtatCivil(
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await db.application.findUnique({
       where: { id: applicationId },
-      select: { id: true, submittedByUserId: true, status: true },
+      select: { id: true, submittedByUserId: true, status: true, studentAnswers: true },
     });
     if (!app) return { ok: false, error: "not-found" };
     if (app.submittedByUserId !== user.id) return { ok: false, error: "forbidden" };
     if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
       return { ok: false, error: "locked" };
     }
+
+    const nomPrenomAr = [parsed.data.childLastNameAr, parsed.data.childFirstNameAr]
+      .map((s) => (s ?? "").trim())
+      .filter(Boolean)
+      .join(" ");
 
     await db.application.update({
       where: { id: applicationId },
@@ -525,6 +554,12 @@ export async function saveEleveEtatCivil(
         childFirstNameAr: parsed.data.childFirstNameAr || null,
         childLastNameAr: parsed.data.childLastNameAr || null,
         childPlaceOfBirthAr: parsed.data.childPlaceOfBirthAr || null,
+        studentAnswers: mergeStudentDarsAnswers(app.studentAnswers, {
+          pays_naissance: parsed.data.childBirthCountry,
+          lieu_naissance: parsed.data.childPlaceOfBirth,
+          nom_prenom_ar: nomPrenomAr,
+          lieu_naissance_ar: parsed.data.childPlaceOfBirthAr,
+        }),
       },
     });
 
@@ -592,7 +627,7 @@ export async function saveElevePassport(
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await db.application.findUnique({
       where: { id: applicationId },
-      select: { id: true, submittedByUserId: true, status: true },
+      select: { id: true, submittedByUserId: true, status: true, studentAnswers: true },
     });
     if (!app) return { ok: false, error: "not-found" };
     if (app.submittedByUserId !== user.id) return { ok: false, error: "forbidden" };
@@ -620,6 +655,17 @@ export async function saveElevePassport(
         // Slot 3 was removed from the UI — null it out on every save
         // so old DB values (from earlier sessions) don't linger.
         childNationality3: null,
+        studentAnswers: mergeStudentDarsAnswers(app.studentAnswers, {
+          nationalite: parsed.data.childNationality,
+          nationalite2: parsed.data.childNationality2,
+          numero_identite: persistLebanesePassport ?? "",
+          isLebanese:
+            parsed.data.childIsLebanese == null
+              ? ""
+              : parsed.data.childIsLebanese
+                ? "yes"
+                : "no",
+        }),
       },
     });
 

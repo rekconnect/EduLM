@@ -322,6 +322,7 @@
   "signIn": {
     "title": "Sign in",
     "subtitle": "Access your {tenantName} workspace.",
+    "heroLead": "The portal for parents and staff.",
     "email": "Email",
     "password": "Password",
     "submit": "Sign in",
@@ -336,7 +337,9 @@
     "heading": "EduLM",
     "lead": "A complete school management platform — students, attendance, discipline, billing, parent portal.",
     "ctaSignIn": "Sign in",
-    "ctaLearn": "Learn more"
+    "ctaSignUp": "Create an account",
+    "ctaLearn": "Learn more",
+    "signUpHint": "First time here? Create your account to enrol your child."
   },
   "dashboard": {
     "welcome": "Hello, {name}",

@@ -15,6 +15,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import {
   CROSS_FIELD_LOOKUP_TYPES,
@@ -35,6 +41,7 @@ import {
   type UserBoundProp,
 } from "@/lib/entity-fields";
 import { presetOptionsForType } from "@/lib/lookups";
+import { FieldsRenderer } from "@/components/fields-renderer";
 import { updateEntityFieldsConfig } from "./_actions";
 
 type Props = {
@@ -109,11 +116,12 @@ export function FieldsConfigForm({ entity, initial }: Props) {
   }
 
   // ── Field mutations ──────────────────────────────────
-  function addField(categoryId: string) {
+  function addField(categoryId: string): string {
+    const id = newId();
     setFields((prev) => [
       ...prev,
       {
-        id: newId(),
+        id,
         key: "",
         label: "",
         type: "short_text",
@@ -122,6 +130,7 @@ export function FieldsConfigForm({ entity, initial }: Props) {
         order: prev.filter((f) => f.categoryId === categoryId).length,
       },
     ]);
+    return id;
   }
   function updateField(id: string, patch: Partial<FieldDef>) {
     setFields((prev) =>
@@ -169,6 +178,18 @@ export function FieldsConfigForm({ entity, initial }: Props) {
     });
   }
 
+  // Move a field to a different category, placing it at the end of the target.
+  function changeFieldCategory(id: string, newCatId: string) {
+    setFields((prev) => {
+      const target = prev.find((f) => f.id === id);
+      if (!target || target.categoryId === newCatId) return prev;
+      const endOrder = prev.filter((f) => f.categoryId === newCatId).length;
+      return prev.map((f) =>
+        f.id === id ? { ...f, categoryId: newCatId, order: endOrder } : f,
+      );
+    });
+  }
+
   // Sorted fields per category for rendering.
   const fieldsByCat = useMemo(() => {
     const map = new Map<string, FieldDef[]>();
@@ -188,12 +209,19 @@ export function FieldsConfigForm({ entity, initial }: Props) {
   }
 
   function onSubmit() {
+    // Drop incomplete fields (no label) — the save schema requires a label, so
+    // an unfinished "+ champ" would otherwise fail the whole save. Also drop
+    // fields whose category no longer exists.
+    const catIds = new Set(categories.map((c) => c.id));
+    const usableFields = fields.filter(
+      (f) => (f.label ?? "").trim().length > 0 && catIds.has(f.categoryId),
+    );
     // Re-number `order` PER CATEGORY (not across the whole flat array) so
     // each field's position within its category is preserved exactly as the
     // admin arranged it. The previous flat-index approach silently broke
     // per-category ordering whenever fields lived in multiple categories.
     const perCategoryCounter = new Map<string, number>();
-    const orderedFields = [...fields]
+    const orderedFields = [...usableFields]
       .sort((a, b) => a.order - b.order)
       .map((f) => {
         const idx = perCategoryCounter.get(f.categoryId) ?? 0;
@@ -224,8 +252,131 @@ export function FieldsConfigForm({ entity, initial }: Props) {
     });
   }
 
+  // ── Live WYSIWYG preview ──────────────────────────────────────────
+  // Render the exact same FieldsRenderer the parent form uses, off the
+  // in-progress config, so editing and the real form stay identical. Clicking
+  // a field jumps to its settings row in the editor.
+  const previewConfig: EntityFieldsConfig = { categories, fields };
+  const [previewAnswers, setPreviewAnswers] = useState<Record<string, string>>(
+    {},
+  );
+  // "form" = WYSIWYG (the editor IS the form, click a field to edit it in a
+  // drawer); "list" = the classic per-category list (power view).
+  const [mode, setMode] = useState<"form" | "list">("form");
+  const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+  const activeField = fields.find((f) => f.id === activeFieldId) ?? null;
+  const sortedCats = [...categories].sort((a, b) => a.order - b.order);
+  const activeCategory =
+    categories.find((c) => c.id === activeCategoryId) ?? null;
+  const activeCatIdx = activeCategory
+    ? sortedCats.findIndex((c) => c.id === activeCategory.id)
+    : -1;
+  const activeCatFields = activeField
+    ? [...fields]
+        .filter((f) => f.categoryId === activeField.categoryId)
+        .sort((a, b) => a.order - b.order)
+    : [];
+  const activeIdx = activeField
+    ? activeCatFields.findIndex((f) => f.id === activeField.id)
+    : -1;
+
+  function handleEditField(id: string) {
+    if (mode === "form") {
+      setActiveFieldId(id);
+      return;
+    }
+    const f = fields.find((x) => x.id === id);
+    if (!f) return;
+    setOpenCats((prev) => new Set(prev).add(f.categoryId));
+    setTimeout(() => {
+      document
+        .getElementById(`field-row-${id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+  }
+
   return (
     <div className="space-y-4">
+      {/* Mode toolbar — Formulaire (WYSIWYG) vs Liste, + add category + save. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-sunken)] p-0.5 text-xs">
+          {(["form", "list"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={cn(
+                "rounded px-3 py-1 font-medium transition-colors duration-150 ease-out",
+                mode === m
+                  ? "bg-[color:var(--color-surface-raised)] text-[color:var(--color-foreground)] shadow-card"
+                  : "text-[color:var(--color-foreground-muted)] hover:text-[color:var(--color-foreground)]",
+              )}
+            >
+              {t(m === "form" ? "fieldsConfig.modeForm" : "fieldsConfig.modeList")}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={addCategory}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-[color:var(--color-brand-600)] transition-colors hover:text-[color:var(--color-brand-700)]"
+          >
+            <Plus className="size-4" aria-hidden />
+            {t("fieldsConfig.addCategory")}
+          </button>
+          <Button type="button" onClick={onSubmit} disabled={pending} className="gap-2">
+            {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+            {pending ? tCommon("loading") : tCommon("save")}
+          </Button>
+        </div>
+      </div>
+
+      {mode === "form" ? (
+        /* ── Formulaire (WYSIWYG): the editor IS the live form. ── */
+        <div className="rounded-lg border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] p-5 shadow-card">
+          {fields.length === 0 ? (
+            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+              {t("fieldsConfig.previewEmpty")}
+            </p>
+          ) : (
+            <>
+              <p className="mb-4 text-xs text-[color:var(--color-foreground-subtle)]">
+                {t("fieldsConfig.clickToEdit")}
+              </p>
+              <FieldsRenderer
+                config={previewConfig}
+                answers={previewAnswers}
+                extras={{ establishments: [] }}
+                unlockBound
+                onEditField={handleEditField}
+                onEditCategory={setActiveCategoryId}
+                onChange={(fid, v) =>
+                  setPreviewAnswers((p) => ({ ...p, [fid]: v }))
+                }
+              />
+            </>
+          )}
+          {/* Quick add a field into any category. */}
+          <div className="mt-5 flex flex-wrap gap-2 border-t border-[color:var(--color-border-subtle)] pt-4">
+            {categories
+              .filter((c) => c.active)
+              .map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setActiveFieldId(addField(c.id))}
+                  className="inline-flex items-center gap-1 rounded-md border border-dashed border-[color:var(--color-border-strong)] px-2.5 py-1 text-xs font-medium text-[color:var(--color-foreground-muted)] transition-colors hover:border-[color:var(--color-brand-400)] hover:text-[color:var(--color-brand-600)]"
+                >
+                  <Plus className="size-3.5" aria-hidden />
+                  {c.name}
+                </button>
+              ))}
+          </div>
+        </div>
+      ) : (
+      <div className="space-y-4">
       {categories.length === 0 ? (
         <div className="rounded-md border border-dashed border-[color:var(--color-border-strong)] px-4 py-6 text-center text-sm text-[color:var(--color-foreground-muted)]">
           {t("fieldsConfig.noCategories")}
@@ -317,9 +468,11 @@ export function FieldsConfigForm({ entity, initial }: Props) {
                             isFirst={fIdx === 0}
                             isLast={fIdx === catFields.length - 1}
                             referenceable={referenceableFields(f.id)}
+                            categories={categories}
                             onUpdate={(patch) => updateField(f.id, patch)}
                             onRemove={() => removeField(f.id)}
                             onMove={(dir) => moveField(f.id, dir)}
+                            onChangeCategory={(catId) => changeFieldCategory(f.id, catId)}
                           />
                         ))}
                       </ul>
@@ -339,21 +492,125 @@ export function FieldsConfigForm({ entity, initial }: Props) {
           })}
         </ul>
       )}
-
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={addCategory}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-[color:var(--color-brand-600)] transition-colors hover:text-[color:var(--color-brand-700)]"
-        >
-          <Plus className="size-4" aria-hidden />
-          {t("fieldsConfig.addCategory")}
-        </button>
-        <Button type="button" onClick={onSubmit} disabled={pending} className="gap-2">
-          {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-          {pending ? tCommon("loading") : tCommon("save")}
-        </Button>
       </div>
+      )}
+
+      {/* Field editor drawer — opens when a field is clicked in Formulaire
+          mode. Reuses the same FieldRow controls as the Liste view. */}
+      <Sheet
+        open={!!activeFieldId}
+        onOpenChange={(o) => {
+          if (!o) setActiveFieldId(null);
+        }}
+      >
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
+          <SheetHeader className="text-start">
+            <SheetTitle>{t("fieldsConfig.editField")}</SheetTitle>
+          </SheetHeader>
+          {activeField ? (
+            <ul className="mt-4">
+              <FieldRow
+                field={activeField}
+                entity={entity}
+                isFirst={activeIdx === 0}
+                isLast={activeIdx === activeCatFields.length - 1}
+                referenceable={referenceableFields(activeField.id)}
+                categories={categories}
+                onUpdate={(patch) => updateField(activeField.id, patch)}
+                onRemove={() => {
+                  removeField(activeField.id);
+                  setActiveFieldId(null);
+                }}
+                onMove={(dir) => moveField(activeField.id, dir)}
+                onChangeCategory={(catId) =>
+                  changeFieldCategory(activeField.id, catId)
+                }
+              />
+            </ul>
+          ) : null}
+        </SheetContent>
+      </Sheet>
+
+      {/* Section (category) editor drawer — opened from a section heading in
+          Formulaire mode. */}
+      <Sheet
+        open={!!activeCategoryId}
+        onOpenChange={(o) => {
+          if (!o) setActiveCategoryId(null);
+        }}
+      >
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-sm">
+          <SheetHeader className="text-start">
+            <SheetTitle>{t("fieldsConfig.editSection")}</SheetTitle>
+          </SheetHeader>
+          {activeCategory ? (
+            <div className="mt-4 space-y-4">
+              <Field
+                label={t("fieldsConfig.sectionName")}
+                htmlFor={`cat-name-${activeCategory.id}`}
+              >
+                <Input
+                  id={`cat-name-${activeCategory.id}`}
+                  value={activeCategory.name}
+                  onChange={(e) =>
+                    updateCategory(activeCategory.id, { name: e.target.value })
+                  }
+                  maxLength={80}
+                />
+              </Field>
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={activeCategory.active}
+                  onChange={(e) =>
+                    updateCategory(activeCategory.id, {
+                      active: e.target.checked,
+                    })
+                  }
+                />
+                {t("fieldsConfig.active")}
+              </label>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={activeCatIdx <= 0}
+                  onClick={() => moveCategory(activeCategory.id, -1)}
+                  className="gap-1"
+                >
+                  <ChevronUp className="size-4" aria-hidden />
+                  {t("fieldsConfig.moveUp")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={activeCatIdx === sortedCats.length - 1}
+                  onClick={() => moveCategory(activeCategory.id, 1)}
+                  className="gap-1"
+                >
+                  <ChevronDown className="size-4" aria-hidden />
+                  {t("fieldsConfig.moveDown")}
+                </Button>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!window.confirm(t("fieldsConfig.removeSectionConfirm")))
+                    return;
+                  removeCategory(activeCategory.id);
+                  setActiveCategoryId(null);
+                }}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-[color:var(--color-danger)] transition-colors hover:underline"
+              >
+                <Trash2 className="size-4" aria-hidden />
+                {t("fieldsConfig.removeCategory")}
+              </button>
+            </div>
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -364,9 +621,11 @@ function FieldRow({
   isFirst,
   isLast,
   referenceable,
+  categories,
   onUpdate,
   onRemove,
   onMove,
+  onChangeCategory,
 }: {
   field: FieldDef;
   /** parent vs student — the user-binding picker only appears for parent fields. */
@@ -374,9 +633,11 @@ function FieldRow({
   isFirst: boolean;
   isLast: boolean;
   referenceable: FieldDef[];
+  categories: FieldCategory[];
   onUpdate: (patch: Partial<FieldDef>) => void;
   onRemove: () => void;
   onMove: (dir: -1 | 1) => void;
+  onChangeCategory: (categoryId: string) => void;
 }) {
   const t = useTranslations("settings");
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -408,7 +669,10 @@ function FieldRow({
         : [];
 
   return (
-    <li className="rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] p-3">
+    <li
+      id={`field-row-${field.id}`}
+      className="scroll-mt-4 rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] p-3"
+    >
       <div className="grid gap-2 sm:grid-cols-[1fr_140px_auto_auto]">
         <Field label={t("fieldsConfig.label")} htmlFor={`label-${field.id}`}>
           <Input
@@ -464,6 +728,19 @@ function FieldRow({
               }
             />
             {t("fieldsConfig.fieldActive")}
+          </label>
+          <label
+            className="inline-flex items-center gap-1.5 text-xs"
+            title={t("fieldsConfig.formHiddenHint")}
+          >
+            <input
+              type="checkbox"
+              checked={field.formHidden === true}
+              onChange={(e) =>
+                onUpdate({ formHidden: e.target.checked ? true : undefined })
+              }
+            />
+            {t("fieldsConfig.formHidden")}
           </label>
         </div>
         <div className="flex items-end gap-1 pb-1">
@@ -584,6 +861,23 @@ function FieldRow({
 
       {showAdvanced ? (
         <div className="mt-2 grid gap-2 rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-sunken)]/60 p-3 sm:grid-cols-2">
+          <Field
+            label={t("fieldsConfig.moveToCategory")}
+            htmlFor={`cat-${field.id}`}
+            hint={t("fieldsConfig.moveToCategoryHint")}
+          >
+            <Select
+              id={`cat-${field.id}`}
+              value={field.categoryId}
+              onChange={(e) => onChangeCategory(e.target.value)}
+            >
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
           <Field
             label={t("fieldsConfig.key")}
             htmlFor={`key-${field.id}`}

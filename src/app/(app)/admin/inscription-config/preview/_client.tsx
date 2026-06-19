@@ -1,15 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Check } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Check, Sparkles } from "lucide-react";
 import { TenantConfigProvider } from "@/components/dossier/tenant-config-context";
 import { PreviewEditModeProvider } from "@/components/dossier/preview-edit-mode-context";
 import { FieldEditDrawer } from "@/components/dossier/field-edit-drawer";
 import { FirstTimeBanner } from "./_first-time-banner";
-import { EleveEtatCivilSection } from "@/app/(app)/parent/inscriptions/[id]/edit/_section-eleve-etat-civil";
-import { ElevePassportSection } from "@/app/(app)/parent/inscriptions/[id]/edit/_section-eleve-passport";
-import { ResponsableLebaneseSection } from "@/app/(app)/parent/inscriptions/[id]/edit/_section-responsable-lebanese";
-import { ResponsableFooter } from "@/app/(app)/parent/inscriptions/[id]/edit/_section-responsable-footer";
 import { DossierTabFoyer } from "@/app/(app)/parent/inscriptions/[id]/edit/_tab-foyer";
 import { DossierTabScolarite } from "@/app/(app)/parent/inscriptions/[id]/edit/_tab-scolarite";
 import { DossierTabTransport } from "@/app/(app)/parent/inscriptions/[id]/edit/_tab-transport";
@@ -55,30 +52,6 @@ const TAB_LABELS: Record<PreviewTabKey, string> = {
 // preview shows the Pédagogique Terminale block (the richest one).
 // Admin can change the niveau interactively to see other groups.
 
-const MOCK_ELEVE = {
-  childFirstName: "Maya",
-  childLastName: "Hajj",
-  childDob: "2008-09-15",
-  childGender: "FEMALE" as const,
-  childPlaceOfBirth: "Beyrouth",
-  childBirthCountry: "Liban",
-  childFirstNameAr: "مايا",
-  childLastNameAr: "الحاج",
-  childPlaceOfBirthAr: "بيروت",
-};
-const MOCK_PASSPORT = {
-  childIsLebanese: true as boolean | null,
-  childPassportLebanese: "RL 1234567",
-  childNationality: "",
-  childNationality2: "",
-};
-const MOCK_RESPONSABLE = {
-  submitterRelation: "pere",
-  submitterIsLebanese: true as boolean | null,
-  submitterPassportLebanese: "RL 7654321",
-  submitterNationality: "",
-  submitterNationality2: "",
-};
 const MOCK_FOYER = {
   addressCaza: "Baabda",
   addressVillage: "Hazmieh",
@@ -193,37 +166,11 @@ export function PreviewClient({
 
         <div className="mt-4 space-y-6">
           {active === "eleve" ? (
-            <>
-              <EleveEtatCivilSection
-                applicationId="preview"
-                initial={MOCK_ELEVE}
-                disabled={false}
-                editMode
-              />
-              <ElevePassportSection
-                applicationId="preview"
-                initial={MOCK_PASSPORT}
-                disabled={false}
-                editMode
-              />
-            </>
+            <MigratedTabNotice tab="Élève" where="Champs élève" />
           ) : null}
 
           {active === "responsables" ? (
-            <>
-              <ResponsableLebaneseSection
-                applicationId="preview"
-                initial={MOCK_RESPONSABLE}
-                disabled={false}
-                editMode
-              />
-              <ResponsableFooter
-                applicationId="preview"
-                initialMonoParental={false}
-                disabled={false}
-                editMode
-              />
-            </>
+            <MigratedTabNotice tab="Responsables" where="Champs parent" />
           ) : null}
 
           {active === "foyer" ? (
@@ -301,5 +248,37 @@ export function PreviewClient({
         <FieldEditDrawer />
       </PreviewEditModeProvider>
     </TenantConfigProvider>
+  );
+}
+
+/**
+ * This tab has been migrated to the Dars entity-fields system, so it's
+ * configured in Settings → Champs (with a live WYSIWYG preview + conditions),
+ * not in this legacy editor. Shown instead of the stale hardcoded form.
+ */
+function MigratedTabNotice({ tab, where }: { tab: string; where: string }) {
+  return (
+    <div className="rounded-lg border border-[color:var(--color-brand-200)] bg-[color:var(--color-brand-50)] p-6 text-center">
+      <Sparkles
+        className="mx-auto size-6 text-[color:var(--color-brand-600)]"
+        aria-hidden
+      />
+      <h3 className="mt-2 text-sm font-semibold text-[color:var(--color-foreground)]">
+        L&apos;onglet « {tab} » se configure désormais ici&nbsp;:
+      </h3>
+      <p className="mx-auto mt-1 max-w-md text-sm text-[color:var(--color-foreground-muted)]">
+        Ce champ a migré vers le nouvel éditeur unifié. Modifiez les libellés,
+        l&apos;ordre, les types, la visibilité et les conditions d&apos;affichage
+        depuis <strong>Réglages → {where}</strong> — avec un aperçu en direct du
+        formulaire.
+      </p>
+      <Link
+        href="/settings"
+        className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-[color:var(--color-brand-600)] px-4 py-2 text-sm font-semibold text-[color:var(--color-foreground-onbrand)] shadow-card transition-colors hover:bg-[color:var(--color-brand-700)]"
+      >
+        Ouvrir {where}
+        <ArrowRight className="size-4 rtl:rotate-180" aria-hidden />
+      </Link>
+    </div>
   );
 }

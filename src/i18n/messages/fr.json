@@ -119,6 +119,10 @@
       "saved": "Établissements enregistrés.",
       "saveError": "Échec de l'enregistrement."
     },
+    "formFields": {
+      "title": "Champs du formulaire",
+      "description": "Configurez les champs de l'inscription par onglet — comme le formulaire que voit le parent."
+    },
     "parentFields": {
       "title": "Champs des parents",
       "description": "Définissez les catégories et les champs personnalisés du profil parent. Ils apparaissent dans le formulaire d'inscription puis sur la fiche du parent."
@@ -232,6 +236,22 @@
       "townSourceMissing": "Aucun champ de type \"Région du Liban\" disponible. Ajoutez-en un d'abord dans cette configuration.",
       "fieldActive": "Actif",
       "activeHint": "Décochez pour cacher complètement ce champ (parents et admins). Le champ n'est plus obligatoire dans ce cas.",
+      "formHidden": "Fiche seulement",
+      "formHiddenHint": "Cochez pour masquer ce champ du formulaire d'inscription parent, tout en le gardant visible sur la fiche (ex. code Dars, n° de registre, communauté héritée du père).",
+      "moveToCategory": "Catégorie",
+      "moveToCategoryHint": "Déplacer ce champ vers une autre catégorie. Il est placé à la fin de la catégorie choisie.",
+      "previewTitle": "Aperçu du formulaire",
+      "previewEmpty": "Ajoutez un champ pour voir l'aperçu du formulaire.",
+      "modeForm": "Formulaire",
+      "modeList": "Liste",
+      "editField": "Modifier le champ",
+      "clickToEdit": "Cliquez sur un champ du formulaire pour le modifier.",
+      "editSection": "Modifier la section",
+      "sectionName": "Nom de la section",
+      "removeSectionConfirm": "Supprimer cette section et tous ses champs ?",
+      "tabStudent": "Élève",
+      "tabParent": "Parents",
+      "tabParentCreate": "Création de compte",
       "dossierBoundLabel": "Refléter un champ du dossier",
       "dossierBoundHint": "Le champ affiche la valeur saisie dans la section \"Identité du dossier\" et reste en lecture seule. Modifiable uniquement via cette section principale.",
       "dossierBoundNone": "Non lié (champ modifiable normalement)",
@@ -799,6 +819,7 @@
         "bfiHint": "Préparation du Baccalauréat Français International — valorise des compétences en deux langues et une culture."
       },
       "premiere": {
+        "hint": "Choix des spécialités, langues et options pour la classe de 1ère.",
         "specialitesLabel": "Spécialités (3 choix)",
         "specialitesHint": "{picked, plural, one {# choisie} other {# choisies}} sur 3.",
         "bfiLabel": "BFI",
@@ -806,6 +827,7 @@
         "complementLibanaisPhysique": "Complément libanais — Physique"
       },
       "terminale": {
+        "hint": "Choix des spécialités, langues et options pour la classe de Terminale.",
         "specialitesLabel": "Spécialités (2 choix)",
         "specialitesHint": "{picked, plural, one {# choisie} other {# choisies}} sur 2.",
         "mathsLabel": "Mathématiques",

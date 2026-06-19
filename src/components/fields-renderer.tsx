@@ -1,5 +1,6 @@
 "use client";
 
+import { Pencil } from "lucide-react";
 import { Field, FormRow } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import {
@@ -151,6 +152,8 @@ export function FieldsRenderer({
   extras,
   disabled = false,
   unlockBound = false,
+  onEditField,
+  onEditCategory,
 }: {
   config: EntityFieldsConfig;
   answers: FieldAnswers;
@@ -164,6 +167,17 @@ export function FieldsRenderer({
    * admin fiche, where the column is canonical and the mirror is read-only.
    */
   unlockBound?: boolean;
+  /**
+   * WYSIWYG editor hook. When set, each field gets a hover "edit" affordance
+   * that calls this with the field id — lets an admin click a field in the
+   * live-form preview to jump to its settings. Not used by the parent form.
+   */
+  onEditField?: (fieldId: string) => void;
+  /**
+   * WYSIWYG editor hook for SECTIONS. When set, each category heading gets an
+   * edit affordance and empty categories still render (so they can be managed).
+   */
+  onEditCategory?: (categoryId: string) => void;
 }) {
   const grouped = fieldsByCategory(config);
   const sortedCategories = [...config.categories]
@@ -180,25 +194,68 @@ export function FieldsRenderer({
         const fields = (grouped.get(cat.id) ?? []).filter((f) =>
           evaluateShowIf(f, answers),
         );
-        if (fields.length === 0) return null;
+        // In editor mode (onEditCategory set) keep empty sections so they can
+        // be renamed / deleted; on the real form, hide them.
+        if (fields.length === 0 && !onEditCategory) return null;
         return (
           <section key={cat.id} className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
-              {cat.name}
-            </h3>
+            <div className="group/cat flex items-center gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
+                {cat.name}
+              </h3>
+              {onEditCategory ? (
+                <button
+                  type="button"
+                  onClick={() => onEditCategory(cat.id)}
+                  className="inline-flex items-center gap-1 rounded border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] px-1.5 py-0.5 text-[10px] font-medium text-[color:var(--color-foreground-muted)] opacity-0 transition-opacity duration-150 ease-out group-hover/cat:opacity-100 hover:text-[color:var(--color-brand-600)]"
+                >
+                  <Pencil className="size-3" aria-hidden />
+                  Section
+                </button>
+              ) : null}
+            </div>
+            {fields.length === 0 && onEditCategory ? (
+              <p className="text-xs italic text-[color:var(--color-foreground-subtle)]">
+                Section vide
+              </p>
+            ) : null}
             <div className="space-y-4">
-              {fields.map((f) => (
-                <FieldInput
-                  key={f.id}
-                  field={f}
-                  value={answers[f.id] ?? ""}
-                  onChange={(v) => onChange(f.id, v)}
-                  extras={extras}
-                  allAnswers={answers}
-                  disabled={disabled}
-                  unlockBound={unlockBound}
-                />
-              ))}
+              {fields.map((f) =>
+                onEditField ? (
+                  <div key={f.id} className="group/edit relative">
+                    <button
+                      type="button"
+                      onClick={() => onEditField(f.id)}
+                      className="absolute -end-1 -top-1 z-10 inline-flex items-center gap-1 rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] px-1.5 py-0.5 text-[10px] font-medium text-[color:var(--color-foreground-muted)] opacity-0 shadow-card transition-opacity duration-150 ease-out group-hover/edit:opacity-100 hover:text-[color:var(--color-brand-600)]"
+                    >
+                      <Pencil className="size-3" aria-hidden />
+                      {f.label}
+                    </button>
+                    <div className="rounded-md ring-[color:var(--color-brand-400)] transition-shadow group-hover/edit:ring-2">
+                      <FieldInput
+                        field={f}
+                        value={answers[f.id] ?? ""}
+                        onChange={(v) => onChange(f.id, v)}
+                        extras={extras}
+                        allAnswers={answers}
+                        disabled={disabled}
+                        unlockBound={unlockBound}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <FieldInput
+                    key={f.id}
+                    field={f}
+                    value={answers[f.id] ?? ""}
+                    onChange={(v) => onChange(f.id, v)}
+                    extras={extras}
+                    allAnswers={answers}
+                    disabled={disabled}
+                    unlockBound={unlockBound}
+                  />
+                ),
+              )}
             </div>
           </section>
         );

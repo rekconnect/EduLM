@@ -164,6 +164,10 @@
         "email": "Email"
       }
     },
+    "formFields": {
+      "title": "Form fields",
+      "description": "Configure the inscription fields by tab — like the form the parent sees."
+    },
     "parentFields": {
       "title": "Parent fields",
       "description": "Define categories and custom fields for the parent profile. They appear in the inscription form and on the parent record."
@@ -232,6 +236,22 @@
       "townSourceMissing": "No \"Lebanon region\" field exists yet. Add one first in this configuration.",
       "fieldActive": "Active",
       "activeHint": "Uncheck to fully hide this field (parents and admins). The field is no longer required when inactive.",
+      "formHidden": "Fiche only",
+      "formHiddenHint": "Check to hide this field from the parent inscription form while keeping it on the fiche (e.g. Dars code, register number, community inherited from the father).",
+      "moveToCategory": "Category",
+      "moveToCategoryHint": "Move this field to another category. It is placed at the end of the chosen category.",
+      "previewTitle": "Form preview",
+      "previewEmpty": "Add a field to see the form preview.",
+      "modeForm": "Form",
+      "modeList": "List",
+      "editField": "Edit field",
+      "clickToEdit": "Click a field in the form to edit it.",
+      "editSection": "Edit section",
+      "sectionName": "Section name",
+      "removeSectionConfirm": "Delete this section and all its fields?",
+      "tabStudent": "Student",
+      "tabParent": "Parents",
+      "tabParentCreate": "Account creation",
       "dossierBoundLabel": "Mirror a dossier field",
       "dossierBoundHint": "The field shows the value entered in the \"File identity\" section and stays read-only. Editable only via that main section.",
       "dossierBoundNone": "Not linked (regular editable field)",
@@ -639,6 +659,7 @@
       "scolarite": "Schooling",
       "sante": "Health",
       "transport": "Transport & meals",
+      "autorisations": "Authorizations",
       "contacts": "Other contacts",
       "finance": "Finance",
       "justificatifs": "Documents",
@@ -798,6 +819,7 @@
         "bfiHint": "International French Baccalaureate — bilingual / bicultural program."
       },
       "premiere": {
+        "hint": "Specialties, languages and option choices for 1ère.",
         "specialitesLabel": "Specialties (pick 3)",
         "specialitesHint": "{picked, plural, one {# picked} other {# picked}} out of 3.",
         "bfiLabel": "BFI",
@@ -805,6 +827,7 @@
         "complementLibanaisPhysique": "Lebanese complement — Physics"
       },
       "terminale": {
+        "hint": "Specialties, languages and option choices for Terminale.",
         "specialitesLabel": "Specialties (pick 2)",
         "specialitesHint": "{picked, plural, one {# picked} other {# picked}} out of 2.",
         "mathsLabel": "Mathematics",

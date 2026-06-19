@@ -7,29 +7,27 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { FieldsRenderer, type FieldAnswers } from "@/components/fields-renderer";
 import type { EntityFieldsConfig } from "@/lib/entity-fields";
-import { saveAutorisationsTab } from "../../_actions";
-
-/** "yes"/"no"/"" → boolean | null for the column-backed image rights. */
-const ynBool = (v: string | undefined): boolean | null =>
-  v === "yes" ? true : v === "no" ? false : null;
+import { saveStudentDossier } from "../../_actions";
 
 /**
- * "Autorisations" tab — Dars entity-fields edition. Renders the student
- * "Autorisations" category (auth_site / auth_livre / auth_reseaux / auth_radio
- * + quitter_seul) via the shared FieldsRenderer, configured in
- * Settings → Champs élève. The image-rights answers still persist to the
- * Family row (so siblings inherit) and quitter_seul to dossierAnswers via the
- * existing saveAutorisationsTab — the migration is a UI swap only.
+ * Élève tab — Dars entity-fields edition. Renders the student "Info générale"
+ * + "Info Arabe" fields from the tenant's studentFieldsConfig via the shared
+ * FieldsRenderer (so labels / required / order / show-if conditions are all
+ * configured in Settings → Champs élève). Answers persist to
+ * Application.studentAnswers; the bound prénom/nom/date de naissance — and the
+ * "sexe" select — are mirrored to the Application columns by the save action.
  */
-export function DossierTabAutorisations({
+export function DossierTabEleve({
   applicationId,
   config,
   initial,
+  establishments,
   disabled,
 }: {
   applicationId: string;
   config: EntityFieldsConfig;
   initial: FieldAnswers;
+  establishments: Array<{ id: string; name: string; levels?: string[] }>;
   disabled: boolean;
 }) {
   const [answers, setAnswers] = useState<FieldAnswers>(initial);
@@ -37,13 +35,7 @@ export function DossierTabAutorisations({
 
   function onSave() {
     start(async () => {
-      const r = await saveAutorisationsTab(applicationId, {
-        imageRightsSite: ynBool(answers.auth_site),
-        imageRightsBook: ynBool(answers.auth_livre),
-        imageRightsSocial: ynBool(answers.auth_reseaux),
-        imageRightsRadio: ynBool(answers.auth_radio),
-        quitterSeul: ynBool(answers.quitter_seul),
-      });
+      const r = await saveStudentDossier(applicationId, { answers });
       if (r.ok) toast.success("Enregistré");
       else toast.error("Échec de l'enregistrement");
     });
@@ -51,15 +43,17 @@ export function DossierTabAutorisations({
 
   return (
     <Card>
-      <CardHeader title="Autorisations" />
+      <CardHeader title="Élève" />
       <CardBody>
         <FieldsRenderer
           config={config}
           answers={answers}
+          extras={{ establishments }}
           disabled={disabled}
           unlockBound
-          onChange={(id, v) => setAnswers((p) => ({ ...p, [id]: v }))}
+          onChange={(id, value) => setAnswers((p) => ({ ...p, [id]: value }))}
         />
+
         {!disabled ? (
           <div className="mt-5 flex justify-end">
             <Button type="button" onClick={onSave} disabled={pending} className="gap-2">

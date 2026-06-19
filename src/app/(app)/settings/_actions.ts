@@ -307,7 +307,9 @@ export async function updateFamilyCodeSettings(
 import {
   DOSSIER_BOUND_PROPS,
   ENTITY_TYPES,
+  FAMILY_BOUND_PROPS,
   FIELD_TYPES,
+  GUARDIAN_BOUND_PROPS,
   USER_BOUND_PROPS,
   parseEntityFieldsConfig,
   type EntityType,
@@ -360,6 +362,10 @@ const fieldSchema = z.object({
     .optional(),
   userBoundTo: z.enum(USER_BOUND_PROPS).optional(),
   dossierBoundTo: z.enum(DOSSIER_BOUND_PROPS).optional(),
+  guardianBoundTo: z.enum(GUARDIAN_BOUND_PROPS).optional(),
+  familyBoundTo: z.enum(FAMILY_BOUND_PROPS).optional(),
+  // Hide from the inscription form, keep on the fiche.
+  formHidden: z.boolean().optional(),
   active: z.boolean().optional(),
 });
 

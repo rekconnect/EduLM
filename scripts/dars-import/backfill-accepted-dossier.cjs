@@ -71,6 +71,9 @@ const ynOf = (b) => (b === true ? "yes" : b === false ? "no" : "");
     app.responsables.find((r) => caStrings(r.customAnswers).email?.toLowerCase() === email && email) ||
     app.responsables.find((r) => r.kind === "PERE") || app.responsables[0] || null;
   const rca = resp ? caStrings(resp.customAnswers) : {};
+  // Child inherits the father's registre + communauté (shared family sijill + religion).
+  if (!ca.registerNum && rca.numero_registre) ca.registerNum = rca.numero_registre;
+  if (!ca.communaute_eleve && rca.communaute) ca.communaute_eleve = rca.communaute;
   const guardian = await p.guardian.findUnique({ where: { userId: app.submittedBy.id }, select: { id: true, familyId: true } });
   let fam = null;
   if (guardian?.familyId) {

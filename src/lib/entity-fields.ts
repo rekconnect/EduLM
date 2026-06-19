@@ -230,6 +230,14 @@ export type FieldDef = {
    */
   active?: boolean;
   /**
+   * Hide this field from the parent INSCRIPTION FORM while keeping it on the
+   * fiche + admin views. For import-/admin-only fields a parent should never
+   * fill at registration — the Dars student code, register number, an
+   * inherited community, internal emails, etc. Independent of `active` (which
+   * hides it everywhere). Defaults to false (shown on the form).
+   */
+  formHidden?: boolean;
+  /**
    * Mirror a value from the dossier identity (Application columns set
    * during creation). When set, the field shows the canonical value
    * read-only — edits must happen via the "Identité du dossier" section.
@@ -316,6 +324,8 @@ export function parseEntityFieldsConfig(raw: unknown): EntityFieldsConfig {
           // Default to active when missing (handles legacy data + fields
           // created before this toggle existed).
           active: f.active === false ? false : true,
+          // Hidden from the inscription form (fiche/admin still show it).
+          formHidden: f.formHidden === true ? true : undefined,
           dossierBoundTo:
             typeof f.dossierBoundTo === "string" &&
             (DOSSIER_BOUND_PROPS as readonly string[]).includes(f.dossierBoundTo)

@@ -695,6 +695,100 @@ export async function saveElevePassport(
 }
 
 /**
+ * Dars-unified Élève save: the Élève tab now renders the student
+ * "Info générale" + "Info Arabe" fields via the shared FieldsRenderer, so the
+ * whole answer set arrives as one blob keyed by the Dars field ids. We persist
+ * it to Application.studentAnswers (the canonical source) and mirror the bound
+ * prénom/nom/date de naissance — plus Sexe — to the Application columns. The
+ * legacy état-civil columns are still written (dual-write) until the column
+ * drop phase, so the bridge + admissions detail keep working unchanged.
+ */
+export async function saveStudentDossier(
+  applicationId: string,
+  payload: { answers: Record<string, string> },
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  const a = payload.answers ?? {};
+  const val = (k: string) => (a[k] ?? "").trim();
+  // Sexe is now a config select ("Garçon"/"Fille"/"Autre") → childGender enum.
+  const sx = val("sexe");
+  const gender =
+    sx === "Garçon" ? "MALE" : sx === "Fille" ? "FEMALE" : sx === "Autre" ? "OTHER" : null;
+
+  // Clean studentAnswers — keep non-empty trimmed strings.
+  const studentAnswers: Record<string, string> = {};
+  for (const [k, v] of Object.entries(a)) {
+    if (typeof v === "string" && v.trim()) studentAnswers[k] = v.trim();
+  }
+
+  const isLeb = a.isLebanese === "yes" ? true : a.isLebanese === "no" ? false : null;
+  const dobStr = val("date_naissance");
+  const childDob = /^\d{4}-\d{2}-\d{2}$/.test(dobStr)
+    ? new Date(`${dobStr}T00:00:00.000Z`)
+    : null;
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id: applicationId },
+      select: { id: true, submittedByUserId: true, status: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    if (app.submittedByUserId !== user.id) return { ok: false, error: "forbidden" };
+    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
+      return { ok: false, error: "locked" };
+    }
+
+    await db.application.update({
+      where: { id: applicationId },
+      data: {
+        // Canonical columns (kept past the drop phase).
+        childFirstName: val("prenom"),
+        childLastName: val("nom"),
+        childDob,
+        childGender: gender,
+        // Legacy état-civil columns — dual-written until they're dropped.
+        childBirthCountry: val("pays_naissance") || null,
+        childPlaceOfBirth: val("lieu_naissance") || null,
+        childNationality: val("nationalite") || null,
+        childNationality2: val("nationalite2") || null,
+        childIsLebanese: isLeb,
+        childPassportLebanese: isLeb ? val("numero_identite") || null : null,
+        childPlaceOfBirthAr: val("lieu_naissance_ar") || null,
+        childNationality3: null,
+        studentAnswers: studentAnswers as Prisma.InputJsonValue,
+      },
+    });
+
+    const [fresh, tenantFormConfig] = await Promise.all([
+      db.application.findUnique({
+        where: { id: applicationId },
+        select: { ...ELEVE_COMPLETION_SELECT, tabsCompleted: true },
+      }),
+      loadInscriptionFormConfig(tenantId),
+    ]);
+    if (fresh) {
+      await db.application.update({
+        where: { id: applicationId },
+        data: {
+          tabsCompleted: mergeTabsCompleted(
+            fresh.tabsCompleted,
+            "eleve",
+            evaluateEleveComplete(fresh, tenantFormConfig),
+          ),
+        },
+      });
+    }
+
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    revalidatePath("/parent/dashboard");
+    return { ok: true };
+  });
+}
+
+/**
  * Save the submitting parent's identity card on the Responsables tab —
  * relation to the child + Lebanese-nationality Oui/Non. Stored on
  * Application columns for now; Phase 4's multi-responsable UI will

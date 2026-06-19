@@ -13,8 +13,6 @@ import {
   Send,
   SlidersHorizontal,
   SunMoon,
-  UserCircle,
-  UserPlus,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -29,8 +27,7 @@ import { BillingDefaultsForm } from "./_billing-defaults";
 import { EmailDefaultsForm } from "./_email";
 import { FamilyCodeForm } from "./_family-code";
 import { EstablishmentsForm, type EstablishmentRow } from "./_establishments";
-import { FieldsConfigForm } from "./_fields-config";
-import { ParentCreateFieldsForm } from "./_parent-create-fields";
+import { FieldsEditorTabs } from "./_fields-editor-tabs";
 import {
   listEstablishments,
   loadEntityFieldsConfig,
@@ -272,29 +269,15 @@ export default async function SettingsPage({
                 description={t("category.forms.description")}
               />
               <SettingsSection
-                icon={UserCircle}
-                title={t("parentFields.title")}
-                description={t("parentFields.description")}
-              >
-                <FieldsConfigForm entity="parent" initial={parentFields} />
-              </SettingsSection>
-
-              {parentCreateConfig ? (
-                <SettingsSection
-                  icon={UserPlus}
-                  title={t("parentCreate.title")}
-                  description={t("parentCreate.description")}
-                >
-                  <ParentCreateFieldsForm initial={parentCreateConfig} />
-                </SettingsSection>
-              ) : null}
-
-              <SettingsSection
                 icon={Users}
-                title={t("studentFields.title")}
-                description={t("studentFields.description")}
+                title={t("formFields.title")}
+                description={t("formFields.description")}
               >
-                <FieldsConfigForm entity="student" initial={studentFields} />
+                <FieldsEditorTabs
+                  studentInitial={studentFields}
+                  parentInitial={parentFields}
+                  parentCreateInitial={parentCreateConfig}
+                />
               </SettingsSection>
             </>
           ) : null}

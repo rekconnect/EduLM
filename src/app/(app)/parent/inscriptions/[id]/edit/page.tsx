@@ -34,8 +34,7 @@ import { relKindOf, guardianToParentAnswers } from "@/lib/guardian-prefill";
 import { DossierTabAutorisations } from "./_tab-autorisations";
 import { DossierTabScolarite } from "./_tab-scolarite";
 import { DossierTabTransport } from "./_tab-transport";
-import { EleveEtatCivilSection } from "./_section-eleve-etat-civil";
-import { ElevePassportSection } from "./_section-eleve-passport";
+import { DossierTabEleve } from "./_tab-eleve";
 import { ResponsableFooter } from "./_section-responsable-footer";
 import {
   parseScolarite,
@@ -218,6 +217,75 @@ export default async function DossierEditPage({
           : [],
       }));
 
+    // ── Élève tab (Dars entity-fields) ──────────────────────────────
+    // Render only the student "Info générale" + "Info Arabe" categories;
+    // the other categories live on their own tabs (Scolarité/Services/…).
+    const studentAnswersMap = coerceAnswers(app.studentAnswers);
+    const ELEVE_CATEGORY_NAMES = ["Info générale", "Info Arabe"];
+    const eleveCats = studentFieldsConfig.categories.filter((c) =>
+      ELEVE_CATEGORY_NAMES.includes(c.name),
+    );
+    const eleveCatIds = new Set(eleveCats.map((c) => c.id));
+    const eleveConfig = {
+      categories: eleveCats,
+      // Exclude formHidden fields — import-/admin-only fields (Dars code,
+      // register, inherited community, internal emails) don't belong on the
+      // parent form, though they stay on the fiche.
+      fields: studentFieldsConfig.fields.filter(
+        (f) => eleveCatIds.has(f.categoryId) && !f.formHidden,
+      ),
+    };
+    // Same rule for the Responsables tab parent fields.
+    const parentFormConfig = {
+      ...parentFieldsConfig,
+      fields: parentFieldsConfig.fields.filter((f) => !f.formHidden),
+    };
+    // Prefill: studentAnswers first, then fall back to the legacy columns so
+    // dossiers created before the migration still populate the form.
+    const eleveInitial: Record<string, string> = {
+      ...studentAnswersMap,
+      prenom: studentAnswersMap.prenom || app.childFirstName || "",
+      nom: studentAnswersMap.nom || app.childLastName || "",
+      date_naissance:
+        studentAnswersMap.date_naissance ||
+        (app.childDob ? app.childDob.toISOString().slice(0, 10) : ""),
+      pays_naissance: studentAnswersMap.pays_naissance || app.childBirthCountry || "",
+      lieu_naissance: studentAnswersMap.lieu_naissance || app.childPlaceOfBirth || "",
+      nationalite: studentAnswersMap.nationalite || app.childNationality || "",
+      nationalite2: studentAnswersMap.nationalite2 || app.childNationality2 || "",
+      numero_identite: studentAnswersMap.numero_identite || app.childPassportLebanese || "",
+      isLebanese:
+        studentAnswersMap.isLebanese ||
+        (app.childIsLebanese == null ? "" : app.childIsLebanese ? "yes" : "no"),
+      nom_prenom_ar:
+        studentAnswersMap.nom_prenom_ar ||
+        [app.childLastNameAr, app.childFirstNameAr].filter(Boolean).join(" "),
+      lieu_naissance_ar: studentAnswersMap.lieu_naissance_ar || app.childPlaceOfBirthAr || "",
+      sexe:
+        studentAnswersMap.sexe ||
+        (app.childGender === "MALE"
+          ? "Garçon"
+          : app.childGender === "FEMALE"
+            ? "Fille"
+            : app.childGender === "OTHER"
+              ? "Autre"
+              : ""),
+    };
+
+    // ── Autorisations tab (Dars entity-fields) ──────────────────────
+    const autorisationsCats = studentFieldsConfig.categories.filter(
+      (c) => c.name === "Autorisations",
+    );
+    const autCatIds = new Set(autorisationsCats.map((c) => c.id));
+    const autorisationsConfig = {
+      categories: autorisationsCats,
+      fields: studentFieldsConfig.fields.filter(
+        (f) => autCatIds.has(f.categoryId) && !f.formHidden,
+      ),
+    };
+    const boolYn = (b: boolean | null | undefined) =>
+      b === true ? "yes" : b === false ? "no" : "";
+
     // Renewal: the schooling tab (établissement précédent, EBEP, examens…)
     // is only meaningful for a brand-new pupil. Hide it for re-inscriptions so
     // the parent isn't asked to re-fill it and it doesn't block submission.
@@ -371,43 +439,20 @@ export default async function DossierEditPage({
         >
         <div className="space-y-6">
           {currentTab === "eleve" ? (
-            <>
-              <EleveEtatCivilSection
-                applicationId={app.id}
-                disabled={!editable}
-                initial={{
-                  childFirstName: app.childFirstName ?? "",
-                  childLastName: app.childLastName ?? "",
-                  childDob: app.childDob
-                    ? app.childDob.toISOString().slice(0, 10)
-                    : "",
-                  childGender: app.childGender ?? "",
-                  childPlaceOfBirth: app.childPlaceOfBirth ?? "",
-                  childBirthCountry: app.childBirthCountry ?? "",
-                  childFirstNameAr: app.childFirstNameAr ?? "",
-                  childLastNameAr: app.childLastNameAr ?? "",
-                  childPlaceOfBirthAr: app.childPlaceOfBirthAr ?? "",
-                }}
-              />
-
-              <ElevePassportSection
-                applicationId={app.id}
-                disabled={!editable}
-                initial={{
-                  childIsLebanese: app.childIsLebanese,
-                  childPassportLebanese: app.childPassportLebanese ?? "",
-                  childNationality: app.childNationality ?? "",
-                  childNationality2: app.childNationality2 ?? "",
-                }}
-              />
-            </>
+            <DossierTabEleve
+              applicationId={app.id}
+              disabled={!editable}
+              config={eleveConfig}
+              initial={eleveInitial}
+              establishments={establishmentsForRenderer}
+            />
           ) : null}
 
           {currentTab === "responsables" ? (
             <DossierResponsablesParents
               applicationId={app.id}
               disabled={!editable}
-              parentConfig={parentFieldsConfig}
+              parentConfig={parentFormConfig}
               establishments={establishmentsForRenderer}
               initial={responsableRows}
             />
@@ -502,17 +547,20 @@ export default async function DossierEditPage({
               dossier.autorisations && typeof dossier.autorisations === "object"
                 ? (dossier.autorisations as Record<string, unknown>)
                 : {};
+            const fam = guardian?.family;
             return (
               <DossierTabAutorisations
                 applicationId={app.id}
                 disabled={!editable}
+                config={autorisationsConfig}
                 initial={{
-                  imageRightsSite: guardian?.family?.imageRightsSite ?? null,
-                  imageRightsBook: guardian?.family?.imageRightsBook ?? null,
-                  imageRightsSocial: guardian?.family?.imageRightsSocial ?? null,
-                  imageRightsRadio: guardian?.family?.imageRightsRadio ?? null,
-                  quitterSeul:
+                  auth_site: boolYn(fam?.imageRightsSite),
+                  auth_livre: boolYn(fam?.imageRightsBook),
+                  auth_reseaux: boolYn(fam?.imageRightsSocial),
+                  auth_radio: boolYn(fam?.imageRightsRadio),
+                  quitter_seul: boolYn(
                     typeof autz.quitterSeul === "boolean" ? autz.quitterSeul : null,
+                  ),
                 }}
               />
             );

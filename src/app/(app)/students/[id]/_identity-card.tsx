@@ -87,6 +87,10 @@ export function StudentIdentitySection({
     setEditing(false);
   }
 
+  // Adresse / Ville / Code postal / Pays / Contact d'urgence are pre-Dars
+  // Student columns — the household address lives on the Family (Foyer tab)
+  // and emergency contacts in the authorized-persons list, so they're not
+  // surfaced on the student fiche. (Columns dropped in a later schema phase.)
   const rows: Array<[string, string]> = [
     ["Prénom", v.firstName],
     ["Nom", v.lastName],
@@ -95,12 +99,7 @@ export function StudentIdentitySection({
     ["Statut", STATUS[v.status] ?? v.status],
     ["Nationalité", v.nationality],
     ["Lieu de naissance", v.placeOfBirth],
-    ["Adresse", v.address],
-    ["Ville", v.city],
-    ["Code postal", v.postalCode],
-    ["Pays", v.country],
     ["École précédente", v.previousSchool],
-    ["Contact d'urgence", v.emergencyContact],
     ["Notes internes", v.internalNotes],
   ];
   const readRows = rows.filter(([, val]) => val && val.trim().length > 0);
@@ -181,23 +180,8 @@ export function StudentIdentitySection({
           <EditRow label="Lieu de naissance">
             <Input value={v.placeOfBirth} onChange={(e) => set("placeOfBirth", e.target.value)} />
           </EditRow>
-          <EditRow label="Adresse">
-            <Input value={v.address} onChange={(e) => set("address", e.target.value)} />
-          </EditRow>
-          <EditRow label="Ville">
-            <Input value={v.city} onChange={(e) => set("city", e.target.value)} />
-          </EditRow>
-          <EditRow label="Code postal">
-            <Input value={v.postalCode} onChange={(e) => set("postalCode", e.target.value)} />
-          </EditRow>
-          <EditRow label="Pays">
-            <Input value={v.country} onChange={(e) => set("country", e.target.value)} />
-          </EditRow>
           <EditRow label="École précédente">
             <Input value={v.previousSchool} onChange={(e) => set("previousSchool", e.target.value)} />
-          </EditRow>
-          <EditRow label="Contact d'urgence">
-            <Input value={v.emergencyContact} onChange={(e) => set("emergencyContact", e.target.value)} />
           </EditRow>
           <EditRow label="Notes internes" full>
             <Textarea

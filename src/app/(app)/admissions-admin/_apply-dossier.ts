@@ -247,6 +247,32 @@ export async function applyDossierToStudent(
     ca.isLebanese = civil.isLebanese ? "yes" : "no";
   }
 
+  // Responsable resolution — the row for the submitting account (match by
+  // email, else Père, else first). Reused below for the User/Guardian writes.
+  const submitterEmail = (opts.submitterEmail ?? "").trim().toLowerCase();
+  const responsables = Array.isArray(opts.responsables) ? opts.responsables : [];
+  const caOf = (r: ResponsableRow): Record<string, string> => {
+    const out: Record<string, string> = {};
+    if (r.customAnswers && typeof r.customAnswers === "object") {
+      for (const [k, v] of Object.entries(r.customAnswers as Record<string, unknown>)) {
+        if (typeof v === "string" && v.trim()) out[k] = v.trim();
+      }
+    }
+    return out;
+  };
+  const submitterResp =
+    responsables.find((r) => caOf(r).email?.toLowerCase() === submitterEmail && submitterEmail) ??
+    responsables.find((r) => r.kind === "PERE") ??
+    responsables[0] ??
+    null;
+  const submitterCa = submitterResp ? caOf(submitterResp) : {};
+
+  // Child registre + communauté inherit from the father — in Lebanon the child
+  // shares the family sijill (registre) and community/religion. Only fill when
+  // the student doesn't already have its own value.
+  if (!ca.registerNum && submitterCa.numero_registre) ca.registerNum = submitterCa.numero_registre;
+  if (!ca.communaute_eleve && submitterCa.communaute) ca.communaute_eleve = submitterCa.communaute;
+
   // Previous school (dossier) → Student.previousSchool column when the accept
   // flow didn't already set it (it reads app.currentSchool, often empty).
   const prevSchoolUpdate =
@@ -301,25 +327,6 @@ export async function applyDossierToStudent(
   // dossiers). We merge the submitter's responsable answers into the parent's
   // User.customAnswers (which is what the fiche + Arabic section read) and
   // mirror the column-backed ones onto the Guardian row.
-  const submitterEmail = (opts.submitterEmail ?? "").trim().toLowerCase();
-  const responsables = Array.isArray(opts.responsables) ? opts.responsables : [];
-  const caOf = (r: ResponsableRow): Record<string, string> => {
-    const out: Record<string, string> = {};
-    if (r.customAnswers && typeof r.customAnswers === "object") {
-      for (const [k, v] of Object.entries(r.customAnswers as Record<string, unknown>)) {
-        if (typeof v === "string" && v.trim()) out[k] = v.trim();
-      }
-    }
-    return out;
-  };
-  // The responsable that corresponds to the submitting account: match by
-  // email, else the Père, else the first row.
-  const submitterResp =
-    responsables.find((r) => caOf(r).email?.toLowerCase() === submitterEmail && submitterEmail) ??
-    responsables.find((r) => r.kind === "PERE") ??
-    responsables[0] ??
-    null;
-
   const parent = await tx.user.findFirst({
     where: { id: opts.submittedByUserId, tenantId },
     select: { customAnswers: true },

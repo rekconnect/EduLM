@@ -353,12 +353,13 @@ export default async function StudentDetailPage({
       },
       {
         title: "العنوان",
+        // Only the Arabic-sourced address fields. البلدة / القضاء (village /
+        // caza) have no Arabic input — they live as Latin pickers in the
+        // Foyer tab — so they're intentionally not shown here.
         rows: [
           { label: "المبنى", value: fatherCa.adresse_immeuble_ar ?? "" },
           { label: "الشارع", value: fatherCa.adresse_rue_ar ?? "" },
           { label: "تفاصيل المكان", value: fatherCa.adresse_place_ar ?? "" },
-          { label: "البلدة", value: fatherCa.adresse_village ?? "" },
-          { label: "القضاء", value: fatherCa.adresse_qaza ?? "" },
           { label: "العنوان البريدي", value: fatherCa.adresse_bp ?? "" },
         ],
       },

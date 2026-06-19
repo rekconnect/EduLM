@@ -352,6 +352,10 @@ export default async function AdmissionsAdminDetailPage({
     };
 
     const niveauGroup = classifyNiveau(app.niveau);
+    // Student dossier answers (Dars field ids). The migrated Élève tab writes
+    // the combined Arabic name here as nom_prenom_ar; fall back to the legacy
+    // split columns for dossiers created before the migration.
+    const studentAns = coerce(app.studentAnswers);
 
     const urgenceContacts = app.contacts.filter((c) => c.kind === "URGENCE");
     const pickupContacts = app.contacts.filter((c) => c.kind === "PICKUP");
@@ -531,10 +535,12 @@ export default async function AdmissionsAdminDetailPage({
             <dl>
               <Row label="Nom" value={app.childLastName} />
               <Row label="Prénom" value={app.childFirstName} />
-              <Row label="الشهرة (nom AR)" value={app.childLastNameAr ?? ""} />
               <Row
-                label="الاسم (prénom AR)"
-                value={app.childFirstNameAr ?? ""}
+                label="الاسم الكامل (nom prénom AR)"
+                value={
+                  studentAns.nom_prenom_ar ||
+                  [app.childLastNameAr, app.childFirstNameAr].filter(Boolean).join(" ")
+                }
               />
               <Row
                 label="Date de naissance"

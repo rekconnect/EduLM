@@ -999,6 +999,7 @@
     "fieldChildDob": "Date of birth",
     "fieldChildGender": "Gender",
     "fieldChildNationality": "Nationality",
+    "fieldChildNationality2": "Nationality 2",
     "fieldChildPlaceOfBirth": "Place of birth",
     "genderMale": "Male",
     "genderFemale": "Female",
@@ -1476,6 +1477,7 @@
     "makePrimary": "Set as primary parent"
   },
   "common": {
+    "selectDate": "Select a date",
     "save": "Save",
     "saved": "Saved.",
     "saving": "Saving…",

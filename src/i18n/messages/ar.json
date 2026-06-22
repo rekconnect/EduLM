@@ -999,6 +999,7 @@
     "fieldChildDob": "تاريخ الميلاد",
     "fieldChildGender": "الجنس",
     "fieldChildNationality": "الجنسية",
+    "fieldChildNationality2": "الجنسية 2",
     "fieldChildPlaceOfBirth": "مكان الولادة",
     "genderMale": "ذكر",
     "genderFemale": "أنثى",
@@ -1476,6 +1477,7 @@
     "makePrimary": "تعيين كولي أمر رئيسي"
   },
   "common": {
+    "selectDate": "اختر تاريخاً",
     "save": "حفظ",
     "saved": "تم الحفظ.",
     "saving": "جاري الحفظ…",

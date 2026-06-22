@@ -20,6 +20,7 @@ export const STUDENT_CREATE_BUILTIN_KEYS = [
   "dob",
   "gender",
   "nationality",
+  "nationality2",
   "placeOfBirth",
   "address",
   "city",
@@ -77,6 +78,8 @@ export function studentCreateDefaultLabel(
       return tAdm("fieldChildGender");
     case "nationality":
       return tAdm("fieldChildNationality");
+    case "nationality2":
+      return tAdm("fieldChildNationality2");
     case "placeOfBirth":
       return tAdm("fieldChildPlaceOfBirth");
     case "address":
@@ -117,6 +120,7 @@ export const DEFAULT_STUDENT_CREATE_CONFIG: StudentCreateConfig = {
     dob: "optional",
     gender: "optional",
     nationality: "optional",
+    nationality2: "optional",
     placeOfBirth: "optional",
     address: "hidden",
     city: "hidden",

@@ -5,6 +5,8 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
+import { DatePicker } from "@/components/ui/date-picker";
+import { NATIONALITIES_FR } from "@/lib/lookups";
 import type { FieldDef } from "@/lib/entity-fields";
 import {
   STUDENT_ALL_CREATE_KEYS,
@@ -81,9 +83,14 @@ export function StudentForm({
     );
 
   const initVal = (k: StudentAllCreateKey): string => {
-    const v = initial?.[k];
+    const v = (initial as Record<string, unknown> | undefined)?.[k];
     return typeof v === "string" ? v : "";
   };
+
+  // nationality2 isn't a typed StudentInput key (it's stored in customAnswers),
+  // so read errors through a loose lookup.
+  const errorFor = (key: string) =>
+    (state.errors as Record<string, string> | undefined)?.[key];
 
   function renderField(k: StudentAllCreateKey) {
     const label = labelFor(k);
@@ -114,7 +121,27 @@ export function StudentForm({
     if (k === "dob") {
       return (
         <Field key={k} label={label} htmlFor="dob" required={req(k)} error={state.errors?.dob}>
-          <Input id="dob" name="dob" type="date" defaultValue={initVal(k)} required={req(k)} />
+          <DatePicker
+            id="dob"
+            name="dob"
+            defaultValue={initVal(k)}
+            required={req(k)}
+            placeholder={tCommon("selectDate")}
+          />
+        </Field>
+      );
+    }
+    if (k === "nationality" || k === "nationality2") {
+      return (
+        <Field key={k} label={label} htmlFor={k} required={req(k)} error={errorFor(k)}>
+          <Select id={k} name={k} defaultValue={initVal(k)} required={req(k)}>
+            <option value="">—</option>
+            {NATIONALITIES_FR.map((nat) => (
+              <option key={nat} value={nat}>
+                {nat}
+              </option>
+            ))}
+          </Select>
         </Field>
       );
     }
@@ -134,7 +161,7 @@ export function StudentForm({
         htmlFor={k}
         required={req(k)}
         hint={k === "emergencyContact" ? t("fieldEmergencyContactHint") : undefined}
-        error={state.errors?.[k]}
+        error={errorFor(k)}
       >
         <Input
           id={k}

@@ -532,6 +532,7 @@ const studentCreateConfigSchema = z.object({
     dob: z.enum(BUILTIN_MODES_ENUM),
     gender: z.enum(BUILTIN_MODES_ENUM),
     nationality: z.enum(BUILTIN_MODES_ENUM),
+    nationality2: z.enum(BUILTIN_MODES_ENUM),
     placeOfBirth: z.enum(BUILTIN_MODES_ENUM),
     address: z.enum(BUILTIN_MODES_ENUM),
     city: z.enum(BUILTIN_MODES_ENUM),

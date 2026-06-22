@@ -114,6 +114,10 @@ export async function createStudent(
     const v = String(formData.get(f.key) ?? "").trim();
     if (v) customAnswers[f.key] = v;
   }
+  // nationality2 is a standard create-form field but has no Student column —
+  // store it in customAnswers when the admin filled it.
+  const nat2 = String(formData.get("nationality2") ?? "").trim();
+  if (nat2) customAnswers["nationality2"] = nat2;
 
   let newId: string | undefined;
   await runWithTenant({ tenantId, slug: null }, async () => {

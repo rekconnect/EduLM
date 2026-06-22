@@ -81,6 +81,9 @@ model Tenant {
   //             categories: […], fields: […] } using the entity-fields
   // schema for the custom side.
   parentCreateFieldsConfig Json @default("{}")
+  // "Add a student" admin form config — same shape as parentCreateFieldsConfig
+  // (builtin field modes + entity-fields for custom answers).
+  studentCreateFieldsConfig Json @default("{}")
   // Which of the 10 dossier tabs are visible to parents on this tenant.
   // Stored as { eleve: bool, responsables: bool, foyer: bool, scolarite: bool,
   // sante: bool, transport: bool, contacts: bool, finance: bool,

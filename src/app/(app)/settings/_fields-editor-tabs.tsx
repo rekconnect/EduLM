@@ -7,13 +7,15 @@ import type { EntityFieldsConfig } from "@/lib/entity-fields";
 import { FieldsConfigForm } from "./_fields-config";
 import { ParentCreateFieldsForm } from "./_parent-create-fields";
 
-type Tab = "eleve" | "parents" | "parentCreate";
+type Context = "inscription" | "admission";
 
 /**
- * One field editor with horizontal tabs on top (Élève / Parents / Création de
- * compte), mirroring the inscription form's tab layout — instead of separate
- * stacked sections. More tabs (Foyer, Scolarité, …) join here as those parts
- * of the form migrate to the config-driven system.
+ * Form-field editor, split by CONTEXT (like the inscription vs admission
+ * sides), each with its own sub-tabs:
+ *   Inscription → Élève / Parents  (the online dossier the parent fills)
+ *   Admission   → Ajouter un parent / Ajouter un élève  (admin quick-create)
+ * Keeping the two apart matches how they're actually used — a full dossier vs
+ * a few fields to spin up a record.
  */
 export function FieldsEditorTabs({
   studentInitial,
@@ -27,45 +29,102 @@ export function FieldsEditorTabs({
     | null;
 }) {
   const t = useTranslations("settings");
-  const [tab, setTab] = useState<Tab>("eleve");
-
-  const tabs: Array<{ id: Tab; label: string }> = [
-    { id: "eleve", label: t("fieldsConfig.tabStudent") },
-    { id: "parents", label: t("fieldsConfig.tabParent") },
-    ...(parentCreateInitial
-      ? [{ id: "parentCreate" as Tab, label: t("fieldsConfig.tabParentCreate") }]
-      : []),
-  ];
+  const [ctx, setCtx] = useState<Context>("inscription");
+  const [insTab, setInsTab] = useState<"eleve" | "parents">("eleve");
+  const [admTab, setAdmTab] = useState<"parent" | "student">("parent");
 
   return (
-    <div>
-      <div className="mb-5 flex flex-wrap gap-1 border-b border-[color:var(--color-border-subtle)]">
-        {tabs.map((tb) => (
+    <div className="space-y-5">
+      {/* ── Context switch: Inscription vs Admission ── */}
+      <div className="inline-flex rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-sunken)] p-0.5 text-sm">
+        {(["inscription", "admission"] as const).map((c) => (
           <button
-            key={tb.id}
+            key={c}
             type="button"
-            onClick={() => setTab(tb.id)}
+            onClick={() => setCtx(c)}
             className={cn(
-              "-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors duration-150 ease-out",
-              tab === tb.id
-                ? "border-[color:var(--color-brand-600)] text-[color:var(--color-foreground)]"
-                : "border-transparent text-[color:var(--color-foreground-muted)] hover:text-[color:var(--color-foreground)]",
+              "rounded px-4 py-1.5 font-medium transition-colors duration-150 ease-out",
+              ctx === c
+                ? "bg-[color:var(--color-surface-raised)] text-[color:var(--color-foreground)] shadow-card"
+                : "text-[color:var(--color-foreground-muted)] hover:text-[color:var(--color-foreground)]",
             )}
           >
-            {tb.label}
+            {t(c === "inscription" ? "fieldsConfig.ctxInscription" : "fieldsConfig.ctxAdmission")}
           </button>
         ))}
       </div>
 
-      {tab === "eleve" ? (
-        <FieldsConfigForm entity="student" initial={studentInitial} />
-      ) : null}
-      {tab === "parents" ? (
-        <FieldsConfigForm entity="parent" initial={parentInitial} />
-      ) : null}
-      {tab === "parentCreate" && parentCreateInitial ? (
-        <ParentCreateFieldsForm initial={parentCreateInitial} />
-      ) : null}
+      {ctx === "inscription" ? (
+        <>
+          <SubTabs
+            value={insTab}
+            onChange={(v) => setInsTab(v as "eleve" | "parents")}
+            tabs={[
+              { id: "eleve", label: t("fieldsConfig.tabStudent") },
+              { id: "parents", label: t("fieldsConfig.tabParent") },
+            ]}
+          />
+          {insTab === "eleve" ? (
+            <FieldsConfigForm entity="student" initial={studentInitial} />
+          ) : (
+            <FieldsConfigForm entity="parent" initial={parentInitial} />
+          )}
+        </>
+      ) : (
+        <>
+          <SubTabs
+            value={admTab}
+            onChange={(v) => setAdmTab(v as "parent" | "student")}
+            tabs={[
+              { id: "parent", label: t("fieldsConfig.tabAddParent") },
+              { id: "student", label: t("fieldsConfig.tabAddStudent") },
+            ]}
+          />
+          {admTab === "parent" ? (
+            parentCreateInitial ? (
+              <ParentCreateFieldsForm initial={parentCreateInitial} />
+            ) : (
+              <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                {t("fieldsConfig.addParentDesc")}
+              </p>
+            )
+          ) : (
+            <div className="rounded-md border border-dashed border-[color:var(--color-border-strong)] px-4 py-6 text-center text-sm text-[color:var(--color-foreground-muted)]">
+              {t("fieldsConfig.addStudentSoon")}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function SubTabs({
+  value,
+  onChange,
+  tabs,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  tabs: Array<{ id: string; label: string }>;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1 border-b border-[color:var(--color-border-subtle)]">
+      {tabs.map((tb) => (
+        <button
+          key={tb.id}
+          type="button"
+          onClick={() => onChange(tb.id)}
+          className={cn(
+            "-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors duration-150 ease-out",
+            value === tb.id
+              ? "border-[color:var(--color-brand-600)] text-[color:var(--color-foreground)]"
+              : "border-transparent text-[color:var(--color-foreground-muted)] hover:text-[color:var(--color-foreground)]",
+          )}
+        >
+          {tb.label}
+        </button>
+      ))}
     </div>
   );
 }

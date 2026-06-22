@@ -119,6 +119,28 @@
       "saved": "تم حفظ المؤسسات.",
       "saveError": "فشل الحفظ."
     },
+    "studentCreate": {
+      "builtinSectionHint": "اختر الحقول التي تظهر وأيها إلزامي في نموذج إنشاء التلميذ.",
+      "identityAlwaysRequired": "هذه الحقول موجودة دائماً وإلزامية.",
+      "required": {
+        "firstName": "الاسم",
+        "lastName": "الكنية",
+        "status": "الحالة"
+      },
+      "builtin": {
+        "dob": "تاريخ الولادة",
+        "gender": "الجنس",
+        "nationality": "الجنسية",
+        "placeOfBirth": "مكان الولادة",
+        "address": "العنوان",
+        "city": "المدينة",
+        "postalCode": "الرمز البريدي",
+        "country": "البلد",
+        "previousSchool": "المدرسة السابقة",
+        "emergencyContact": "جهة اتصال للطوارئ",
+        "internalNotes": "ملاحظات داخلية"
+      }
+    },
     "parentCreate": {
       "title": "نموذج « إضافة ولي أمر »",
       "description": "اختر الحقول الظاهرة والإلزامية عند إنشاء ولي أمر جديد من /admin/parents/new.",
@@ -245,8 +267,11 @@
       "modeForm": "الاستمارة",
       "modeList": "قائمة",
       "editField": "تعديل الحقل",
+      "editFieldDesc": "عدّل تسمية هذا الحقل ونوعه وخياراته.",
       "clickToEdit": "انقر على حقل في الاستمارة لتعديله.",
       "editSection": "تعديل القسم",
+      "editSectionDesc": "أعد تسمية هذا القسم أو غيّر حالته.",
+      "builtinRenamePlaceholder": "إعادة تسمية (اختياري)",
       "sectionName": "اسم القسم",
       "removeSectionConfirm": "حذف هذا القسم وكل حقوله؟",
       "tabStudent": "التلميذ",

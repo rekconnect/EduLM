@@ -10,6 +10,7 @@ import {
   parseEntityFieldsConfig,
   type EntityFieldsConfig,
 } from "@/lib/entity-fields";
+import { parseStudentCreateConfig } from "@/lib/student-create-config";
 
 const STATUSES = ["PROSPECT", "ENROLLED", "WITHDRAWN", "GRADUATED"] as const;
 const GENDERS = ["MALE", "FEMALE", "OTHER"] as const;
@@ -100,10 +101,28 @@ export async function createStudent(
   const parsed = parseForm(formData);
   if (!parsed.success) return zodToState(parsed.error);
 
+  // Pull any admin-configured custom fields ("Add a student" config) out of
+  // the form and stash them in Student.customAnswers, keyed by field.key.
+  const tenantRow = await unscopedDb().tenant.findUnique({
+    where: { id: tenantId },
+    select: { studentCreateFieldsConfig: true },
+  });
+  const cfg = parseStudentCreateConfig(tenantRow?.studentCreateFieldsConfig);
+  const customAnswers: Record<string, string> = {};
+  for (const f of cfg.fields) {
+    if (f.active === false) continue;
+    const v = String(formData.get(f.key) ?? "").trim();
+    if (v) customAnswers[f.key] = v;
+  }
+
   let newId: string | undefined;
   await runWithTenant({ tenantId, slug: null }, async () => {
     const created = await db.student.create({
-      data: { tenantId, ...parsed.data },
+      data: {
+        tenantId,
+        ...parsed.data,
+        ...(Object.keys(customAnswers).length > 0 ? { customAnswers } : {}),
+      },
       select: { id: true },
     });
     newId = created.id;

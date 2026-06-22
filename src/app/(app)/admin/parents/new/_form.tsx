@@ -4,9 +4,14 @@ import { useActionState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/input";
-import { Field, FormRow } from "@/components/ui/field";
+import { Field } from "@/components/ui/field";
 import { type FieldDef } from "@/lib/entity-fields";
-import { type ParentCreateConfig } from "@/lib/parent-create-config";
+import {
+  PARENT_CREATE_BUILTIN_KEYS,
+  type ParentCreateBuiltinKey,
+  type ParentCreateConfig,
+  parentCreateDefaultLabel,
+} from "@/lib/parent-create-config";
 import { RESPONSABLE_RELATIONS } from "@/app/(app)/parent/inscriptions/[id]/edit/_section-responsable-lebanese";
 import { createParent, type ParentFormState } from "../_actions";
 
@@ -45,10 +50,65 @@ export function CreateParentForm({
     {},
   );
 
-  const showFirstName = config.builtin.firstName !== "hidden";
-  const showLastName = config.builtin.lastName !== "hidden";
-  const showRelation = config.builtin.relation !== "hidden";
-  const showLocale = config.builtin.locale !== "hidden";
+  const req = (k: ParentCreateBuiltinKey) => config.builtin[k] === "required";
+  // Standard fields, in the admin-configured order, hidden ones dropped.
+  const orderedBuiltin = [...PARENT_CREATE_BUILTIN_KEYS]
+    .filter((k) => config.builtin[k] !== "hidden")
+    .sort(
+      (a, b) =>
+        (config.builtinMeta?.[a]?.order ?? PARENT_CREATE_BUILTIN_KEYS.indexOf(a)) -
+        (config.builtinMeta?.[b]?.order ?? PARENT_CREATE_BUILTIN_KEYS.indexOf(b)),
+    );
+
+  // Built-in label: explicit create-form override → app-wide label → i18n.
+  const defaultLabel = (k: ParentCreateBuiltinKey): string => {
+    const base = parentCreateDefaultLabel(k, (s) => t(s as never));
+    if (k === "firstName") return labels?.firstName ?? base;
+    if (k === "lastName") return labels?.lastName ?? base;
+    return base;
+  };
+  const labelFor = (k: ParentCreateBuiltinKey) =>
+    config.builtinMeta?.[k]?.label || defaultLabel(k);
+
+  function renderBuiltin(k: ParentCreateBuiltinKey) {
+    if (k === "relation") {
+      return (
+        <Field key={k} label={labelFor(k)} htmlFor="relation" required={req(k)}>
+          <Select id="relation" name="relation" required={req(k)} defaultValue="">
+            <option value="">—</option>
+            {RESPONSABLE_RELATIONS.map((r) => (
+              <option key={r} value={r}>
+                {tDossier(`responsable.relations.${r}` as never)}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      );
+    }
+    if (k === "locale") {
+      return (
+        <Field key={k} label={labelFor(k)} htmlFor="locale" required={req(k)}>
+          <Select id="locale" name="locale" defaultValue="fr">
+            <option value="fr">Français</option>
+            <option value="en">English</option>
+            <option value="ar">العربية</option>
+          </Select>
+        </Field>
+      );
+    }
+    // firstName / lastName
+    return (
+      <Field
+        key={k}
+        label={labelFor(k)}
+        htmlFor={k}
+        required={req(k)}
+        error={state.errors?.[k]}
+      >
+        <Input id={k} name={k} required={req(k)} autoFocus={k === "firstName"} />
+      </Field>
+    );
+  }
 
   const sortedFields = [...config.fields]
     .filter((f) => f.active !== false)
@@ -56,39 +116,7 @@ export function CreateParentForm({
 
   return (
     <form action={formAction} className="space-y-5">
-      {(showFirstName || showLastName) && (
-        <FormRow>
-          {showFirstName ? (
-            <Field
-              label={labels?.firstName ?? t("fieldFirstName")}
-              htmlFor="firstName"
-              required={config.builtin.firstName === "required"}
-              error={state.errors?.firstName}
-            >
-              <Input
-                id="firstName"
-                name="firstName"
-                required={config.builtin.firstName === "required"}
-                autoFocus
-              />
-            </Field>
-          ) : null}
-          {showLastName ? (
-            <Field
-              label={labels?.lastName ?? t("fieldLastName")}
-              htmlFor="lastName"
-              required={config.builtin.lastName === "required"}
-              error={state.errors?.lastName}
-            >
-              <Input
-                id="lastName"
-                name="lastName"
-                required={config.builtin.lastName === "required"}
-              />
-            </Field>
-          ) : null}
-        </FormRow>
-      )}
+      {orderedBuiltin.map(renderBuiltin)}
 
       <Field
         label={labels?.email ?? t("fieldEmail")}
@@ -98,45 +126,6 @@ export function CreateParentForm({
       >
         <Input id="email" name="email" type="email" required />
       </Field>
-
-      {(showRelation || showLocale) && (
-        <FormRow>
-          {showRelation ? (
-            <Field
-              label={t("fieldRelation")}
-              htmlFor="relation"
-              required={config.builtin.relation === "required"}
-            >
-              <Select
-                id="relation"
-                name="relation"
-                required={config.builtin.relation === "required"}
-                defaultValue=""
-              >
-                <option value="">—</option>
-                {RESPONSABLE_RELATIONS.map((r) => (
-                  <option key={r} value={r}>
-                    {tDossier(`responsable.relations.${r}` as never)}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          ) : null}
-          {showLocale ? (
-            <Field
-              label={t("fieldLocale")}
-              htmlFor="locale"
-              required={config.builtin.locale === "required"}
-            >
-              <Select id="locale" name="locale" defaultValue="fr">
-                <option value="fr">Français</option>
-                <option value="en">English</option>
-                <option value="ar">العربية</option>
-              </Select>
-            </Field>
-          ) : null}
-        </FormRow>
-      )}
 
       <Field
         label={t("fieldPassword")}

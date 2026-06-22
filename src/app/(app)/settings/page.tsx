@@ -32,6 +32,7 @@ import {
   listEstablishments,
   loadEntityFieldsConfig,
   loadParentCreateConfig,
+  loadStudentCreateConfig,
   loadTenantSettings,
 } from "./_actions";
 
@@ -102,20 +103,27 @@ export default async function SettingsPage({
   const needsStudentFields = isAdmin && currentTab === "forms";
   const needsParentCreate = isAdmin && currentTab === "forms";
 
-  const [tenant, establishments, parentFields, studentFields, parentCreateConfig] =
-    await Promise.all([
-      needsTenant ? loadTenantSettings() : Promise.resolve(null),
-      needsEstablishments
-        ? listEstablishments()
-        : Promise.resolve([] as EstablishmentRow[]),
-      needsParentFields
-        ? loadEntityFieldsConfig("parent")
-        : Promise.resolve({ categories: [], fields: [] }),
-      needsStudentFields
-        ? loadEntityFieldsConfig("student")
-        : Promise.resolve({ categories: [], fields: [] }),
-      needsParentCreate ? loadParentCreateConfig() : Promise.resolve(null),
-    ]);
+  const [
+    tenant,
+    establishments,
+    parentFields,
+    studentFields,
+    parentCreateConfig,
+    studentCreateConfig,
+  ] = await Promise.all([
+    needsTenant ? loadTenantSettings() : Promise.resolve(null),
+    needsEstablishments
+      ? listEstablishments()
+      : Promise.resolve([] as EstablishmentRow[]),
+    needsParentFields
+      ? loadEntityFieldsConfig("parent")
+      : Promise.resolve({ categories: [], fields: [] }),
+    needsStudentFields
+      ? loadEntityFieldsConfig("student")
+      : Promise.resolve({ categories: [], fields: [] }),
+    needsParentCreate ? loadParentCreateConfig() : Promise.resolve(null),
+    needsParentCreate ? loadStudentCreateConfig() : Promise.resolve(null),
+  ]);
 
   const visibleCategories: Category[] = isAdmin ? [...CATEGORIES] : ["appearance"];
 
@@ -277,6 +285,7 @@ export default async function SettingsPage({
                   studentInitial={studentFields}
                   parentInitial={parentFields}
                   parentCreateInitial={parentCreateConfig}
+                  studentCreateInitial={studentCreateConfig}
                 />
               </SettingsSection>
             </>

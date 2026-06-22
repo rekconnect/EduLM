@@ -312,8 +312,41 @@ import {
   GUARDIAN_BOUND_PROPS,
   USER_BOUND_PROPS,
   parseEntityFieldsConfig,
+  slugifyKey,
   type EntityType,
 } from "@/lib/entity-fields";
+
+/**
+ * Backfill empty/missing field keys in a raw fields payload before validation.
+ * A non-Latin label (Arabic, etc.) slugifies to "", which would otherwise fail
+ * key.min(1) and reject the entire save. Mutates in place; preserves all
+ * existing non-empty keys and only fills the blanks with a unique key.
+ */
+function backfillFieldKeys(raw: unknown): void {
+  if (!raw || typeof raw !== "object") return;
+  const fields = (raw as { fields?: unknown }).fields;
+  if (!Array.isArray(fields)) return;
+  const seen = new Set<string>();
+  for (const f of fields) {
+    if (f && typeof f === "object" && typeof f.key === "string" && f.key.trim()) {
+      seen.add(f.key.trim());
+    }
+  }
+  for (const f of fields) {
+    if (!f || typeof f !== "object") continue;
+    const existing = typeof f.key === "string" ? f.key.trim() : "";
+    if (existing) continue;
+    const idPart = typeof f.id === "string" ? f.id.replace(/[^a-z0-9_]/gi, "") : "";
+    const base =
+      slugifyKey(typeof f.label === "string" ? f.label : "") ||
+      (idPart ? `field_${idPart}` : "field");
+    let key = base;
+    let n = 2;
+    while (seen.has(key)) key = `${base}_${n++}`;
+    seen.add(key);
+    f.key = key;
+  }
+}
 
 const fieldSchema = z.object({
   id: z.string().trim().min(1).max(80),
@@ -322,7 +355,10 @@ const fieldSchema = z.object({
   hint: z.string().trim().max(300).optional(),
   type: z.enum(FIELD_TYPES),
   required: z.boolean(),
-  options: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
+  // Up to 2000 — real lists run large (305 professions, ~195 countries, and a
+  // full Lebanese town list is ~1700). Seeded configs predate this cap, so a
+  // low limit silently broke re-saving them through the editor.
+  options: z.array(z.string().trim().min(1).max(120)).max(2000).optional(),
   categoryId: z.string().trim().min(1).max(80),
   order: z.coerce.number().int().min(0).max(1000),
   showIf: z
@@ -400,6 +436,16 @@ export async function loadEntityFieldsConfig(entity: EntityType) {
 // ─── Parent-create form config (built-in toggles + custom fields) ──
 
 const BUILTIN_MODES_ENUM = ["required", "optional", "hidden"] as const;
+// Per-built-in label/order overrides (rename + reorder of standard fields).
+const builtinMetaSchema = z
+  .record(
+    z.string(),
+    z.object({
+      label: z.string().trim().max(200).optional(),
+      order: z.coerce.number().int().min(0).max(1000).optional(),
+    }),
+  )
+  .optional();
 const parentCreateConfigSchema = z.object({
   builtin: z.object({
     firstName: z.enum(BUILTIN_MODES_ENUM),
@@ -407,6 +453,7 @@ const parentCreateConfigSchema = z.object({
     relation: z.enum(BUILTIN_MODES_ENUM),
     locale: z.enum(BUILTIN_MODES_ENUM),
   }),
+  builtinMeta: builtinMetaSchema,
   categories: z.array(categorySchema).max(40),
   fields: z.array(fieldSchema).max(200),
 });
@@ -442,8 +489,15 @@ export async function updateParentCreateConfig(
   } catch {
     return { ok: false, error: "invalid-json" };
   }
+  backfillFieldKeys(parsedRaw);
   const parsed = parentCreateConfigSchema.safeParse(parsedRaw);
-  if (!parsed.success) return { ok: false, error: "validation" };
+  if (!parsed.success) {
+    console.error(
+      "[updateParentCreateConfig] validation failed:",
+      JSON.stringify(parsed.error.issues.slice(0, 10)),
+    );
+    return { ok: false, error: "validation" };
+  }
 
   // Same cross-validation as entity fields: drop orphaned fields, strip
   // options for non-select types.
@@ -460,6 +514,7 @@ export async function updateParentCreateConfig(
     data: {
       parentCreateFieldsConfig: {
         builtin: parsed.data.builtin,
+        builtinMeta: parsed.data.builtinMeta ?? {},
         categories: parsed.data.categories,
         fields: finalFields,
       } as unknown as Prisma.InputJsonValue,
@@ -467,6 +522,86 @@ export async function updateParentCreateConfig(
   });
   revalidatePath("/settings");
   revalidatePath("/admin/parents/new");
+  return { ok: true };
+}
+
+// ─── Student-create form config (mirror of parent-create) ──────────
+
+const studentCreateConfigSchema = z.object({
+  builtin: z.object({
+    dob: z.enum(BUILTIN_MODES_ENUM),
+    gender: z.enum(BUILTIN_MODES_ENUM),
+    nationality: z.enum(BUILTIN_MODES_ENUM),
+    placeOfBirth: z.enum(BUILTIN_MODES_ENUM),
+    address: z.enum(BUILTIN_MODES_ENUM),
+    city: z.enum(BUILTIN_MODES_ENUM),
+    postalCode: z.enum(BUILTIN_MODES_ENUM),
+    country: z.enum(BUILTIN_MODES_ENUM),
+    previousSchool: z.enum(BUILTIN_MODES_ENUM),
+    emergencyContact: z.enum(BUILTIN_MODES_ENUM),
+    internalNotes: z.enum(BUILTIN_MODES_ENUM),
+  }),
+  builtinMeta: builtinMetaSchema,
+  categories: z.array(categorySchema).max(40),
+  fields: z.array(fieldSchema).max(200),
+});
+
+export async function loadStudentCreateConfig() {
+  const { parseStudentCreateConfig, DEFAULT_STUDENT_CREATE_CONFIG } =
+    await import("@/lib/student-create-config");
+  const user = await requireUser();
+  if (!user.tenantId) return DEFAULT_STUDENT_CREATE_CONFIG;
+  const tenant = await unscopedDb().tenant.findUnique({
+    where: { id: user.tenantId },
+    select: { studentCreateFieldsConfig: true },
+  });
+  return parseStudentCreateConfig(tenant?.studentCreateFieldsConfig);
+}
+
+export async function updateStudentCreateConfig(
+  formData: FormData,
+): Promise<SettingsResult> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  if (!user.tenantId) return { ok: false, error: "no-tenant" };
+
+  const raw = String(formData.get("config") ?? "{}");
+  let parsedRaw: unknown;
+  try {
+    parsedRaw = JSON.parse(raw);
+  } catch {
+    return { ok: false, error: "invalid-json" };
+  }
+  backfillFieldKeys(parsedRaw);
+  const parsed = studentCreateConfigSchema.safeParse(parsedRaw);
+  if (!parsed.success) {
+    console.error(
+      "[updateStudentCreateConfig] validation failed:",
+      JSON.stringify(parsed.error.issues.slice(0, 10)),
+    );
+    return { ok: false, error: "validation" };
+  }
+
+  const categoryIds = new Set(parsed.data.categories.map((c) => c.id));
+  const cleanedFields = parsed.data.fields.filter((f) =>
+    categoryIds.has(f.categoryId),
+  );
+  const finalFields = cleanedFields.map((f) =>
+    f.type === "select" ? f : { ...f, options: undefined },
+  );
+
+  await unscopedDb().tenant.update({
+    where: { id: user.tenantId },
+    data: {
+      studentCreateFieldsConfig: {
+        builtin: parsed.data.builtin,
+        builtinMeta: parsed.data.builtinMeta ?? {},
+        categories: parsed.data.categories,
+        fields: finalFields,
+      } as unknown as Prisma.InputJsonValue,
+    },
+  });
+  revalidatePath("/settings");
+  revalidatePath("/students/new");
   return { ok: true };
 }
 
@@ -484,8 +619,15 @@ export async function updateEntityFieldsConfig(
     return { ok: false, error: "invalid-json" };
   }
 
+  backfillFieldKeys(parsedRaw);
   const parsed = fieldsConfigSchema.safeParse(parsedRaw);
-  if (!parsed.success) return { ok: false, error: "validation" };
+  if (!parsed.success) {
+    console.error(
+      "[updateEntityFieldsConfig] validation failed:",
+      JSON.stringify(parsed.error.issues.slice(0, 10)),
+    );
+    return { ok: false, error: "validation" };
+  }
 
   // Cross-validate categoryId references: every field must point at one of
   // the categories in this payload. Drop any orphaned fields silently — the

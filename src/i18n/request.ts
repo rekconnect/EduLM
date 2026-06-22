@@ -1,5 +1,6 @@
 import { cookies, headers } from "next/headers";
 import { getRequestConfig } from "next-intl/server";
+import { auth } from "@/lib/auth";
 import { unscopedDb } from "@/lib/db";
 import { DEFAULT_LOCALE, isLocale, LOCALES, type Locale } from "./config";
 
@@ -11,30 +12,57 @@ import { DEFAULT_LOCALE, isLocale, LOCALES, type Locale } from "./config";
  *      `defaultLocale` wins. Schools want one consistent language for everyone,
  *      so we deliberately ignore the browser's `accept-language` here (an
  *      English-language browser must still see a French school in French).
- *   3. `accept-language` — only on the root marketing domain, where there is
- *      no school context to defer to.
+ *      The tenant is resolved from the URL slug (subdomain / `/t/<slug>/`) OR,
+ *      when there's no slug, from the logged-in user's tenant — so admin/app
+ *      pages at the bare root still render in the school's language.
+ *   3. `accept-language` — only on the root marketing domain with no school
+ *      context and no signed-in user to defer to.
  *   4. Hard fallback to `fr`.
  */
 export default getRequestConfig(async () => {
   const cookieStore = await cookies();
   const headerStore = await headers();
 
-  // Tenant context (slug set by the proxy from subdomain or /t/<slug>/ path).
-  // Look up the school's default + enabled languages; a DB hiccup must never
-  // break rendering, so fall back to "all locales / fr" on error.
-  const slug = (headerStore.get("x-tenant-slug") ?? "").trim();
   let enabled: readonly Locale[] = LOCALES;
   let tenantDefault: Locale = DEFAULT_LOCALE;
+  let inTenantContext = false;
+
+  // A DB hiccup (or a missing session) must never break rendering, so each
+  // lookup falls back silently to "all locales / fr".
+  const applyTenant = (tenant: {
+    defaultLocale: string;
+    enabledLocales: string[];
+  }) => {
+    inTenantContext = true;
+    if (isLocale(tenant.defaultLocale)) tenantDefault = tenant.defaultLocale;
+    const en = tenant.enabledLocales.filter(isLocale);
+    if (en.length > 0) enabled = en;
+  };
+
+  const slug = (headerStore.get("x-tenant-slug") ?? "").trim();
   if (slug) {
     try {
       const tenant = await unscopedDb().tenant.findFirst({
         where: { slug },
         select: { defaultLocale: true, enabledLocales: true },
       });
-      if (tenant) {
-        if (isLocale(tenant.defaultLocale)) tenantDefault = tenant.defaultLocale;
-        const en = tenant.enabledLocales.filter(isLocale);
-        if (en.length > 0) enabled = en;
+      if (tenant) applyTenant(tenant);
+    } catch {
+      // keep defaults
+    }
+  } else {
+    // No URL tenant context — defer to the signed-in user's tenant so admin
+    // and in-app pages (which live at the bare root) follow the school's
+    // language instead of the browser's.
+    try {
+      const session = await auth();
+      const tenantId = session?.user?.tenantId ?? null;
+      if (tenantId) {
+        const tenant = await unscopedDb().tenant.findUnique({
+          where: { id: tenantId },
+          select: { defaultLocale: true, enabledLocales: true },
+        });
+        if (tenant) applyTenant(tenant);
       }
     } catch {
       // keep defaults
@@ -45,7 +73,7 @@ export default getRequestConfig(async () => {
   const cookieLocale = cookieStore.get("NEXT_LOCALE")?.value;
   if (isLocale(cookieLocale) && enabled.includes(cookieLocale)) {
     locale = cookieLocale;
-  } else if (slug) {
+  } else if (inTenantContext) {
     // School context → school default (clamped to an enabled language).
     locale = enabled.includes(tenantDefault) ? tenantDefault : (enabled[0] ?? DEFAULT_LOCALE);
   } else {

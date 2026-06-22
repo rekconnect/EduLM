@@ -119,6 +119,28 @@
       "saved": "Establishments saved.",
       "saveError": "Save failed."
     },
+    "studentCreate": {
+      "builtinSectionHint": "Choose which fields appear and which are required on the student-create form.",
+      "identityAlwaysRequired": "These fields are always present and required.",
+      "required": {
+        "firstName": "First name",
+        "lastName": "Last name",
+        "status": "Status"
+      },
+      "builtin": {
+        "dob": "Date of birth",
+        "gender": "Gender",
+        "nationality": "Nationality",
+        "placeOfBirth": "Place of birth",
+        "address": "Address",
+        "city": "City",
+        "postalCode": "Postal code",
+        "country": "Country",
+        "previousSchool": "Previous school",
+        "emergencyContact": "Emergency contact",
+        "internalNotes": "Internal notes"
+      }
+    },
     "parentCreate": {
       "title": "\"Add a parent\" form",
       "description": "Choose which fields appear and which are required when an admin creates a new parent from /admin/parents/new.",
@@ -245,8 +267,11 @@
       "modeForm": "Form",
       "modeList": "List",
       "editField": "Edit field",
+      "editFieldDesc": "Edit this field's label, type and options.",
       "clickToEdit": "Click a field in the form to edit it.",
       "editSection": "Edit section",
+      "editSectionDesc": "Rename this section or change its status.",
+      "builtinRenamePlaceholder": "Rename (optional)",
       "sectionName": "Section name",
       "removeSectionConfirm": "Delete this section and all its fields?",
       "tabStudent": "Student",

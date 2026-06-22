@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import type { EntityFieldsConfig } from "@/lib/entity-fields";
 import { FieldsConfigForm } from "./_fields-config";
 import { ParentCreateFieldsForm } from "./_parent-create-fields";
+import { StudentCreateFieldsForm } from "./_student-create-fields";
 
 type Context = "inscription" | "admission";
 
@@ -21,11 +22,15 @@ export function FieldsEditorTabs({
   studentInitial,
   parentInitial,
   parentCreateInitial,
+  studentCreateInitial,
 }: {
   studentInitial: EntityFieldsConfig;
   parentInitial: EntityFieldsConfig;
   parentCreateInitial:
     | React.ComponentProps<typeof ParentCreateFieldsForm>["initial"]
+    | null;
+  studentCreateInitial:
+    | React.ComponentProps<typeof StudentCreateFieldsForm>["initial"]
     | null;
 }) {
   const t = useTranslations("settings");
@@ -64,10 +69,15 @@ export function FieldsEditorTabs({
               { id: "parents", label: t("fieldsConfig.tabParent") },
             ]}
           />
+          {/* Distinct keys force a remount when switching Élève↔Parents.
+              Without them React reuses the same FieldsConfigForm instance
+              (same type, same position) and its useState keeps the previous
+              entity's fields — so Parents would show the student's config and
+              a Save there would overwrite the wrong column. */}
           {insTab === "eleve" ? (
-            <FieldsConfigForm entity="student" initial={studentInitial} />
+            <FieldsConfigForm key="student" entity="student" initial={studentInitial} />
           ) : (
-            <FieldsConfigForm entity="parent" initial={parentInitial} />
+            <FieldsConfigForm key="parent" entity="parent" initial={parentInitial} />
           )}
         </>
       ) : (
@@ -88,10 +98,12 @@ export function FieldsEditorTabs({
                 {t("fieldsConfig.addParentDesc")}
               </p>
             )
+          ) : studentCreateInitial ? (
+            <StudentCreateFieldsForm initial={studentCreateInitial} />
           ) : (
-            <div className="rounded-md border border-dashed border-[color:var(--color-border-strong)] px-4 py-6 text-center text-sm text-[color:var(--color-foreground-muted)]">
-              {t("fieldsConfig.addStudentSoon")}
-            </div>
+            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+              {t("fieldsConfig.addParentDesc")}
+            </p>
           )}
         </>
       )}

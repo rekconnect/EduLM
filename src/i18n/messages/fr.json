@@ -127,6 +127,28 @@
       "title": "Champs des parents",
       "description": "Définissez les catégories et les champs personnalisés du profil parent. Ils apparaissent dans le formulaire d'inscription puis sur la fiche du parent."
     },
+    "studentCreate": {
+      "builtinSectionHint": "Choisissez quels champs apparaissent et lesquels sont obligatoires sur le formulaire de création d'élève.",
+      "identityAlwaysRequired": "Ces champs sont toujours présents et obligatoires.",
+      "required": {
+        "firstName": "Prénom",
+        "lastName": "Nom",
+        "status": "Statut"
+      },
+      "builtin": {
+        "dob": "Date de naissance",
+        "gender": "Sexe",
+        "nationality": "Nationalité",
+        "placeOfBirth": "Lieu de naissance",
+        "address": "Adresse",
+        "city": "Ville",
+        "postalCode": "Code postal",
+        "country": "Pays",
+        "previousSchool": "École précédente",
+        "emergencyContact": "Contact d'urgence",
+        "internalNotes": "Notes internes"
+      }
+    },
     "parentCreate": {
       "title": "Formulaire « Ajouter un parent »",
       "description": "Choisissez les champs visibles et obligatoires quand un admin crée un nouveau parent depuis /admin/parents/new.",
@@ -245,8 +267,11 @@
       "modeForm": "Formulaire",
       "modeList": "Liste",
       "editField": "Modifier le champ",
+      "editFieldDesc": "Modifiez le libellé, le type et les options de ce champ.",
       "clickToEdit": "Cliquez sur un champ du formulaire pour le modifier.",
       "editSection": "Modifier la section",
+      "editSectionDesc": "Renommez cette section ou modifiez son statut.",
+      "builtinRenamePlaceholder": "Renommer (optionnel)",
       "sectionName": "Nom de la section",
       "removeSectionConfirm": "Supprimer cette section et tous ses champs ?",
       "tabStudent": "Élève",

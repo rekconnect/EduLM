@@ -10,27 +10,19 @@ import { Field } from "@/components/ui/field";
 import { FIELD_TYPES, slugifyKey, type FieldDef } from "@/lib/entity-fields";
 import {
   type BuiltinFieldMode,
-  type ParentCreateConfig,
-  PARENT_CREATE_BUILTIN_KEYS,
-  parentCreateDefaultLabel,
-} from "@/lib/parent-create-config";
-import { updateParentCreateConfig } from "./_actions";
+  type StudentAllCreateKey,
+  type StudentCreateConfig,
+  STUDENT_ALL_CREATE_KEYS,
+  isStudentRequiredKey,
+  studentCreateDefaultLabel,
+} from "@/lib/student-create-config";
+import { updateStudentCreateConfig } from "./_actions";
 import { BuiltinFieldsList } from "./_builtin-fields-list";
 
 function newId(): string {
   return Math.random().toString(36).slice(2, 12);
 }
 
-/**
- * Settings UI for the /admin/parents/new form. Two stacked sections:
- *  1. Built-in field modes — required / optional / hidden for the four
- *     standard non-auth fields. Email + password are not listed because
- *     they're always required (parent has to log in).
- *  2. Custom fields — short-text / select / yes-no / date / number /
- *     phone / long-text only. We intentionally keep the editor small
- *     here; the rich field types (cascading, mirroring, etc.) belong on
- *     the long parent-profile form, not the create form.
- */
 const ALLOWED_CREATE_TYPES = [
   "short_text",
   "long_text",
@@ -42,46 +34,53 @@ const ALLOWED_CREATE_TYPES = [
   "email",
 ] as const satisfies ReadonlyArray<(typeof FIELD_TYPES)[number]>;
 
-export function ParentCreateFieldsForm({
+/**
+ * Settings UI for the /students/new admin form — same shape as the parent
+ * create editor (built-in field modes + small custom-field list). Reuses the
+ * generic parentCreate.* strings; only the field labels are student-specific.
+ */
+export function StudentCreateFieldsForm({
   initial,
 }: {
-  initial: ParentCreateConfig;
+  initial: StudentCreateConfig;
 }) {
   const t = useTranslations("settings");
   const tCommon = useTranslations("common");
-  const tParents = useTranslations("parents");
+  const tStudents = useTranslations("students");
+  const tAdmissions = useTranslations("admissions");
   const [pending, startTransition] = useTransition();
 
   const [builtin, setBuiltin] = useState(initial.builtin);
   const [builtinMeta, setBuiltinMeta] = useState(initial.builtinMeta ?? {});
-  // Bootstrap a single default category if none exists — keeps the JSON
-  // model identical to the entity-fields system so we can pipe these
-  // answers through the existing FieldsRenderer if we ever want to.
   const [categoryId] = useState<string>(
     () => initial.categories[0]?.id ?? newId(),
   );
   const [fields, setFields] = useState<FieldDef[]>(initial.fields);
 
-  function setBuiltinMode(key: typeof PARENT_CREATE_BUILTIN_KEYS[number], mode: BuiltinFieldMode) {
-    setBuiltin((prev) => ({ ...prev, [key]: mode }));
+  // Required identity fields are always "required"; the rest read their mode.
+  const modeOf = (key: StudentAllCreateKey): BuiltinFieldMode =>
+    isStudentRequiredKey(key)
+      ? "required"
+      : builtin[key as Exclude<StudentAllCreateKey, "firstName" | "lastName" | "status">];
+
+  function setBuiltinMode(key: StudentAllCreateKey, mode: BuiltinFieldMode) {
+    if (isStudentRequiredKey(key)) return; // locked
+    setBuiltin((prev) => ({ ...prev, [key]: mode }) as typeof prev);
   }
 
-  function setBuiltinLabel(
-    key: typeof PARENT_CREATE_BUILTIN_KEYS[number],
-    label: string,
-  ) {
+  function setBuiltinLabel(key: StudentAllCreateKey, label: string) {
     setBuiltinMeta((prev) => ({
       ...prev,
       [key]: { ...prev[key], label: label.trim() ? label : undefined },
     }));
   }
 
-  function moveBuiltin(key: typeof PARENT_CREATE_BUILTIN_KEYS[number], dir: -1 | 1) {
+  function moveBuiltin(key: StudentAllCreateKey, dir: -1 | 1) {
     setBuiltinMeta((prev) => {
-      const ordered = [...PARENT_CREATE_BUILTIN_KEYS].sort(
+      const ordered = [...STUDENT_ALL_CREATE_KEYS].sort(
         (a, b) =>
-          (prev[a]?.order ?? PARENT_CREATE_BUILTIN_KEYS.indexOf(a)) -
-          (prev[b]?.order ?? PARENT_CREATE_BUILTIN_KEYS.indexOf(b)),
+          (prev[a]?.order ?? STUDENT_ALL_CREATE_KEYS.indexOf(a)) -
+          (prev[b]?.order ?? STUDENT_ALL_CREATE_KEYS.indexOf(b)),
       );
       const idx = ordered.indexOf(key);
       const swap = idx + dir;
@@ -112,9 +111,7 @@ export function ParentCreateFieldsForm({
   }
 
   function updateField(id: string, patch: Partial<FieldDef>) {
-    setFields((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, ...patch } : f)),
-    );
+    setFields((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
   }
 
   function removeField(id: string) {
@@ -137,8 +134,6 @@ export function ParentCreateFieldsForm({
   }
 
   function onSubmit() {
-    // Auto-derive `key` from label when admin left it blank so they
-    // don't have to know about the underlying slug.
     const finalized = fields.map((f, i) => ({
       ...f,
       order: i,
@@ -161,7 +156,7 @@ export function ParentCreateFieldsForm({
     const fd = new FormData();
     fd.set("config", JSON.stringify(config));
     startTransition(async () => {
-      const r = await updateParentCreateConfig(fd);
+      const r = await updateStudentCreateConfig(fd);
       if (r.ok) toast.success(tCommon("saved"));
       else toast.error(t("parentCreate.saveError"));
     });
@@ -177,13 +172,21 @@ export function ParentCreateFieldsForm({
           {t("parentCreate.builtinSectionTitle")}
         </p>
         <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t("parentCreate.builtinSectionHint")}
+          {t("studentCreate.builtinSectionHint")}
         </p>
+
         <BuiltinFieldsList
-          keys={PARENT_CREATE_BUILTIN_KEYS}
-          modeOf={(k) => builtin[k]}
+          keys={STUDENT_ALL_CREATE_KEYS}
+          modeOf={modeOf}
+          isLocked={isStudentRequiredKey}
           meta={builtinMeta}
-          defaultLabel={(k) => parentCreateDefaultLabel(k, (s) => tParents(s as never))}
+          defaultLabel={(k) =>
+            studentCreateDefaultLabel(
+              k,
+              (s) => tStudents(s as never),
+              (s) => tAdmissions(s as never),
+            )
+          }
           modeLabels={{
             required: t("parentCreate.mode.required"),
             optional: t("parentCreate.mode.optional"),
@@ -196,7 +199,7 @@ export function ParentCreateFieldsForm({
           onMove={moveBuiltin}
         />
         <p className="text-xs text-[color:var(--color-foreground-subtle)]">
-          {t("parentCreate.authAlwaysRequired")}
+          {t("studentCreate.identityAlwaysRequired")}
         </p>
       </div>
 
@@ -269,9 +272,7 @@ export function ParentCreateFieldsForm({
                         id={`f-${f.id}-type`}
                         value={f.type}
                         onChange={(e) =>
-                          updateField(f.id, {
-                            type: e.target.value as FieldDef["type"],
-                          })
+                          updateField(f.id, { type: e.target.value as FieldDef["type"] })
                         }
                       >
                         {ALLOWED_CREATE_TYPES.map((tp) => (

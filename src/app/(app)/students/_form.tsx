@@ -4,7 +4,15 @@ import { useActionState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/input";
-import { Field, FormRow } from "@/components/ui/field";
+import { Field } from "@/components/ui/field";
+import type { FieldDef } from "@/lib/entity-fields";
+import {
+  STUDENT_ALL_CREATE_KEYS,
+  type StudentAllCreateKey,
+  type StudentCreateConfig,
+  isStudentRequiredKey,
+  studentCreateDefaultLabel,
+} from "@/lib/student-create-config";
 import type { StudentFormState } from "./_actions";
 
 type StudentValues = {
@@ -28,10 +36,15 @@ export function StudentForm({
   action,
   initial,
   submitLabel,
+  config,
 }: {
   action: (state: StudentFormState, formData: FormData) => Promise<StudentFormState>;
   initial?: StudentValues;
   submitLabel: string;
+  /** Admin "Add a student" config — controls which standard fields show, their
+   *  required state, their label override and order, plus any custom fields.
+   *  Omitted (edit form) ⇒ everything visible, default labels, default order. */
+  config?: StudentCreateConfig;
 }) {
   const t = useTranslations("students");
   const tAdm = useTranslations("admissions");
@@ -42,177 +55,117 @@ export function StudentForm({
     {},
   );
 
+  const mode = (k: StudentAllCreateKey): "required" | "optional" | "hidden" => {
+    if (isStudentRequiredKey(k)) return "required";
+    return config?.builtin[k] ?? "optional";
+  };
+  const show = (k: StudentAllCreateKey) => mode(k) !== "hidden";
+  const req = (k: StudentAllCreateKey) => mode(k) === "required";
+
+  // All standard fields (required + configurable) in the admin order; hidden
+  // ones dropped. Required fields can't be hidden, so they always survive.
+  const orderedFields = [...STUDENT_ALL_CREATE_KEYS]
+    .filter(show)
+    .sort(
+      (a, b) =>
+        (config?.builtinMeta?.[a]?.order ?? STUDENT_ALL_CREATE_KEYS.indexOf(a)) -
+        (config?.builtinMeta?.[b]?.order ?? STUDENT_ALL_CREATE_KEYS.indexOf(b)),
+    );
+
+  const labelFor = (k: StudentAllCreateKey) =>
+    config?.builtinMeta?.[k]?.label ||
+    studentCreateDefaultLabel(
+      k,
+      (s) => t(s as never),
+      (s) => tAdm(s as never),
+    );
+
+  const initVal = (k: StudentAllCreateKey): string => {
+    const v = initial?.[k];
+    return typeof v === "string" ? v : "";
+  };
+
+  function renderField(k: StudentAllCreateKey) {
+    const label = labelFor(k);
+    if (k === "status") {
+      return (
+        <Field key={k} label={label} htmlFor="status" required error={state.errors?.status}>
+          <Select id="status" name="status" defaultValue={initial?.status ?? "PROSPECT"}>
+            <option value="PROSPECT">{t("statusProspect")}</option>
+            <option value="ENROLLED">{t("statusEnrolled")}</option>
+            <option value="WITHDRAWN">{t("statusWithdrawn")}</option>
+            <option value="GRADUATED">{t("statusGraduated")}</option>
+          </Select>
+        </Field>
+      );
+    }
+    if (k === "gender") {
+      return (
+        <Field key={k} label={label} htmlFor="gender" required={req(k)} error={state.errors?.gender}>
+          <Select id="gender" name="gender" defaultValue={initial?.gender ?? ""} required={req(k)}>
+            <option value="">—</option>
+            <option value="MALE">{tAdm("genderMale")}</option>
+            <option value="FEMALE">{tAdm("genderFemale")}</option>
+            <option value="OTHER">{tAdm("genderOther")}</option>
+          </Select>
+        </Field>
+      );
+    }
+    if (k === "dob") {
+      return (
+        <Field key={k} label={label} htmlFor="dob" required={req(k)} error={state.errors?.dob}>
+          <Input id="dob" name="dob" type="date" defaultValue={initVal(k)} required={req(k)} />
+        </Field>
+      );
+    }
+    if (k === "internalNotes") {
+      return (
+        <Field key={k} label={label} htmlFor="internalNotes" hint={t("fieldInternalNotesHint")} required={req(k)} error={state.errors?.internalNotes}>
+          <Textarea id="internalNotes" name="internalNotes" rows={4} defaultValue={initVal(k)} required={req(k)} />
+        </Field>
+      );
+    }
+    // Text fields: firstName, lastName, nationality, placeOfBirth, address,
+    // city, postalCode, country, previousSchool, emergencyContact.
+    return (
+      <Field
+        key={k}
+        label={label}
+        htmlFor={k}
+        required={req(k)}
+        hint={k === "emergencyContact" ? t("fieldEmergencyContactHint") : undefined}
+        error={state.errors?.[k]}
+      >
+        <Input
+          id={k}
+          name={k}
+          defaultValue={initVal(k)}
+          required={req(k)}
+          autoFocus={k === "firstName"}
+        />
+      </Field>
+    );
+  }
+
+  const customFields = [...(config?.fields ?? [])]
+    .filter((f) => f.active !== false)
+    .sort((a, b) => a.order - b.order);
+
   return (
     <form action={formAction} className="space-y-8">
-      {/* Identity ─────────────────────────────────── */}
+      {/* All standard fields (required + configurable) in admin order ── */}
       <section>
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[color:var(--muted-fg)]">
-          {tAdm("stepIdentity")}
-        </h3>
-        <div className="space-y-4">
-          <FormRow>
-            <Field
-              label={t("fieldFirstName")}
-              htmlFor="firstName"
-              required
-              error={state.errors?.firstName}
-            >
-              <Input
-                id="firstName"
-                name="firstName"
-                defaultValue={initial?.firstName ?? ""}
-                required
-                autoFocus
-              />
-            </Field>
-            <Field
-              label={t("fieldLastName")}
-              htmlFor="lastName"
-              required
-              error={state.errors?.lastName}
-            >
-              <Input
-                id="lastName"
-                name="lastName"
-                defaultValue={initial?.lastName ?? ""}
-                required
-              />
-            </Field>
-          </FormRow>
-
-          <FormRow>
-            <Field label={t("fieldDob")} htmlFor="dob" error={state.errors?.dob}>
-              <Input
-                id="dob"
-                name="dob"
-                type="date"
-                defaultValue={initial?.dob ?? ""}
-              />
-            </Field>
-            <Field label={tAdm("fieldChildGender")} htmlFor="gender" error={state.errors?.gender}>
-              <Select id="gender" name="gender" defaultValue={initial?.gender ?? ""}>
-                <option value="">—</option>
-                <option value="MALE">{tAdm("genderMale")}</option>
-                <option value="FEMALE">{tAdm("genderFemale")}</option>
-                <option value="OTHER">{tAdm("genderOther")}</option>
-              </Select>
-            </Field>
-          </FormRow>
-
-          <FormRow>
-            <Field
-              label={tAdm("fieldChildNationality")}
-              htmlFor="nationality"
-              error={state.errors?.nationality}
-            >
-              <Input
-                id="nationality"
-                name="nationality"
-                defaultValue={initial?.nationality ?? ""}
-              />
-            </Field>
-            <Field
-              label={tAdm("fieldChildPlaceOfBirth")}
-              htmlFor="placeOfBirth"
-              error={state.errors?.placeOfBirth}
-            >
-              <Input
-                id="placeOfBirth"
-                name="placeOfBirth"
-                defaultValue={initial?.placeOfBirth ?? ""}
-              />
-            </Field>
-          </FormRow>
-
-          <Field label={t("fieldStatus")} htmlFor="status" error={state.errors?.status} required>
-            <Select id="status" name="status" defaultValue={initial?.status ?? "PROSPECT"}>
-              <option value="PROSPECT">{t("statusProspect")}</option>
-              <option value="ENROLLED">{t("statusEnrolled")}</option>
-              <option value="WITHDRAWN">{t("statusWithdrawn")}</option>
-              <option value="GRADUATED">{t("statusGraduated")}</option>
-            </Select>
-          </Field>
-        </div>
+        <div className="space-y-4">{orderedFields.map(renderField)}</div>
       </section>
 
-      {/* Address ─────────────────────────────────── */}
-      <section>
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[color:var(--muted-fg)]">
-          {tAdm("fieldAddress")}
-        </h3>
-        <div className="space-y-4">
-          <Field label={tAdm("fieldAddress")} htmlFor="address" error={state.errors?.address}>
-            <Input id="address" name="address" defaultValue={initial?.address ?? ""} />
-          </Field>
-          <FormRow>
-            <Field label={tAdm("fieldCity")} htmlFor="city" error={state.errors?.city}>
-              <Input id="city" name="city" defaultValue={initial?.city ?? ""} />
-            </Field>
-            <Field label={tAdm("fieldPostalCode")} htmlFor="postalCode" error={state.errors?.postalCode}>
-              <Input
-                id="postalCode"
-                name="postalCode"
-                defaultValue={initial?.postalCode ?? ""}
-              />
-            </Field>
-          </FormRow>
-          <Field label={tAdm("fieldCountry")} htmlFor="country" error={state.errors?.country}>
-            <Input id="country" name="country" defaultValue={initial?.country ?? ""} />
-          </Field>
-        </div>
-      </section>
-
-      {/* Background ──────────────────────────────── */}
-      <section>
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[color:var(--muted-fg)]">
-          {t("sectionBackground")}
-        </h3>
-        <div className="space-y-4">
-          <Field
-            label={t("fieldPreviousSchool")}
-            htmlFor="previousSchool"
-            error={state.errors?.previousSchool}
-          >
-            <Input
-              id="previousSchool"
-              name="previousSchool"
-              defaultValue={initial?.previousSchool ?? ""}
-            />
-          </Field>
-          <Field
-            label={t("fieldEmergencyContact")}
-            htmlFor="emergencyContact"
-            hint={t("fieldEmergencyContactHint")}
-            error={state.errors?.emergencyContact}
-          >
-            <Input
-              id="emergencyContact"
-              name="emergencyContact"
-              defaultValue={initial?.emergencyContact ?? ""}
-            />
-          </Field>
-        </div>
-      </section>
-
-      {/* Internal notes (admin-only) ─────────────── */}
-      <section>
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[color:var(--muted-fg)]">
-          {t("sectionInternal")}
-        </h3>
-        <Field
-          label={t("fieldInternalNotes")}
-          htmlFor="internalNotes"
-          hint={t("fieldInternalNotesHint")}
-          error={state.errors?.internalNotes}
-        >
-          <Textarea
-            id="internalNotes"
-            name="internalNotes"
-            rows={4}
-            defaultValue={initial?.internalNotes ?? ""}
-          />
-        </Field>
-      </section>
+      {/* Custom fields (admin-configured) ─────────── */}
+      {customFields.length > 0 ? (
+        <section className="space-y-4">
+          {customFields.map((f) => (
+            <CustomFieldInput key={f.id} field={f} />
+          ))}
+        </section>
+      ) : null}
 
       {state.formError ? (
         <p className="text-sm text-red-600" role="alert">
@@ -232,5 +185,52 @@ export function StudentForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+/** Renders one admin-configured custom field as an uncontrolled input named by
+ *  its key, so createStudent can read it from FormData and store it in
+ *  Student.customAnswers. */
+function CustomFieldInput({ field }: { field: FieldDef }) {
+  const id = `cf-${field.id}`;
+  let input: React.ReactNode;
+  if (field.type === "long_text") {
+    input = <Textarea id={id} name={field.key} rows={3} required={field.required} />;
+  } else if (field.type === "yes_no") {
+    input = (
+      <Select id={id} name={field.key} defaultValue="" required={field.required}>
+        <option value="">—</option>
+        <option value="yes">Oui</option>
+        <option value="no">Non</option>
+      </Select>
+    );
+  } else if (field.type === "select") {
+    input = (
+      <Select id={id} name={field.key} defaultValue="" required={field.required}>
+        <option value="">—</option>
+        {(field.options ?? []).map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </Select>
+    );
+  } else {
+    const htmlType =
+      field.type === "date"
+        ? "date"
+        : field.type === "number"
+          ? "number"
+          : field.type === "email"
+            ? "email"
+            : field.type === "phone"
+              ? "tel"
+              : "text";
+    input = <Input id={id} name={field.key} type={htmlType} required={field.required} />;
+  }
+  return (
+    <Field label={field.label} htmlFor={id} required={field.required}>
+      {input}
+    </Field>
   );
 }

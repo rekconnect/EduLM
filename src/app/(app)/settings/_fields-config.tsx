@@ -18,6 +18,7 @@ import { Field } from "@/components/ui/field";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -226,10 +227,13 @@ export function FieldsConfigForm({ entity, initial }: Props) {
       .map((f) => {
         const idx = perCategoryCounter.get(f.categoryId) ?? 0;
         perCategoryCounter.set(f.categoryId, idx + 1);
+        // Guarantee a non-empty key: a non-Latin label (e.g. Arabic "الاسم")
+        // slugifies to "", which would fail the save schema's key.min(1).
+        const derived = (f.key || slugifyKey(f.label)).trim();
         return {
           ...f,
           order: idx,
-          key: (f.key || slugifyKey(f.label)).trim(),
+          key: derived || `field_${f.id}`,
           label: f.label.trim(),
         };
       });
@@ -506,6 +510,7 @@ export function FieldsConfigForm({ entity, initial }: Props) {
         <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
           <SheetHeader className="text-start">
             <SheetTitle>{t("fieldsConfig.editField")}</SheetTitle>
+            <SheetDescription>{t("fieldsConfig.editFieldDesc")}</SheetDescription>
           </SheetHeader>
           {activeField ? (
             <ul className="mt-4">
@@ -542,6 +547,7 @@ export function FieldsConfigForm({ entity, initial }: Props) {
         <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-sm">
           <SheetHeader className="text-start">
             <SheetTitle>{t("fieldsConfig.editSection")}</SheetTitle>
+            <SheetDescription>{t("fieldsConfig.editSectionDesc")}</SheetDescription>
           </SheetHeader>
           {activeCategory ? (
             <div className="mt-4 space-y-4">

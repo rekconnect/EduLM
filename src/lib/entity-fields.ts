@@ -258,6 +258,14 @@ export type FieldDef = {
    */
   renewalPrefill?: "blank" | "locked";
   /**
+   * Seed this (student) field from the FATHER's answer for the given PARENT
+   * field key, on acceptance, when the student has no value of its own. The
+   * configurable, generic version of "child inherits the father's communauté /
+   * registre". Set to a parent field key (e.g. "communaute"); empty = no
+   * inheritance. Student fields only. Applied by the acceptance bridge.
+   */
+  inheritParentKey?: string;
+  /**
    * Mirror a value from the dossier identity (Application columns set
    * during creation). When set, the field shows the canonical value
    * read-only — edits must happen via the "Identité du dossier" section.
@@ -353,6 +361,10 @@ export function parseEntityFieldsConfig(raw: unknown): EntityFieldsConfig {
           renewalPrefill:
             f.renewalPrefill === "blank" || f.renewalPrefill === "locked"
               ? f.renewalPrefill
+              : undefined,
+          inheritParentKey:
+            typeof f.inheritParentKey === "string" && f.inheritParentKey.trim()
+              ? f.inheritParentKey.trim()
               : undefined,
           dossierBoundTo:
             typeof f.dossierBoundTo === "string" &&

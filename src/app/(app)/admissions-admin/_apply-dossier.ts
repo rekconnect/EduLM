@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { parseTransport, parseSante, parseScolarite } from "@/lib/dossier-content";
+import { parseEntityFieldsConfig } from "@/lib/entity-fields";
 
 /**
  * The ACCEPTANCE BRIDGE — field matching between the online inscription /
@@ -267,11 +268,24 @@ export async function applyDossierToStudent(
     null;
   const submitterCa = submitterResp ? caOf(submitterResp) : {};
 
-  // Child registre + communauté inherit from the father — in Lebanon the child
-  // shares the family sijill (registre) and community/religion. Only fill when
-  // the student doesn't already have its own value.
-  if (!ca.registerNum && submitterCa.numero_registre) ca.registerNum = submitterCa.numero_registre;
-  if (!ca.communaute_eleve && submitterCa.communaute) ca.communaute_eleve = submitterCa.communaute;
+  // Configurable "inherit from the father" bindings. Any student field with
+  // `inheritParentKey` set seeds its value from the father's answer for that
+  // parent key (submitterCa is resolved father-first above), only when the
+  // student has no value of its own. In Lebanon the child shares the family
+  // sijill (registre) and community/religion — those two fields ship with this
+  // binding configured, and the admin can add more from Réglages → Champs.
+  const studentCfg = parseEntityFieldsConfig(
+    (
+      await tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { studentFieldsConfig: true },
+      })
+    )?.studentFieldsConfig,
+  );
+  for (const f of studentCfg.fields) {
+    const pk = f.inheritParentKey?.trim();
+    if (pk && !ca[f.key] && submitterCa[pk]) ca[f.key] = submitterCa[pk];
+  }
 
   // Previous school (dossier) → Student.previousSchool column when the accept
   // flow didn't already set it (it reads app.currentSchool, often empty).

@@ -48,6 +48,9 @@ import { updateEntityFieldsConfig } from "./_actions";
 type Props = {
   entity: EntityType;
   initial: EntityFieldsConfig;
+  /** Parent fields (key + label) — feeds the student "inherit from father"
+   *  picker. Only passed for the student editor. */
+  parentFieldOptions?: { key: string; label: string }[];
 };
 
 /** Tiny stable id generator — sufficient for client-side ids. */
@@ -55,7 +58,7 @@ function newId(): string {
   return Math.random().toString(36).slice(2, 12);
 }
 
-export function FieldsConfigForm({ entity, initial }: Props) {
+export function FieldsConfigForm({ entity, initial, parentFieldOptions }: Props) {
   const t = useTranslations("settings");
   const tCommon = useTranslations("common");
   const [pending, startTransition] = useTransition();
@@ -469,6 +472,7 @@ export function FieldsConfigForm({ entity, initial }: Props) {
                             key={f.id}
                             field={f}
                             entity={entity}
+                            parentFieldOptions={parentFieldOptions}
                             isFirst={fIdx === 0}
                             isLast={fIdx === catFields.length - 1}
                             referenceable={referenceableFields(f.id)}
@@ -517,6 +521,7 @@ export function FieldsConfigForm({ entity, initial }: Props) {
               <FieldRow
                 field={activeField}
                 entity={entity}
+                parentFieldOptions={parentFieldOptions}
                 isFirst={activeIdx === 0}
                 isLast={activeIdx === activeCatFields.length - 1}
                 referenceable={referenceableFields(activeField.id)}
@@ -628,6 +633,7 @@ function FieldRow({
   isLast,
   referenceable,
   categories,
+  parentFieldOptions,
   onUpdate,
   onRemove,
   onMove,
@@ -636,6 +642,8 @@ function FieldRow({
   field: FieldDef;
   /** parent vs student — the user-binding picker only appears for parent fields. */
   entity: EntityType;
+  /** Parent fields — feeds the student "inherit from father" picker. */
+  parentFieldOptions?: { key: string; label: string }[];
   isFirst: boolean;
   isLast: boolean;
   referenceable: FieldDef[];
@@ -1200,6 +1208,39 @@ function FieldRow({
                   {USER_BOUND_PROPS.map((p) => (
                     <option key={p} value={p}>
                       {t(`fieldsConfig.userBound_${p}` as never)}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+          ) : null}
+
+          {/* Student-only: inherit this field's value from the father's answer
+              for a parent field (on acceptance). Generic version of "child
+              inherits the father's communauté / registre". */}
+          {entity === "student" &&
+          parentFieldOptions &&
+          parentFieldOptions.length > 0 ? (
+            <div className="sm:col-span-2">
+              <Field
+                label={t("fieldsConfig.inheritParentLabel")}
+                htmlFor={`inherit-${field.id}`}
+                hint={t("fieldsConfig.inheritParentHint")}
+              >
+                <Select
+                  id={`inherit-${field.id}`}
+                  value={field.inheritParentKey ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    onUpdate({ inheritParentKey: v || undefined });
+                  }}
+                >
+                  <option value="">
+                    {t("fieldsConfig.inheritParentNone")}
+                  </option>
+                  {parentFieldOptions.map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.label || p.key}
                     </option>
                   ))}
                 </Select>

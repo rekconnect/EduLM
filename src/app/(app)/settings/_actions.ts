@@ -443,6 +443,7 @@ const fieldSchema = z.object({
   inscriptionHidden: z.boolean().optional(),
   renewalRequired: z.boolean().optional(),
   renewalPrefill: z.enum(["blank", "locked"]).optional(),
+  inheritParentKey: z.string().trim().max(80).optional(),
   active: z.boolean().optional(),
 });
 

@@ -75,7 +75,15 @@ export function FieldsEditorTabs({
               entity's fields — so Parents would show the student's config and
               a Save there would overwrite the wrong column. */}
           {insTab === "eleve" ? (
-            <FieldsConfigForm key="student" entity="student" initial={studentInitial} />
+            <FieldsConfigForm
+              key="student"
+              entity="student"
+              initial={studentInitial}
+              parentFieldOptions={parentInitial.fields.map((f) => ({
+                key: f.key,
+                label: f.label,
+              }))}
+            />
           ) : (
             <FieldsConfigForm key="parent" entity="parent" initial={parentInitial} />
           )}

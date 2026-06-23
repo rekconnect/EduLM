@@ -238,6 +238,26 @@ export type FieldDef = {
    */
   formHidden?: boolean;
   /**
+   * Re-inscription (renewal) visibility overrides. A renewal reuses the same
+   * inscription dossier, pre-filled from the existing student — these let the
+   * field set differ between a fresh inscription and a re-inscription without
+   * maintaining two configs:
+   *   - renewalHidden:      hide on re-inscription (still shown on new).
+   *   - inscriptionHidden:  hide on new inscription (→ re-inscription-only).
+   *   - renewalRequired:    override `required` on re-inscription only.
+   * `formHidden` still wins (hidden from both forms).
+   */
+  renewalHidden?: boolean;
+  inscriptionHidden?: boolean;
+  renewalRequired?: boolean;
+  /**
+   * Pre-fill behaviour on a re-inscription. Absent ⇒ pre-filled from last
+   * year's value and editable (default). "blank" ⇒ not pre-filled, the parent
+   * must fill it again. "locked" ⇒ pre-filled but read-only (parent can't
+   * change it).
+   */
+  renewalPrefill?: "blank" | "locked";
+  /**
    * Mirror a value from the dossier identity (Application columns set
    * during creation). When set, the field shows the canonical value
    * read-only — edits must happen via the "Identité du dossier" section.
@@ -326,6 +346,14 @@ export function parseEntityFieldsConfig(raw: unknown): EntityFieldsConfig {
           active: f.active === false ? false : true,
           // Hidden from the inscription form (fiche/admin still show it).
           formHidden: f.formHidden === true ? true : undefined,
+          // Re-inscription (renewal) visibility overrides.
+          renewalHidden: f.renewalHidden === true ? true : undefined,
+          inscriptionHidden: f.inscriptionHidden === true ? true : undefined,
+          renewalRequired: f.renewalRequired === true ? true : undefined,
+          renewalPrefill:
+            f.renewalPrefill === "blank" || f.renewalPrefill === "locked"
+              ? f.renewalPrefill
+              : undefined,
           dossierBoundTo:
             typeof f.dossierBoundTo === "string" &&
             (DOSSIER_BOUND_PROPS as readonly string[]).includes(f.dossierBoundTo)
@@ -408,6 +436,43 @@ export function slugifyKey(label: string): string {
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .slice(0, 60);
+}
+
+/**
+ * Whether a field should appear on the parent dossier form, given whether this
+ * is a re-inscription (renewal). `formHidden` always hides it; otherwise the
+ * renewal/inscription-specific flag decides.
+ */
+export function fieldVisibleOnForm(
+  f: FieldDef,
+  opts: { renewal: boolean },
+): boolean {
+  if (f.formHidden) return false;
+  return opts.renewal ? !f.renewalHidden : !f.inscriptionHidden;
+}
+
+/** Effective `required` for a field on the form (renewal can override it). */
+export function fieldRequiredOnForm(
+  f: FieldDef,
+  opts: { renewal: boolean },
+): boolean {
+  return opts.renewal ? (f.renewalRequired ?? f.required) : f.required;
+}
+
+/** On a re-inscription, is this field read-only (pre-filled but locked)? */
+export function fieldLockedOnForm(
+  f: FieldDef,
+  opts: { renewal: boolean },
+): boolean {
+  return opts.renewal && f.renewalPrefill === "locked";
+}
+
+/** On a re-inscription, should this field start blank (no pre-fill)? */
+export function fieldPrefillBlank(
+  f: FieldDef,
+  opts: { renewal: boolean },
+): boolean {
+  return opts.renewal && f.renewalPrefill === "blank";
 }
 
 /** Group fields by category id, preserving the configured order within each. */

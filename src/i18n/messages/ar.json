@@ -190,6 +190,12 @@
       "title": "حقول الاستمارة",
       "description": "اضبط حقول التسجيل حسب علامات التبويب — كما يراها الأهل."
     },
+    "dossierDefaults": {
+      "title": "الخدمات وحالة الملف",
+      "description": "الحالة الابتدائية للملف (الخدمات مخفية/مفتوحة، للقراءة فقط)، حسب السياق. يمكنك تغييرها لكل ملف من الإدارة.",
+      "inscription": "تسجيل جديد",
+      "renewal": "إعادة تسجيل"
+    },
     "parentFields": {
       "title": "حقول الأهالي",
       "description": "حدّد الفئات والحقول المخصصة لملف الوالد. تظهر في نموذج التسجيل ثم في بطاقة الوالد."
@@ -260,6 +266,17 @@
       "activeHint": "ألغِ التحديد لإخفاء هذا الحقل كلياً (للأهالي والإدارة). يصبح الحقل غير إلزامي عند إيقافه.",
       "formHidden": "البطاقة فقط",
       "formHiddenHint": "حدّد لإخفاء هذا الحقل من استمارة التسجيل للأهل مع إبقائه ظاهراً في البطاقة (مثل رمز Dars، رقم السجل، الطائفة الموروثة من الأب).",
+      "renewalHidden": "إخفاء عند إعادة التسجيل",
+      "renewalHiddenHint": "يُخفي هذا الحقل عند إعادة التسجيل (يبقى ظاهراً في التسجيل الجديد).",
+      "inscriptionHidden": "إعادة التسجيل فقط",
+      "inscriptionHiddenHint": "يُظهر هذا الحقل عند إعادة التسجيل فقط، وليس في التسجيل الجديد.",
+      "renewalRequired": "إلزامي عند إعادة التسجيل",
+      "renewalRequiredHint": "يجعل هذا الحقل إلزامياً عند إعادة التسجيل.",
+      "renewalPrefill": "التعبئة المسبقة (إعادة التسجيل)",
+      "renewalPrefillHint": "سلوك هذا الحقل عند إعادة التسجيل.",
+      "renewalPrefillDefault": "معبأ مسبقاً، قابل للتعديل",
+      "renewalPrefillBlank": "فارغ (إعادة الإدخال)",
+      "renewalPrefillLocked": "معبأ مسبقاً، مقفل",
       "moveToCategory": "الفئة",
       "moveToCategoryHint": "نقل هذا الحقل إلى فئة أخرى. يُوضع في نهاية الفئة المختارة.",
       "previewTitle": "معاينة الاستمارة",
@@ -999,7 +1016,21 @@
     "fieldChildDob": "تاريخ الميلاد",
     "fieldChildGender": "الجنس",
     "fieldChildNationality": "الجنسية",
+    "fieldChildNationality1": "الجنسية 1",
     "fieldChildNationality2": "الجنسية 2",
+    "dossierStateLabel": "حالة الملف",
+    "dossierState": {
+      "open": "مفتوح",
+      "services_hidden": "الخدمات مخفية",
+      "services_open": "الخدمات مفتوحة (الباقي مقفل)",
+      "readonly": "للاطلاع فقط"
+    },
+    "dossierStateHint": {
+      "open": "كل شيء مرئي وقابل للتعديل.",
+      "services_hidden": "الخدمات مخفية؛ والباقي قابل للتعديل.",
+      "services_open": "الخدمات قابلة للتعديل؛ والباقي مقفل.",
+      "readonly": "كل شيء مرئي لكن للقراءة فقط."
+    },
     "fieldChildPlaceOfBirth": "مكان الولادة",
     "genderMale": "ذكر",
     "genderFemale": "أنثى",
@@ -1478,6 +1509,7 @@
   },
   "common": {
     "selectDate": "اختر تاريخاً",
+    "error": "خطأ",
     "save": "حفظ",
     "saved": "تم الحفظ.",
     "saving": "جاري الحفظ…",

@@ -46,6 +46,15 @@ import { DossierTabContacts } from "./_tab-contacts";
 import { DossierTabSante } from "./_tab-sante";
 import { DossierTabFinance } from "./_tab-finance";
 import { parseSante, parseFinance } from "@/lib/dossier-content";
+import {
+  fieldVisibleOnForm,
+  fieldRequiredOnForm,
+} from "@/lib/entity-fields";
+import {
+  resolveDossierState,
+  servicesHiddenInState,
+  fieldEditableInState,
+} from "@/lib/dossier-state";
 import { DossierTabValidation } from "./_tab-validation";
 
 const STATUS_TONE: Record<string, string> = {
@@ -101,6 +110,7 @@ export default async function DossierEditPage({
         select: {
           id: true,
           status: true,
+          dossierState: true,
           submittedByUserId: true,
           existingStudentId: true,
           childFirstName: true,
@@ -171,6 +181,8 @@ export default async function DossierEditPage({
             where: { id: user.tenantId },
             select: {
               inscriptionTabsConfig: true,
+              dossierStateInscription: true,
+              dossierStateRenewal: true,
               inscriptionFormConfig: true,
               name: true,
             },
@@ -225,6 +237,15 @@ export default async function DossierEditPage({
     // the other categories live on their own tabs (Scolarité/Services/…).
     const studentAnswersMap = coerceAnswers(app.studentAnswers);
     const ELEVE_CATEGORY_NAMES = ["Info générale", "Info Arabe"];
+    // Re-inscription (renewal) vs new inscription — drives per-field
+    // visibility (renewalHidden / inscriptionHidden) and the required override.
+    const isRenewal = app.existingStudentId != null;
+    const onForm = (f: (typeof studentFieldsConfig.fields)[number]) =>
+      fieldVisibleOnForm(f, { renewal: isRenewal });
+    const withReq = <F extends (typeof studentFieldsConfig.fields)[number]>(
+      f: F,
+    ): F => ({ ...f, required: fieldRequiredOnForm(f, { renewal: isRenewal }) });
+
     const eleveCats = studentFieldsConfig.categories.filter((c) =>
       ELEVE_CATEGORY_NAMES.includes(c.name),
     );
@@ -233,15 +254,16 @@ export default async function DossierEditPage({
       categories: eleveCats,
       // Exclude formHidden fields — import-/admin-only fields (Dars code,
       // register, inherited community, internal emails) don't belong on the
-      // parent form, though they stay on the fiche.
-      fields: studentFieldsConfig.fields.filter(
-        (f) => eleveCatIds.has(f.categoryId) && !f.formHidden,
-      ),
+      // parent form, though they stay on the fiche. On a re-inscription,
+      // renewalHidden fields drop out too; inscription-only ones are added.
+      fields: studentFieldsConfig.fields
+        .filter((f) => eleveCatIds.has(f.categoryId) && onForm(f))
+        .map(withReq),
     };
     // Same rule for the Responsables tab parent fields.
     const parentFormConfig = {
       ...parentFieldsConfig,
-      fields: parentFieldsConfig.fields.filter((f) => !f.formHidden),
+      fields: parentFieldsConfig.fields.filter(onForm).map(withReq),
     };
     // Prefill: studentAnswers first, then fall back to the legacy columns so
     // dossiers created before the migration still populate the form.
@@ -274,6 +296,17 @@ export default async function DossierEditPage({
               ? "Autre"
               : ""),
     };
+    // On a re-inscription, fields set to "Vide" (renewalPrefill === "blank")
+    // start empty so the parent re-enters them (answers are keyed by field id;
+    // clear key too for safety).
+    if (isRenewal) {
+      for (const f of studentFieldsConfig.fields) {
+        if (f.renewalPrefill === "blank") {
+          delete eleveInitial[f.id];
+          delete eleveInitial[f.key];
+        }
+      }
+    }
 
     // ── Autorisations tab (Dars entity-fields) ──────────────────────
     const autorisationsCats = studentFieldsConfig.categories.filter(
@@ -282,17 +315,15 @@ export default async function DossierEditPage({
     const autCatIds = new Set(autorisationsCats.map((c) => c.id));
     const autorisationsConfig = {
       categories: autorisationsCats,
-      fields: studentFieldsConfig.fields.filter(
-        (f) => autCatIds.has(f.categoryId) && !f.formHidden,
-      ),
+      fields: studentFieldsConfig.fields
+        .filter((f) => autCatIds.has(f.categoryId) && onForm(f))
+        .map(withReq),
     };
     const boolYn = (b: boolean | null | undefined) =>
       b === true ? "yes" : b === false ? "no" : "";
 
-    // Renewal: the schooling tab (établissement précédent, EBEP, examens…)
-    // is only meaningful for a brand-new pupil. Hide it for re-inscriptions so
-    // the parent isn't asked to re-fill it and it doesn't block submission.
-    const isRenewal = app.existingStudentId != null;
+    // (isRenewal computed above — drives field visibility + the schooling tab,
+    // which is only meaningful for a brand-new pupil.)
 
     // Two-parent editor rows. Real ApplicationResponsable rows if they exist;
     // otherwise synthesize prefilled rows from the family's guardians so the
@@ -382,6 +413,26 @@ export default async function DossierEditPage({
     const baseHref = `/parent/inscriptions/${app.id}/edit`;
     const editable = app.status === "DRAFT" || app.status === "SUBMITTED";
 
+    // Dossier "state" gates the Services (Transport & restauration) tab + the
+    // editability of the rest. Per-dossier override → tenant default per context.
+    const dossierState = resolveDossierState(
+      app.dossierState,
+      isRenewal ? tenant?.dossierStateRenewal : tenant?.dossierStateInscription,
+    );
+    const servicesHidden = servicesHiddenInState(dossierState);
+    const otherEditable = fieldEditableInState(dossierState, {
+      isService: false,
+      baseEditable: editable,
+    });
+    const servicesEditable = fieldEditableInState(dossierState, {
+      isService: true,
+      baseEditable: editable,
+    });
+    // Hide the Transport & restauration tab from the nav when services are hidden.
+    const visibleTabs = servicesHidden
+      ? { ...tabsConfig, transport: false }
+      : tabsConfig;
+
     // Dars-style child code = family code + next sibling index (shown so the
     // parent sees the same reference the school uses).
     const inscFamily = guardian?.family ?? null;
@@ -419,7 +470,7 @@ export default async function DossierEditPage({
             {t(statusKey as never)}
           </span>
           <DossierRemainingPill
-            visibility={tabsConfig}
+            visibility={visibleTabs}
             completed={tabsCompleted}
           />
         </div>
@@ -437,7 +488,7 @@ export default async function DossierEditPage({
         <DossierTabStrip
           baseHref={baseHref}
           current={currentTab}
-          visibility={tabsConfig}
+          visibility={visibleTabs}
           completed={tabsCompleted}
         />
 
@@ -454,17 +505,18 @@ export default async function DossierEditPage({
           {currentTab === "eleve" ? (
             <DossierTabEleve
               applicationId={app.id}
-              disabled={!editable}
+              disabled={!otherEditable}
               config={eleveConfig}
               initial={eleveInitial}
               establishments={establishmentsForRenderer}
+              renewal={isRenewal}
             />
           ) : null}
 
           {currentTab === "responsables" ? (
             <DossierResponsablesParents
               applicationId={app.id}
-              disabled={!editable}
+              disabled={!otherEditable}
               parentConfig={parentFormConfig}
               establishments={establishmentsForRenderer}
               initial={responsableRows}
@@ -474,7 +526,7 @@ export default async function DossierEditPage({
           {currentTab === "responsables" ? (
             <ResponsableFooter
               applicationId={app.id}
-              disabled={!editable}
+              disabled={!otherEditable}
               initialMonoParental={app.monoParental}
             />
           ) : null}
@@ -494,7 +546,7 @@ export default async function DossierEditPage({
             return (
               <DossierTabFoyer
                 applicationId={app.id}
-                disabled={!editable}
+                disabled={!otherEditable}
                 initial={{
                   addressCaza: fam?.addressCity ?? "",
                   addressVillage: fam?.addressHood ?? "",
@@ -535,7 +587,7 @@ export default async function DossierEditPage({
             return (
               <DossierTabScolarite
                 applicationId={app.id}
-                disabled={!editable}
+                disabled={!otherEditable}
                 initial={parseScolarite(dossier.scolarite)}
                 initialEstablishmentId={app.establishmentId ?? ""}
                 initialNiveau={app.niveau ?? ""}
@@ -564,7 +616,7 @@ export default async function DossierEditPage({
             return (
               <DossierTabAutorisations
                 applicationId={app.id}
-                disabled={!editable}
+                disabled={!otherEditable}
                 config={autorisationsConfig}
                 initial={{
                   auth_site: boolYn(fam?.imageRightsSite),
@@ -579,7 +631,7 @@ export default async function DossierEditPage({
             );
           })() : null}
 
-          {currentTab === "transport" ? (() => {
+          {currentTab === "transport" && !servicesHidden ? (() => {
             const dossier =
               app.dossierAnswers &&
               typeof app.dossierAnswers === "object"
@@ -588,7 +640,7 @@ export default async function DossierEditPage({
             return (
               <DossierTabTransport
                 applicationId={app.id}
-                disabled={!editable}
+                disabled={!servicesEditable}
                 niveau={app.niveau}
                 initial={parseTransport(dossier.transport)}
               />
@@ -598,7 +650,7 @@ export default async function DossierEditPage({
           {currentTab === "contacts" ? (
             <DossierTabContacts
               applicationId={app.id}
-              disabled={!editable}
+              disabled={!otherEditable}
               initial={app.contacts.map((c) => ({
                 id: c.id,
                 kind: c.kind,
@@ -619,7 +671,7 @@ export default async function DossierEditPage({
             return (
               <DossierTabSante
                 applicationId={app.id}
-                disabled={!editable}
+                disabled={!otherEditable}
                 initial={parseSante(dossier.sante)}
               />
             );
@@ -633,7 +685,7 @@ export default async function DossierEditPage({
             return (
               <DossierTabFinance
                 applicationId={app.id}
-                disabled={!editable}
+                disabled={!otherEditable}
                 initial={parseFinance(dossier.finance)}
               />
             );
@@ -651,7 +703,7 @@ export default async function DossierEditPage({
             return (
               <DossierTabValidation
                 applicationId={app.id}
-                disabled={!editable}
+                disabled={!otherEditable}
                 acknowledged={validation.acknowledged === true}
                 documentsListMarkdown=""
               />
@@ -674,7 +726,7 @@ export default async function DossierEditPage({
         <DossierBottomBar
           baseHref={baseHref}
           current={currentTab}
-          visibility={tabsConfig}
+          visibility={visibleTabs}
           completed={tabsCompleted}
           applicationId={editable ? app.id : undefined}
         />

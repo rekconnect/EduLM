@@ -748,6 +748,77 @@ function FieldRow({
             />
             {t("fieldsConfig.formHidden")}
           </label>
+          <label
+            className="inline-flex items-center gap-1.5 text-xs"
+            title={t("fieldsConfig.renewalHiddenHint")}
+          >
+            <input
+              type="checkbox"
+              checked={field.renewalHidden === true}
+              onChange={(e) =>
+                onUpdate({ renewalHidden: e.target.checked ? true : undefined })
+              }
+            />
+            {t("fieldsConfig.renewalHidden")}
+          </label>
+          <label
+            className="inline-flex items-center gap-1.5 text-xs"
+            title={t("fieldsConfig.inscriptionHiddenHint")}
+          >
+            <input
+              type="checkbox"
+              checked={field.inscriptionHidden === true}
+              onChange={(e) =>
+                onUpdate({
+                  inscriptionHidden: e.target.checked ? true : undefined,
+                })
+              }
+            />
+            {t("fieldsConfig.inscriptionHidden")}
+          </label>
+          <label
+            className="inline-flex items-center gap-1.5 text-xs"
+            title={t("fieldsConfig.renewalRequiredHint")}
+          >
+            <input
+              type="checkbox"
+              checked={field.renewalRequired === true}
+              onChange={(e) =>
+                onUpdate({
+                  renewalRequired: e.target.checked ? true : undefined,
+                })
+              }
+            />
+            {t("fieldsConfig.renewalRequired")}
+          </label>
+          <label
+            className="inline-flex items-center gap-1.5 text-xs"
+            title={t("fieldsConfig.renewalPrefillHint")}
+          >
+            {t("fieldsConfig.renewalPrefill")}
+            <Select
+              value={field.renewalPrefill ?? "prefill"}
+              onChange={(e) =>
+                onUpdate({
+                  renewalPrefill:
+                    e.target.value === "prefill"
+                      ? undefined
+                      : (e.target.value as "blank" | "locked"),
+                })
+              }
+              className="h-7 w-40 py-0 text-xs"
+            >
+              <option value="prefill">
+                {t("fieldsConfig.renewalPrefillDefault")}
+              </option>
+              <option value="blank">
+                {t("fieldsConfig.renewalPrefillBlank")}
+              </option>
+              <option value="locked">
+                {t("fieldsConfig.renewalPrefillLocked")}
+              </option>
+            </Select>
+          </label>
         </div>
         <div className="flex items-end gap-1 pb-1">
           <button

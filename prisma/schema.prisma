@@ -90,6 +90,13 @@ model Tenant {
   // justificatifs: bool, validation: bool }. Defaults applied in code so
   // tenants pre-dating this column still see the right tabs.
   inscriptionTabsConfig    Json @default("{}")
+  // Default dossier "state" a new/renewal dossier starts in, controlling the
+  // Services category + editability. One of: "open" (all editable),
+  // "services_hidden" (Services hidden, rest editable), "services_open"
+  // (Services editable, everything else read-only), "readonly" (all visible,
+  // none editable). Per-dossier override lives on Application.dossierState.
+  dossierStateInscription String @default("open")
+  dossierStateRenewal     String @default("services_hidden")
   // Per-tenant overrides for the 10-tab inscription dossier's HARDCODED
   // fields — label per locale, required toggle, hidden toggle. Sparse:
   // only diverging keys are stored, resetting a field deletes its key
@@ -816,6 +823,10 @@ model Application {
   cycleId           String
   submittedByUserId String
   status            ApplicationStatus @default(DRAFT)
+  // Per-dossier override of the services/editability state. Null ⇒ inherit the
+  // tenant default for this context (dossierStateInscription / -Renewal).
+  // One of: "open" | "services_hidden" | "services_open" | "readonly".
+  dossierState      String?
 
   // Child identity (Step 1)
   childFirstName    String

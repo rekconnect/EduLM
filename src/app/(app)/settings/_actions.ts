@@ -302,6 +302,43 @@ export async function updateFamilyCodeSettings(
   return { ok: true };
 }
 
+// ── Dossier-state defaults (services gate) per context ──────────
+
+export async function loadDossierStateDefaults(): Promise<{
+  inscription: string;
+  renewal: string;
+}> {
+  const user = await requireUser();
+  if (!user.tenantId) return { inscription: "open", renewal: "services_hidden" };
+  const t = await unscopedDb().tenant.findUnique({
+    where: { id: user.tenantId },
+    select: { dossierStateInscription: true, dossierStateRenewal: true },
+  });
+  return {
+    inscription: t?.dossierStateInscription ?? "open",
+    renewal: t?.dossierStateRenewal ?? "services_hidden",
+  };
+}
+
+export async function updateDossierStateDefaults(
+  formData: FormData,
+): Promise<SettingsResult> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  if (!user.tenantId) return { ok: false, error: "no-tenant" };
+  const { DOSSIER_STATES } = await import("@/lib/dossier-state");
+  const norm = (v: string, fb: string) =>
+    (DOSSIER_STATES as readonly string[]).includes(v) ? v : fb;
+  await unscopedDb().tenant.update({
+    where: { id: user.tenantId },
+    data: {
+      dossierStateInscription: norm(String(formData.get("inscription") ?? ""), "open"),
+      dossierStateRenewal: norm(String(formData.get("renewal") ?? ""), "services_hidden"),
+    },
+  });
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
 // ─── Parent / Student field configs (Round 5) ─────────────────
 
 import {
@@ -402,6 +439,10 @@ const fieldSchema = z.object({
   familyBoundTo: z.enum(FAMILY_BOUND_PROPS).optional(),
   // Hide from the inscription form, keep on the fiche.
   formHidden: z.boolean().optional(),
+  renewalHidden: z.boolean().optional(),
+  inscriptionHidden: z.boolean().optional(),
+  renewalRequired: z.boolean().optional(),
+  renewalPrefill: z.enum(["blank", "locked"]).optional(),
   active: z.boolean().optional(),
 });
 

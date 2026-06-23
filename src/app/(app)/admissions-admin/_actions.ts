@@ -10,6 +10,32 @@ import { decimalStringToCents } from "@/lib/money";
 import { sendApplicationDecidedEmail } from "@/lib/emails/notifications";
 import { linkStudentToGuardianFamily } from "@/lib/family";
 import { applyDossierToStudent } from "./_apply-dossier";
+import { DOSSIER_STATES } from "@/lib/dossier-state";
+
+// ── Dossier state (services gate + editability) ─────────────
+
+/**
+ * Set a dossier's state override (open / services_hidden / services_open /
+ * readonly). Controls the Services tab visibility + editability on the parent
+ * form. Null-equivalent values fall back to the tenant default for the context.
+ */
+export async function setDossierState(
+  applicationId: string,
+  state: string,
+): Promise<{ ok: boolean }> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false };
+  if (!(DOSSIER_STATES as readonly string[]).includes(state)) return { ok: false };
+  await runWithTenant({ tenantId, slug: null }, async () => {
+    await db.application.update({
+      where: { id: applicationId },
+      data: { dossierState: state },
+    });
+  });
+  revalidatePath(`/admissions-admin/${applicationId}`);
+  return { ok: true };
+}
 
 // ── Admission cycle CRUD ────────────────────────────────────
 

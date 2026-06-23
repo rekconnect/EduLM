@@ -77,7 +77,7 @@ export function studentCreateDefaultLabel(
     case "gender":
       return tAdm("fieldChildGender");
     case "nationality":
-      return tAdm("fieldChildNationality");
+      return tAdm("fieldChildNationality1");
     case "nationality2":
       return tAdm("fieldChildNationality2");
     case "placeOfBirth":

@@ -21,6 +21,8 @@ import { cn } from "@/lib/utils";
 import { parseFieldConfig } from "@/lib/admission-fields";
 import { parseEntityFieldsConfig } from "@/lib/entity-fields";
 import { buildKidCode, nextKidIndex } from "@/lib/student-code";
+import { resolveDossierState } from "@/lib/dossier-state";
+import { DossierStateSelect } from "./_dossier-state-select";
 import {
   parseScolarite,
   parseTransport,
@@ -249,6 +251,8 @@ export default async function AdmissionsAdminDetailPage({
       select: {
         parentFieldsConfig: true,
         inscriptionTabsConfig: true,
+        dossierStateInscription: true,
+        dossierStateRenewal: true,
       },
     });
     const tabsConfig = parseTabsConfig(tenant?.inscriptionTabsConfig);
@@ -354,6 +358,13 @@ export default async function AdmissionsAdminDetailPage({
           ),
         )
       : null;
+    // Effective dossier state (services gate + editability) for the selector.
+    const effectiveDossierState = resolveDossierState(
+      app.dossierState,
+      app.existingStudentId != null
+        ? tenant?.dossierStateRenewal
+        : tenant?.dossierStateInscription,
+    );
     const foyer: FoyerData = {
       addressCaza: family?.addressCity ?? "",
       addressVillage: family?.addressHood ?? "",
@@ -512,6 +523,12 @@ export default async function AdmissionsAdminDetailPage({
                 </WarningBanner>
               ) : null}
               <DecideForm applicationId={app.id} classes={classes} />
+              <div className="mt-4 border-t border-[color:var(--color-border-subtle)] pt-4">
+                <DossierStateSelect
+                  applicationId={app.id}
+                  current={effectiveDossierState}
+                />
+              </div>
             </CardBody>
           </Card>
         ) : (
@@ -555,6 +572,7 @@ export default async function AdmissionsAdminDetailPage({
             <SectionLabel>État civil</SectionLabel>
             <dl>
               {prospectiveCode ? <Row label="Code élève" value={prospectiveCode} /> : null}
+              {family?.code ? <Row label="Code famille" value={family.code} /> : null}
               <Row label="Nom" value={app.childLastName} />
               <Row label="Prénom" value={app.childFirstName} />
               <Row

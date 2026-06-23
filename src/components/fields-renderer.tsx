@@ -152,6 +152,8 @@ export function FieldsRenderer({
   extras,
   disabled = false,
   unlockBound = false,
+  renewal = false,
+  editableOnlyCategoryId,
   onEditField,
   onEditCategory,
 }: {
@@ -160,6 +162,17 @@ export function FieldsRenderer({
   onChange: (fieldId: string, value: string) => void;
   extras?: FieldExtras;
   disabled?: boolean;
+  /**
+   * Re-inscription context. When true, fields whose `renewalPrefill` is
+   * "locked" render read-only (pre-filled but not editable by the parent).
+   */
+  renewal?: boolean;
+  /**
+   * When set, ONLY fields in this category stay editable; every other field is
+   * read-only. Used by the dossier "services_open" state (Services editable,
+   * the rest of the dossier locked).
+   */
+  editableOnlyCategoryId?: string;
   /**
    * When true, fields mirrored from a canonical column (guardian / family /
    * dossier) stay EDITABLE instead of being force-locked. Used by the parent
@@ -238,7 +251,7 @@ export function FieldsRenderer({
                         onChange={(v) => onChange(f.id, v)}
                         extras={extras}
                         allAnswers={answers}
-                        disabled={disabled}
+                        disabled={disabled || (renewal && f.renewalPrefill === "locked") || (!!editableOnlyCategoryId && f.categoryId !== editableOnlyCategoryId)}
                         unlockBound={unlockBound}
                       />
                     </div>
@@ -251,7 +264,7 @@ export function FieldsRenderer({
                     onChange={(v) => onChange(f.id, v)}
                     extras={extras}
                     allAnswers={answers}
-                    disabled={disabled}
+                    disabled={disabled || (renewal && f.renewalPrefill === "locked") || (!!editableOnlyCategoryId && f.categoryId !== editableOnlyCategoryId)}
                     unlockBound={unlockBound}
                   />
                 ),

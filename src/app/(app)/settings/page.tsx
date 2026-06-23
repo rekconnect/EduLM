@@ -28,11 +28,13 @@ import { EmailDefaultsForm } from "./_email";
 import { FamilyCodeForm } from "./_family-code";
 import { EstablishmentsForm, type EstablishmentRow } from "./_establishments";
 import { FieldsEditorTabs } from "./_fields-editor-tabs";
+import { DossierStateDefaultsForm } from "./_dossier-state-defaults";
 import {
   listEstablishments,
   loadEntityFieldsConfig,
   loadParentCreateConfig,
   loadStudentCreateConfig,
+  loadDossierStateDefaults,
   loadTenantSettings,
 } from "./_actions";
 
@@ -110,6 +112,7 @@ export default async function SettingsPage({
     studentFields,
     parentCreateConfig,
     studentCreateConfig,
+    dossierStateDefaults,
   ] = await Promise.all([
     needsTenant ? loadTenantSettings() : Promise.resolve(null),
     needsEstablishments
@@ -123,6 +126,9 @@ export default async function SettingsPage({
       : Promise.resolve({ categories: [], fields: [] }),
     needsParentCreate ? loadParentCreateConfig() : Promise.resolve(null),
     needsParentCreate ? loadStudentCreateConfig() : Promise.resolve(null),
+    needsParentCreate
+      ? loadDossierStateDefaults()
+      : Promise.resolve({ inscription: "open", renewal: "services_hidden" }),
   ]);
 
   const visibleCategories: Category[] = isAdmin ? [...CATEGORIES] : ["appearance"];
@@ -287,6 +293,13 @@ export default async function SettingsPage({
                   parentCreateInitial={parentCreateConfig}
                   studentCreateInitial={studentCreateConfig}
                 />
+              </SettingsSection>
+              <SettingsSection
+                icon={Users}
+                title={t("dossierDefaults.title")}
+                description={t("dossierDefaults.description")}
+              >
+                <DossierStateDefaultsForm initial={dossierStateDefaults} />
               </SettingsSection>
             </>
           ) : null}

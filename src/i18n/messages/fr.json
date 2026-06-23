@@ -123,6 +123,12 @@
       "title": "Champs du formulaire",
       "description": "Configurez les champs de l'inscription par onglet — comme le formulaire que voit le parent."
     },
+    "dossierDefaults": {
+      "title": "Services & état du dossier",
+      "description": "État de départ d'un dossier (services masqués/ouverts, lecture seule), par contexte. Vous pouvez le modifier dossier par dossier depuis l'admission.",
+      "inscription": "Nouvelle inscription",
+      "renewal": "Ré-inscription"
+    },
     "parentFields": {
       "title": "Champs des parents",
       "description": "Définissez les catégories et les champs personnalisés du profil parent. Ils apparaissent dans le formulaire d'inscription puis sur la fiche du parent."
@@ -260,6 +266,17 @@
       "activeHint": "Décochez pour cacher complètement ce champ (parents et admins). Le champ n'est plus obligatoire dans ce cas.",
       "formHidden": "Fiche seulement",
       "formHiddenHint": "Cochez pour masquer ce champ du formulaire d'inscription parent, tout en le gardant visible sur la fiche (ex. code Dars, n° de registre, communauté héritée du père).",
+      "renewalHidden": "Masquer en ré-inscription",
+      "renewalHiddenHint": "Masque ce champ lors d'une ré-inscription (il reste affiché en nouvelle inscription).",
+      "inscriptionHidden": "Ré-inscription uniquement",
+      "inscriptionHiddenHint": "Affiche ce champ uniquement en ré-inscription, pas en nouvelle inscription.",
+      "renewalRequired": "Obligatoire en ré-inscription",
+      "renewalRequiredHint": "Rend ce champ obligatoire lors d'une ré-inscription.",
+      "renewalPrefill": "Pré-remplissage (ré-insc.)",
+      "renewalPrefillHint": "Comportement de ce champ lors d'une ré-inscription.",
+      "renewalPrefillDefault": "Pré-rempli, modifiable",
+      "renewalPrefillBlank": "Vide (à re-remplir)",
+      "renewalPrefillLocked": "Pré-rempli, verrouillé",
       "moveToCategory": "Catégorie",
       "moveToCategoryHint": "Déplacer ce champ vers une autre catégorie. Il est placé à la fin de la catégorie choisie.",
       "previewTitle": "Aperçu du formulaire",
@@ -999,7 +1016,21 @@
     "fieldChildDob": "Date de naissance",
     "fieldChildGender": "Sexe",
     "fieldChildNationality": "Nationalité",
+    "fieldChildNationality1": "Nationalité 1",
     "fieldChildNationality2": "Nationalité 2",
+    "dossierStateLabel": "État du dossier",
+    "dossierState": {
+      "open": "Ouvert",
+      "services_hidden": "Services masqués",
+      "services_open": "Services ouverts (reste verrouillé)",
+      "readonly": "Consultation (lecture seule)"
+    },
+    "dossierStateHint": {
+      "open": "Tout est visible et modifiable.",
+      "services_hidden": "Les services sont masqués ; le reste est modifiable.",
+      "services_open": "Les services sont modifiables ; le reste est verrouillé.",
+      "readonly": "Tout est visible mais en lecture seule."
+    },
     "fieldChildPlaceOfBirth": "Lieu de naissance",
     "genderMale": "Masculin",
     "genderFemale": "Féminin",
@@ -1478,6 +1509,7 @@
   },
   "common": {
     "selectDate": "Sélectionner une date",
+    "error": "Erreur",
     "save": "Enregistrer",
     "saved": "Enregistré.",
     "saving": "Enregistrement…",

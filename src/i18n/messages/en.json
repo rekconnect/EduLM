@@ -190,6 +190,12 @@
       "title": "Form fields",
       "description": "Configure the inscription fields by tab — like the form the parent sees."
     },
+    "dossierDefaults": {
+      "title": "Services & dossier state",
+      "description": "Starting state of a dossier (services hidden/open, read-only), per context. You can change it per dossier from the admission review.",
+      "inscription": "New inscription",
+      "renewal": "Re-inscription"
+    },
     "parentFields": {
       "title": "Parent fields",
       "description": "Define categories and custom fields for the parent profile. They appear in the inscription form and on the parent record."
@@ -260,6 +266,17 @@
       "activeHint": "Uncheck to fully hide this field (parents and admins). The field is no longer required when inactive.",
       "formHidden": "Fiche only",
       "formHiddenHint": "Check to hide this field from the parent inscription form while keeping it on the fiche (e.g. Dars code, register number, community inherited from the father).",
+      "renewalHidden": "Hide on re-inscription",
+      "renewalHiddenHint": "Hides this field on a re-inscription (still shown on a new inscription).",
+      "inscriptionHidden": "Re-inscription only",
+      "inscriptionHiddenHint": "Shows this field only on a re-inscription, not on a new inscription.",
+      "renewalRequired": "Required on re-inscription",
+      "renewalRequiredHint": "Makes this field required during a re-inscription.",
+      "renewalPrefill": "Pre-fill (re-insc.)",
+      "renewalPrefillHint": "How this field behaves during a re-inscription.",
+      "renewalPrefillDefault": "Pre-filled, editable",
+      "renewalPrefillBlank": "Blank (re-enter)",
+      "renewalPrefillLocked": "Pre-filled, locked",
       "moveToCategory": "Category",
       "moveToCategoryHint": "Move this field to another category. It is placed at the end of the chosen category.",
       "previewTitle": "Form preview",
@@ -999,7 +1016,21 @@
     "fieldChildDob": "Date of birth",
     "fieldChildGender": "Gender",
     "fieldChildNationality": "Nationality",
+    "fieldChildNationality1": "Nationality 1",
     "fieldChildNationality2": "Nationality 2",
+    "dossierStateLabel": "Dossier state",
+    "dossierState": {
+      "open": "Open",
+      "services_hidden": "Services hidden",
+      "services_open": "Services open (rest locked)",
+      "readonly": "Read-only (consultation)"
+    },
+    "dossierStateHint": {
+      "open": "Everything visible and editable.",
+      "services_hidden": "Services hidden; the rest is editable.",
+      "services_open": "Services editable; the rest is locked.",
+      "readonly": "Everything visible but read-only."
+    },
     "fieldChildPlaceOfBirth": "Place of birth",
     "genderMale": "Male",
     "genderFemale": "Female",
@@ -1478,6 +1509,7 @@
   },
   "common": {
     "selectDate": "Select a date",
+    "error": "Error",
     "save": "Save",
     "saved": "Saved.",
     "saving": "Saving…",

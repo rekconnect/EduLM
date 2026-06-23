@@ -23,12 +23,15 @@ export function DossierTabEleve({
   initial,
   establishments,
   disabled,
+  renewal = false,
 }: {
   applicationId: string;
   config: EntityFieldsConfig;
   initial: FieldAnswers;
   establishments: Array<{ id: string; name: string; levels?: string[] }>;
   disabled: boolean;
+  /** Re-inscription: locks fields whose renewalPrefill is "locked". */
+  renewal?: boolean;
 }) {
   const [answers, setAnswers] = useState<FieldAnswers>(initial);
   const [pending, start] = useTransition();
@@ -51,6 +54,7 @@ export function DossierTabEleve({
           extras={{ establishments }}
           disabled={disabled}
           unlockBound
+          renewal={renewal}
           onChange={(id, value) => setAnswers((p) => ({ ...p, [id]: value }))}
         />
 

@@ -7,7 +7,53 @@
  * never collide on the unique `(tenantId, code)` constraint.
  */
 
+import type { Prisma } from "@prisma/client";
 import { unscopedDb } from "@/lib/db";
+import {
+  buildKidCode,
+  nextKidIndex,
+  readKidCode,
+  withKidCode,
+} from "@/lib/student-code";
+
+/**
+ * Assign a Dars-style child code (familyCode + 1-based sibling index) into the
+ * student's customAnswers, unless it already has one. Idempotent and safe to
+ * call after a student is placed in a family. Returns the resulting code.
+ */
+export async function assignKidCode(studentId: string): Promise<string | null> {
+  const u = unscopedDb();
+  const student = await u.student.findUnique({
+    where: { id: studentId },
+    select: {
+      customAnswers: true,
+      familyId: true,
+      family: { select: { code: true } },
+    },
+  });
+  if (!student) return null;
+  const existing = readKidCode(student.customAnswers);
+  if (existing) return existing; // never overwrite (imported or prior)
+  if (!student.familyId || !student.family) return null;
+  const siblings = await u.student.findMany({
+    where: { familyId: student.familyId, NOT: { id: studentId } },
+    select: { customAnswers: true },
+  });
+  const code = buildKidCode(
+    student.family.code,
+    nextKidIndex(student.family.code, siblings),
+  );
+  await u.student.update({
+    where: { id: studentId },
+    data: {
+      customAnswers: withKidCode(
+        student.customAnswers,
+        code,
+      ) as Prisma.InputJsonValue,
+    },
+  });
+  return code;
+}
 
 /**
  * Format a sequence number into the tenant's configured code shape.
@@ -93,6 +139,9 @@ export async function ensureFamilyForGuardian(
       }),
     ),
   ]);
+  // Assign each newly-attached child its Dars-style code (sequentially so each
+  // sees the previous one's index).
+  for (const cl of guardian.childLinks) await assignKidCode(cl.studentId);
   return family;
 }
 
@@ -110,5 +159,6 @@ export async function linkStudentToGuardianFamily(
     where: { id: studentId },
     data: { familyId: family.id },
   });
+  await assignKidCode(studentId);
   return family;
 }

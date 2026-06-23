@@ -31,6 +31,7 @@ import { CancelApplicationDialog } from "./_cancel-dialog";
 import { DossierTabFoyer } from "./_tab-foyer";
 import { DossierResponsablesParents } from "./_tab-responsables-parents";
 import { relKindOf, guardianToParentAnswers } from "@/lib/guardian-prefill";
+import { buildKidCode, nextKidIndex } from "@/lib/student-code";
 import { DossierTabAutorisations } from "./_tab-autorisations";
 import { DossierTabScolarite } from "./_tab-scolarite";
 import { DossierTabTransport } from "./_tab-transport";
@@ -180,6 +181,7 @@ export default async function DossierEditPage({
         select: {
           family: {
             select: {
+              code: true,
               addressStreet: true,
               addressHood: true,
               addressCity: true,
@@ -187,6 +189,7 @@ export default async function DossierEditPage({
               imageRightsBook: true,
               imageRightsSocial: true,
               imageRightsRadio: true,
+              students: { select: { customAnswers: true } },
             },
           },
         },
@@ -379,11 +382,21 @@ export default async function DossierEditPage({
     const baseHref = `/parent/inscriptions/${app.id}/edit`;
     const editable = app.status === "DRAFT" || app.status === "SUBMITTED";
 
+    // Dars-style child code = family code + next sibling index (shown so the
+    // parent sees the same reference the school uses).
+    const inscFamily = guardian?.family ?? null;
+    const kidCode = inscFamily?.code
+      ? buildKidCode(
+          inscFamily.code,
+          nextKidIndex(inscFamily.code, inscFamily.students),
+        )
+      : null;
+
     return (
       <main className="mx-auto max-w-5xl space-y-6 px-6 py-10">
         <PageHeader
           title={`${app.childLastName} ${app.childFirstName}`.trim()}
-          description={`${app.cycle.label} · ${app.cycle.targetYearLabel}`}
+          description={`${kidCode ? `Code ${kidCode} · ` : ""}${app.cycle.label} · ${app.cycle.targetYearLabel}`}
           action={
             <Link
               href="/parent/dashboard"

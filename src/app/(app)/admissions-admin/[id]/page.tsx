@@ -20,6 +20,7 @@ import { runWithTenant } from "@/lib/tenant-context";
 import { cn } from "@/lib/utils";
 import { parseFieldConfig } from "@/lib/admission-fields";
 import { parseEntityFieldsConfig } from "@/lib/entity-fields";
+import { buildKidCode, nextKidIndex } from "@/lib/student-code";
 import {
   parseScolarite,
   parseTransport,
@@ -209,6 +210,7 @@ export default async function AdmissionsAdminDetailPage({
               select: {
                 family: {
                   select: {
+                    code: true,
                     addressStreet: true,
                     addressHood: true,
                     addressCity: true,
@@ -221,7 +223,12 @@ export default async function AdmissionsAdminDetailPage({
                 childLinks: {
                   select: {
                     student: {
-                      select: { id: true, firstName: true, lastName: true },
+                      select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        customAnswers: true,
+                      },
                     },
                   },
                 },
@@ -333,6 +340,20 @@ export default async function AdmissionsAdminDetailPage({
     // Foyer data — address lives on Family (linked via Guardian), the
     // sub-fields (building/floor/details/notes) live in dossierAnswers.
     const family = app.submittedBy.guardianProfile?.family ?? null;
+    // Dars-style child code this application will receive: family code + the
+    // next free sibling index. Null until the family has a code (assigned on
+    // acceptance for brand-new families).
+    const prospectiveCode = family?.code
+      ? buildKidCode(
+          family.code,
+          nextKidIndex(
+            family.code,
+            existingChildren.map((cl) => ({
+              customAnswers: cl.student.customAnswers,
+            })),
+          ),
+        )
+      : null;
     const foyer: FoyerData = {
       addressCaza: family?.addressCity ?? "",
       addressVillage: family?.addressHood ?? "",
@@ -364,7 +385,7 @@ export default async function AdmissionsAdminDetailPage({
       <main className="mx-auto max-w-4xl space-y-6 px-6 py-10">
         <PageHeader
           title={`${app.childLastName} ${app.childFirstName}`}
-          description={`${app.cycle.label} · ${app.cycle.targetYearLabel}`}
+          description={`${prospectiveCode ? `Code ${prospectiveCode} · ` : ""}${app.cycle.label} · ${app.cycle.targetYearLabel}`}
           action={
             <Link
               href="/admissions-admin"
@@ -533,6 +554,7 @@ export default async function AdmissionsAdminDetailPage({
           <CardBody>
             <SectionLabel>État civil</SectionLabel>
             <dl>
+              {prospectiveCode ? <Row label="Code élève" value={prospectiveCode} /> : null}
               <Row label="Nom" value={app.childLastName} />
               <Row label="Prénom" value={app.childFirstName} />
               <Row

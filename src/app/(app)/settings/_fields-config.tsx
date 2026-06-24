@@ -51,6 +51,14 @@ type Props = {
   /** Parent fields (key + label) — feeds the student "inherit from father"
    *  picker. Only passed for the student editor. */
   parentFieldOptions?: { key: string; label: string }[];
+  /** When set, only categories with these names are shown (preview + list +
+   *  quick-add). Lets the parent-tab layout scope one entity's editor to the
+   *  categories that land on a given parent tab. The full config is still
+   *  saved — this only filters the rendered view. */
+  visibleCategoryNames?: string[];
+  /** Optional banner rendered above the editor (e.g. "parent shows a hardcoded
+   *  version of this tab"). */
+  notice?: React.ReactNode;
 };
 
 /** Tiny stable id generator — sufficient for client-side ids. */
@@ -58,7 +66,13 @@ function newId(): string {
   return Math.random().toString(36).slice(2, 12);
 }
 
-export function FieldsConfigForm({ entity, initial, parentFieldOptions }: Props) {
+export function FieldsConfigForm({
+  entity,
+  initial,
+  parentFieldOptions,
+  visibleCategoryNames,
+  notice,
+}: Props) {
   const t = useTranslations("settings");
   const tCommon = useTranslations("common");
   const [pending, startTransition] = useTransition();
@@ -263,7 +277,24 @@ export function FieldsConfigForm({ entity, initial, parentFieldOptions }: Props)
   // Render the exact same FieldsRenderer the parent form uses, off the
   // in-progress config, so editing and the real form stay identical. Clicking
   // a field jumps to its settings row in the editor.
-  const previewConfig: EntityFieldsConfig = { categories, fields };
+  // Category scoping for the parent-tab layout: when visibleCategoryNames is
+  // given, the editor renders only those categories (preview + list + quick-add)
+  // while still holding/saving the full config in state.
+  const visibleCatSet =
+    visibleCategoryNames && visibleCategoryNames.length
+      ? new Set(visibleCategoryNames)
+      : null;
+  const shownCategories = visibleCatSet
+    ? categories.filter((c) => visibleCatSet.has(c.name))
+    : categories;
+  const shownCatIds = new Set(shownCategories.map((c) => c.id));
+  const shownFields = visibleCatSet
+    ? fields.filter((f) => shownCatIds.has(f.categoryId))
+    : fields;
+  const previewConfig: EntityFieldsConfig = {
+    categories: shownCategories,
+    fields: shownFields,
+  };
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, string>>(
     {},
   );
@@ -305,6 +336,7 @@ export function FieldsConfigForm({ entity, initial, parentFieldOptions }: Props)
 
   return (
     <div className="space-y-4">
+      {notice}
       {/* Mode toolbar — Formulaire (WYSIWYG) vs Liste, + add category + save. */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-sunken)] p-0.5 text-xs">
@@ -325,14 +357,16 @@ export function FieldsConfigForm({ entity, initial, parentFieldOptions }: Props)
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={addCategory}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-[color:var(--color-brand-600)] transition-colors hover:text-[color:var(--color-brand-700)]"
-          >
-            <Plus className="size-4" aria-hidden />
-            {t("fieldsConfig.addCategory")}
-          </button>
+          {!visibleCatSet ? (
+            <button
+              type="button"
+              onClick={addCategory}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-[color:var(--color-brand-600)] transition-colors hover:text-[color:var(--color-brand-700)]"
+            >
+              <Plus className="size-4" aria-hidden />
+              {t("fieldsConfig.addCategory")}
+            </button>
+          ) : null}
           <Button type="button" onClick={onSubmit} disabled={pending} className="gap-2">
             {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
             {pending ? tCommon("loading") : tCommon("save")}
@@ -343,7 +377,7 @@ export function FieldsConfigForm({ entity, initial, parentFieldOptions }: Props)
       {mode === "form" ? (
         /* ── Formulaire (WYSIWYG): the editor IS the live form. ── */
         <div className="rounded-lg border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] p-5 shadow-card">
-          {fields.length === 0 ? (
+          {shownFields.length === 0 ? (
             <p className="text-sm text-[color:var(--color-foreground-muted)]">
               {t("fieldsConfig.previewEmpty")}
             </p>
@@ -367,7 +401,7 @@ export function FieldsConfigForm({ entity, initial, parentFieldOptions }: Props)
           )}
           {/* Quick add a field into any category. */}
           <div className="mt-5 flex flex-wrap gap-2 border-t border-[color:var(--color-border-subtle)] pt-4">
-            {categories
+            {shownCategories
               .filter((c) => c.active)
               .map((c) => (
                 <button
@@ -384,13 +418,13 @@ export function FieldsConfigForm({ entity, initial, parentFieldOptions }: Props)
         </div>
       ) : (
       <div className="space-y-4">
-      {categories.length === 0 ? (
+      {shownCategories.length === 0 ? (
         <div className="rounded-md border border-dashed border-[color:var(--color-border-strong)] px-4 py-6 text-center text-sm text-[color:var(--color-foreground-muted)]">
           {t("fieldsConfig.noCategories")}
         </div>
       ) : (
         <ul className="space-y-2">
-          {categories.map((cat, idx) => {
+          {shownCategories.map((cat, idx) => {
             const isOpen = openCats.has(cat.id);
             const catFields = fieldsByCat.get(cat.id) ?? [];
             return (
@@ -687,6 +721,13 @@ function FieldRow({
       id={`field-row-${field.id}`}
       className="scroll-mt-4 rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] p-3"
     >
+      {field.formHidden ? (
+        <div className="mb-2">
+          <span className="inline-flex items-center rounded-full border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-sunken)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[color:var(--color-foreground-muted)]">
+            {t("fieldsConfig.adminOnlyBadge")}
+          </span>
+        </div>
+      ) : null}
       <div className="grid gap-2 sm:grid-cols-[1fr_140px_auto_auto]">
         <Field label={t("fieldsConfig.label")} htmlFor={`label-${field.id}`}>
           <Input

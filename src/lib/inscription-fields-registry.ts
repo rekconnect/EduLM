@@ -442,7 +442,14 @@ export const INSCRIPTION_FIELDS_REGISTRY = {
     defaultRequired: false,
   },
 
-  // Section: Autorisation de prise de vue / publication
+  // Section: Autorisation de prise de vue / publication.
+  // These four consents were MOVED out of Foyer and render on the AUTORISATIONS
+  // tab (System-A auth_* fields). `tab` stays "foyer" (this self-contained
+  // DossierTab union has no "autorisations", and the keys deliberately keep the
+  // `foyer.imageRights.*` prefix so existing WYSIWYG overrides +
+  // evaluateAutorisationsComplete keep resolving by key). The unified /settings
+  // editor therefore excludes this section from the Foyer tab — see
+  // loadInscriptionRegistry in settings/_actions.ts.
   "foyer.imageRights.site": {
     tab: "foyer",
     section: "imageRights",

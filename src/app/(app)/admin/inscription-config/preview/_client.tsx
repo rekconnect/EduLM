@@ -7,15 +7,10 @@ import { TenantConfigProvider } from "@/components/dossier/tenant-config-context
 import { PreviewEditModeProvider } from "@/components/dossier/preview-edit-mode-context";
 import { FieldEditDrawer } from "@/components/dossier/field-edit-drawer";
 import { FirstTimeBanner } from "./_first-time-banner";
-import { DossierTabFoyer } from "@/app/(app)/parent/inscriptions/[id]/edit/_tab-foyer";
 import { DossierTabScolarite } from "@/app/(app)/parent/inscriptions/[id]/edit/_tab-scolarite";
-import { DossierTabTransport } from "@/app/(app)/parent/inscriptions/[id]/edit/_tab-transport";
-import { DossierTabContacts } from "@/app/(app)/parent/inscriptions/[id]/edit/_tab-contacts";
-import { DossierTabSante } from "@/app/(app)/parent/inscriptions/[id]/edit/_tab-sante";
 import { DossierTabFinance } from "@/app/(app)/parent/inscriptions/[id]/edit/_tab-finance";
 import { DossierTabValidation } from "@/app/(app)/parent/inscriptions/[id]/edit/_tab-validation";
 import {
-  defaultSante,
   defaultFinance,
 } from "@/lib/dossier-content";
 import { defaultPedagogique } from "@/lib/pedagogique";
@@ -52,20 +47,6 @@ const TAB_LABELS: Record<PreviewTabKey, string> = {
 // preview shows the Pédagogique Terminale block (the richest one).
 // Admin can change the niveau interactively to see other groups.
 
-const MOCK_FOYER = {
-  addressCaza: "Baabda",
-  addressVillage: "Hazmieh",
-  addressStreet: "Rue Saint-Joseph 12",
-  addressBuilding: "Immeuble Cèdres",
-  addressFloor: "3",
-  addressDetails: "Digicode 0142",
-  addressNotes: "",
-  imageRightsSite: true as boolean | null,
-  imageRightsBook: true as boolean | null,
-  imageRightsSocial: false as boolean | null,
-  imageRightsRadio: false as boolean | null,
-  siblings: [],
-};
 const MOCK_SCOLARITE = {
   previousSchool: "Lycée Abdel Kader",
   previousClass: "1ère S",
@@ -97,20 +78,6 @@ const MOCK_SCOLARITE = {
   dispenseLibanais: "non" as const,
   entryDate: "2026-09-01",
   section: "",
-};
-const MOCK_TRANSPORT = {
-  modeAller: "bus" as const,
-  modeRetour: "bus" as const,
-  hasAlternateAddress: false,
-  altCaza: "",
-  altVillage: "",
-  altStreet: "",
-  altBuilding: "",
-  altFloor: "",
-  altDetails: "",
-  altNotes: "",
-  collation: true as boolean | null,
-  cantine: true as boolean | null,
 };
 
 export function PreviewClient({
@@ -174,12 +141,7 @@ export function PreviewClient({
           ) : null}
 
           {active === "foyer" ? (
-            <DossierTabFoyer
-              applicationId="preview"
-              initial={MOCK_FOYER}
-              disabled={false}
-              editMode
-            />
+            <MigratedTabNotice tab="Foyer" where="Champs élève" />
           ) : null}
 
           {active === "scolarite" ? (
@@ -198,31 +160,15 @@ export function PreviewClient({
           ) : null}
 
           {active === "transport" ? (
-            <DossierTabTransport
-              applicationId="preview"
-              initial={MOCK_TRANSPORT}
-              disabled={false}
-              niveau="Tle"
-              editMode
-            />
+            <MigratedTabNotice tab="Transport & restauration" where="Champs élève" />
           ) : null}
 
           {active === "contacts" ? (
-            <DossierTabContacts
-              applicationId="preview"
-              initial={[]}
-              disabled={false}
-              editMode
-            />
+            <MigratedTabNotice tab="Autres contacts" where="Champs élève" />
           ) : null}
 
           {active === "sante" ? (
-            <DossierTabSante
-              applicationId="preview"
-              initial={defaultSante()}
-              disabled={false}
-              editMode
-            />
+            <MigratedTabNotice tab="Santé" where="Champs élève" />
           ) : null}
 
           {active === "finance" ? (

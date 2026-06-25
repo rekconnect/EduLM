@@ -35,6 +35,7 @@ import {
   loadParentCreateConfig,
   loadStudentCreateConfig,
   loadDossierStateDefaults,
+  loadInscriptionRegistry,
   loadTenantSettings,
 } from "./_actions";
 
@@ -113,6 +114,7 @@ export default async function SettingsPage({
     parentCreateConfig,
     studentCreateConfig,
     dossierStateDefaults,
+    inscriptionRegistry,
   ] = await Promise.all([
     needsTenant ? loadTenantSettings() : Promise.resolve(null),
     needsEstablishments
@@ -129,6 +131,13 @@ export default async function SettingsPage({
     needsParentCreate
       ? loadDossierStateDefaults()
       : Promise.resolve({ inscription: "open", renewal: "services_hidden" }),
+    needsParentCreate
+      ? loadInscriptionRegistry()
+      : Promise.resolve({
+          fieldsByTab: {},
+          config: { version: 1 as const, fields: {} },
+          locale: "fr" as const,
+        }),
   ]);
 
   const visibleCategories: Category[] = isAdmin ? [...CATEGORIES] : ["appearance"];
@@ -292,6 +301,9 @@ export default async function SettingsPage({
                   parentInitial={parentFields}
                   parentCreateInitial={parentCreateConfig}
                   studentCreateInitial={studentCreateConfig}
+                  registryFields={inscriptionRegistry.fieldsByTab}
+                  registryConfig={inscriptionRegistry.config}
+                  registryLocale={inscriptionRegistry.locale}
                 />
               </SettingsSection>
               <SettingsSection

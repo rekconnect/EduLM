@@ -6,6 +6,15 @@ import { Prisma } from "@prisma/client";
 import { unscopedDb } from "@/lib/db";
 import { requireRole, requireUser } from "@/lib/session";
 import { LOCALES, type Locale } from "@/i18n/config";
+import { getLocale } from "next-intl/server";
+import {
+  parseTenantInscriptionFormConfig,
+  resolveFields,
+  type ResolvedField,
+  type TenantInscriptionFormConfig,
+  type DossierLocale,
+} from "@/lib/inscription-fields-resolver";
+import { fieldsForTab, type DossierTab } from "@/lib/inscription-fields-registry";
 
 export type SettingsResult =
   | { ok: true }
@@ -304,6 +313,49 @@ export async function updateFamilyCodeSettings(
 
 // ── Dossier-state defaults (services gate) per context ──────────
 
+/** Tabs whose fields live in the System-B registry (hardcoded components). */
+const REGISTRY_TABS: DossierTab[] = [
+  "scolarite",
+  "finance",
+  "justificatifs",
+  "validation",
+];
+
+/**
+ * Resolve the System-B registry fields (label/required/hidden) for each
+ * hardcoded tab, in the request locale, plus the raw overrides (so the editor
+ * can preserve EN/AR labels). Feeds the unified editor's "registry" tabs.
+ */
+export async function loadInscriptionRegistry(): Promise<{
+  fieldsByTab: Record<string, ResolvedField[]>;
+  config: TenantInscriptionFormConfig;
+  locale: DossierLocale;
+}> {
+  const user = await requireUser();
+  const emptyConfig: TenantInscriptionFormConfig = { version: 1, fields: {} };
+  if (!user.tenantId) {
+    return { fieldsByTab: {}, config: emptyConfig, locale: "fr" };
+  }
+  const tenant = await unscopedDb().tenant.findUnique({
+    where: { id: user.tenantId },
+    select: { inscriptionFormConfig: true },
+  });
+  const config = parseTenantInscriptionFormConfig(tenant?.inscriptionFormConfig);
+  const locale = (await getLocale()) as DossierLocale;
+  const fieldsByTab: Record<string, ResolvedField[]> = {};
+  for (const tab of REGISTRY_TABS) {
+    let resolved = resolveFields(fieldsForTab(tab), config, locale);
+    // The image-rights consents are registered under tab="foyer" (key-compat)
+    // but actually render on the Autorisations tab (System-A auth_* fields).
+    // Keep them out of the Foyer editor so they aren't shown twice.
+    if (tab === "foyer") {
+      resolved = resolved.filter((f) => f.section !== "imageRights");
+    }
+    fieldsByTab[tab] = resolved;
+  }
+  return { fieldsByTab, config, locale };
+}
+
 export async function loadDossierStateDefaults(): Promise<{
   inscription: string;
   renewal: string;
@@ -346,6 +398,7 @@ import {
   ENTITY_TYPES,
   FAMILY_BOUND_PROPS,
   FIELD_TYPES,
+  SUB_FIELD_TYPES,
   GUARDIAN_BOUND_PROPS,
   USER_BOUND_PROPS,
   parseEntityFieldsConfig,
@@ -396,6 +449,20 @@ const fieldSchema = z.object({
   // full Lebanese town list is ~1700). Seeded configs predate this cap, so a
   // low limit silently broke re-saving them through the editor.
   options: z.array(z.string().trim().min(1).max(120)).max(2000).optional(),
+  // Repeater columns (type=repeater). Preserved on save so a configured
+  // repeater survives editing other fields on the same tab.
+  subFields: z
+    .array(
+      z.object({
+        key: z.string().trim().min(1).max(80),
+        label: z.string().trim().min(1).max(200),
+        type: z.enum(SUB_FIELD_TYPES),
+        options: z.array(z.string().trim().min(1).max(120)).max(500).optional(),
+        required: z.boolean().optional(),
+      }),
+    )
+    .max(50)
+    .optional(),
   categoryId: z.string().trim().min(1).max(80),
   order: z.coerce.number().int().min(0).max(1000),
   showIf: z

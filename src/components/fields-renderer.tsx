@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Field, FormRow } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import {
@@ -9,6 +9,7 @@ import {
   fieldsByCategory,
   type EntityFieldsConfig,
   type FieldDef,
+  type SubFieldDef,
 } from "@/lib/entity-fields";
 import {
   LEBANON_REGIONS_FR,
@@ -481,6 +482,16 @@ function FieldInput({
         />
       );
       break;
+    case "repeater":
+      input = (
+        <RepeaterInput
+          field={field}
+          value={value}
+          onChange={onChange}
+          disabled={effectiveDisabled}
+        />
+      );
+      break;
     case "short_text":
     default:
       input = <Input {...commonProps} type="text" maxLength={200} />;
@@ -497,6 +508,174 @@ function FieldInput({
       {input}
     </Field>
   );
+}
+
+/** Parse a repeater answer (JSON array of row objects) defensively. */
+function parseRepeaterRows(value: string): Array<Record<string, string>> {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((r) => {
+      const out: Record<string, string> = {};
+      if (r && typeof r === "object") {
+        for (const [k, v] of Object.entries(r as Record<string, unknown>)) {
+          out[k] = typeof v === "string" ? v : v == null ? "" : String(v);
+        }
+      }
+      return out;
+    });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Repeater field — a dynamic list of rows, each row a set of sub-fields
+ * (columns). The answer is stored as a JSON array of objects keyed by
+ * sub-field key. Used for siblings, emergency/pickup contacts, school history,
+ * etc. — the building block for migrating the hardcoded list-based tabs to
+ * config.
+ */
+function RepeaterInput({
+  field,
+  value,
+  onChange,
+  disabled,
+}: {
+  field: FieldDef;
+  value: string;
+  onChange: (v: string) => void;
+  disabled: boolean;
+}) {
+  const subFields = field.subFields ?? [];
+  const rows = parseRepeaterRows(value);
+
+  function commit(next: Array<Record<string, string>>) {
+    onChange(JSON.stringify(next));
+  }
+  function addRow() {
+    commit([...rows, {}]);
+  }
+  function removeRow(i: number) {
+    commit(rows.filter((_, idx) => idx !== i));
+  }
+  function setCell(i: number, key: string, v: string) {
+    commit(rows.map((r, idx) => (idx === i ? { ...r, [key]: v } : r)));
+  }
+
+  if (subFields.length === 0) {
+    return (
+      <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        Aucune colonne configurée pour cette liste.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {rows.length === 0 ? (
+        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+          Aucune entrée.
+        </p>
+      ) : (
+        rows.map((row, i) => (
+          <div
+            key={i}
+            className="rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] p-3"
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              {subFields.map((sf) => (
+                <label key={sf.key} className="flex flex-col gap-1">
+                  <span className="text-xs text-[color:var(--color-foreground-muted)]">
+                    {sf.label}
+                    {sf.required ? " *" : ""}
+                  </span>
+                  <SubFieldInput
+                    sf={sf}
+                    value={row[sf.key] ?? ""}
+                    disabled={disabled}
+                    onChange={(v) => setCell(i, sf.key, v)}
+                  />
+                </label>
+              ))}
+            </div>
+            {!disabled ? (
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => removeRow(i)}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-[color:var(--color-danger)] transition-colors hover:underline"
+                >
+                  <Trash2 className="size-3.5" aria-hidden />
+                  Supprimer
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ))
+      )}
+      {!disabled ? (
+        <button
+          type="button"
+          onClick={addRow}
+          className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-[color:var(--color-border-strong)] px-3 py-1.5 text-sm font-medium text-[color:var(--color-brand-600)] transition-colors hover:border-[color:var(--color-brand-400)] hover:bg-[color:var(--color-surface-sunken)]"
+        >
+          <Plus className="size-4" aria-hidden />
+          Ajouter
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/** One cell inside a repeater row. Closed, simple sub-field type set. */
+function SubFieldInput({
+  sf,
+  value,
+  onChange,
+  disabled,
+}: {
+  sf: SubFieldDef;
+  value: string;
+  onChange: (v: string) => void;
+  disabled: boolean;
+}) {
+  const common = {
+    value,
+    disabled,
+    onChange: (
+      e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+    ) => onChange(e.target.value),
+  };
+  switch (sf.type) {
+    case "select":
+      return (
+        <Select {...common}>
+          <option value="">—</option>
+          {(sf.options ?? []).map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </Select>
+      );
+    case "yes_no":
+      return (
+        <Select {...common}>
+          <option value="">—</option>
+          <option value="yes">Oui</option>
+          <option value="no">Non</option>
+        </Select>
+      );
+    case "date":
+      return <Input {...common} type="date" />;
+    case "number":
+      return <Input {...common} type="number" />;
+    case "short_text":
+    default:
+      return <Input {...common} type="text" maxLength={200} />;
+  }
 }
 
 /**

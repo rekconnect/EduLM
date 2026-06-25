@@ -122,6 +122,10 @@ export async function applyDossierToStudent(
       if (transport.altFloor) year.transport_etage = transport.altFloor;
       if (transport.altVillage) year.transport_village = transport.altVillage;
       if (transport.altCaza) year.transport_caza = transport.altCaza;
+      // Complete the Dars transport vocabulary so a form-filled dossier seeds
+      // the same registration_by_year keys a Dars restore/import produces.
+      if (transport.altDetails) year.transport_place = transport.altDetails;
+      if (transport.altNotes) year.transport_remarque = transport.altNotes;
     }
   }
   if (transport.collation !== null) year.collations = transport.collation ? "yes" : "no";

@@ -35,8 +35,33 @@ export const FIELD_TYPES = [
   "phone",
   "email",
   "photo",
+  "repeater",
 ] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
+
+/**
+ * Sub-field types allowed inside a `repeater` row. A closed, simple set —
+ * repeaters hold flat rows (siblings, contacts, school history), not nested
+ * repeaters or cross-field lookups.
+ */
+export const SUB_FIELD_TYPES = [
+  "short_text",
+  "select",
+  "yes_no",
+  "date",
+  "number",
+] as const;
+export type SubFieldType = (typeof SUB_FIELD_TYPES)[number];
+
+/** One column of a repeater row. */
+export type SubFieldDef = {
+  key: string;
+  label: string;
+  type: SubFieldType;
+  /** Only meaningful for type=select. */
+  options?: string[];
+  required?: boolean;
+};
 
 /**
  * Types whose options come from somewhere other than the admin-defined
@@ -194,6 +219,11 @@ export type FieldDef = {
   required: boolean;
   /** Only meaningful for type=select. */
   options?: string[];
+  /**
+   * Only meaningful for type=repeater — the columns of each dynamic row.
+   * The answer value is a JSON array of objects keyed by sub-field key.
+   */
+  subFields?: SubFieldDef[];
   categoryId: string;
   order: number;
   /**
@@ -333,6 +363,15 @@ export function parseEntityFieldsConfig(raw: unknown): EntityFieldsConfig {
           type: f.type,
           required: f.required ?? false,
           options: Array.isArray(f.options) ? f.options : undefined,
+          subFields: Array.isArray(f.subFields)
+            ? (f.subFields as unknown[]).filter(isSubField).map((sf) => ({
+                key: sf.key,
+                label: sf.label,
+                type: sf.type,
+                options: Array.isArray(sf.options) ? sf.options : undefined,
+                required: sf.required === true ? true : undefined,
+              }))
+            : undefined,
           categoryId: f.categoryId,
           order: f.order ?? 0,
           showIf: isCondition(f.showIf)
@@ -401,6 +440,16 @@ function isField(raw: unknown): raw is FieldDef {
     typeof f.key === "string" &&
     typeof f.categoryId === "string" &&
     (FIELD_TYPES as readonly string[]).includes(f.type as string)
+  );
+}
+
+function isSubField(raw: unknown): raw is SubFieldDef {
+  if (!raw || typeof raw !== "object") return false;
+  const sf = raw as Partial<SubFieldDef>;
+  return (
+    typeof sf.key === "string" &&
+    typeof sf.label === "string" &&
+    (SUB_FIELD_TYPES as readonly string[]).includes(sf.type as string)
   );
 }
 

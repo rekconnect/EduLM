@@ -40,12 +40,13 @@ import { ResponsableFooter } from "./_section-responsable-footer";
 import {
   parseScolarite,
   parseTransport,
+  serviceAnswersFromTransport,
 } from "@/lib/dossier-content";
 import { parsePedagogique } from "@/lib/pedagogique";
 import { DossierTabContacts } from "./_tab-contacts";
 import { DossierTabSante } from "./_tab-sante";
 import { DossierTabFinance } from "./_tab-finance";
-import { parseSante, parseFinance } from "@/lib/dossier-content";
+import { parseSante, santeAnswers, parseFinance } from "@/lib/dossier-content";
 import {
   fieldVisibleOnForm,
   fieldRequiredOnForm,
@@ -319,6 +320,56 @@ export default async function DossierEditPage({
         .filter((f) => autCatIds.has(f.categoryId) && onForm(f))
         .map(withReq),
     };
+
+    // ── Transport & restauration tab (Dars entity-fields) ──────────
+    // The "Services" category carries the exact Dars registration vocabulary
+    // (transport_aller/retour, collations, repas_chaud, alt address).
+    const transportCats = studentFieldsConfig.categories.filter(
+      (c) => c.name === "Services",
+    );
+    const transportCatIds = new Set(transportCats.map((c) => c.id));
+    const transportConfig = {
+      categories: transportCats,
+      fields: studentFieldsConfig.fields
+        .filter((f) => transportCatIds.has(f.categoryId) && onForm(f))
+        .map(withReq),
+    };
+
+    // ── Contacts tab (Dars entity-fields) — two repeaters (urgence/pickup). ──
+    const contactsCats = studentFieldsConfig.categories.filter(
+      (c) => c.name === "Contacts",
+    );
+    const contactsCatIds = new Set(contactsCats.map((c) => c.id));
+    const contactsConfig = {
+      categories: contactsCats,
+      fields: studentFieldsConfig.fields
+        .filter((f) => contactsCatIds.has(f.categoryId) && onForm(f))
+        .map(withReq),
+    };
+
+    // ── Foyer tab (Dars entity-fields) — address (cascade) + siblings repeater. ──
+    const foyerCats = studentFieldsConfig.categories.filter(
+      (c) => c.name === "Foyer",
+    );
+    const foyerCatIds = new Set(foyerCats.map((c) => c.id));
+    const foyerConfig = {
+      categories: foyerCats,
+      fields: studentFieldsConfig.fields
+        .filter((f) => foyerCatIds.has(f.categoryId) && onForm(f))
+        .map(withReq),
+    };
+
+    // ── Santé tab (Dars entity-fields). ──
+    const santeCats = studentFieldsConfig.categories.filter(
+      (c) => c.name === "Santé",
+    );
+    const santeCatIds = new Set(santeCats.map((c) => c.id));
+    const santeConfig = {
+      categories: santeCats,
+      fields: studentFieldsConfig.fields
+        .filter((f) => santeCatIds.has(f.categoryId) && onForm(f))
+        .map(withReq),
+    };
     const boolYn = (b: boolean | null | undefined) =>
       b === true ? "yes" : b === false ? "no" : "";
 
@@ -543,37 +594,31 @@ export default async function DossierEditPage({
                 ? (dossier.foyer as Record<string, unknown>)
                 : {};
             const fam = guardian?.family;
+            const str = (v: unknown) => (typeof v === "string" ? v : "");
+            const foyerInitial: Record<string, string> = {
+              foyer_caza: fam?.addressCity ?? "",
+              foyer_village: fam?.addressHood ?? "",
+              foyer_street: fam?.addressStreet ?? "",
+              foyer_building: str(foyerExtras.building),
+              foyer_floor: str(foyerExtras.floor),
+              foyer_details: str(foyerExtras.details),
+              foyer_notes: str(foyerExtras.notes),
+              foyer_siblings: JSON.stringify(
+                app.siblings.map((s) => ({
+                  firstName: s.firstName,
+                  birthYear: s.birthYear != null ? String(s.birthYear) : "",
+                  className: s.className ?? "",
+                  schoolName: s.schoolName ?? "",
+                })),
+              ),
+            };
             return (
               <DossierTabFoyer
                 applicationId={app.id}
+                config={foyerConfig}
+                initial={foyerInitial}
                 disabled={!otherEditable}
-                initial={{
-                  addressCaza: fam?.addressCity ?? "",
-                  addressVillage: fam?.addressHood ?? "",
-                  addressStreet: fam?.addressStreet ?? "",
-                  addressBuilding:
-                    typeof foyerExtras.building === "string"
-                      ? foyerExtras.building
-                      : "",
-                  addressFloor:
-                    typeof foyerExtras.floor === "string"
-                      ? foyerExtras.floor
-                      : "",
-                  addressDetails:
-                    typeof foyerExtras.details === "string"
-                      ? foyerExtras.details
-                      : "",
-                  addressNotes:
-                    typeof foyerExtras.notes === "string"
-                      ? foyerExtras.notes
-                      : "",
-                  siblings: app.siblings.map((s) => ({
-                    firstName: s.firstName,
-                    birthYear: s.birthYear != null ? String(s.birthYear) : "",
-                    className: s.className ?? "",
-                    schoolName: s.schoolName ?? "",
-                  })),
-                }}
+                renewal={isRenewal}
               />
             );
           })() : null}
@@ -637,31 +682,63 @@ export default async function DossierEditPage({
               typeof app.dossierAnswers === "object"
                 ? (app.dossierAnswers as Record<string, unknown>)
                 : {};
+            // Prefill: new dossiers store the Dars-key Services shape directly;
+            // legacy dossiers store TransportData → convert via the inverse map.
+            const stored = dossier.transport;
+            const isServiceShape =
+              !!stored &&
+              typeof stored === "object" &&
+              ("transport_aller" in stored ||
+                "transport_retour" in stored ||
+                "collations" in stored ||
+                "autocar" in stored);
+            const svc = isServiceShape
+              ? (stored as Record<string, string>)
+              : serviceAnswersFromTransport(parseTransport(stored));
+            const transportInitial: Record<string, string> = {};
+            for (const f of transportConfig.fields) {
+              const v = svc[f.key];
+              if (typeof v === "string") transportInitial[f.id] = v;
+            }
             return (
               <DossierTabTransport
                 applicationId={app.id}
+                config={transportConfig}
+                initial={transportInitial}
+                establishments={establishmentsForRenderer}
                 disabled={!servicesEditable}
-                niveau={app.niveau}
-                initial={parseTransport(dossier.transport)}
+                renewal={isRenewal}
               />
             );
           })() : null}
 
-          {currentTab === "contacts" ? (
-            <DossierTabContacts
-              applicationId={app.id}
-              disabled={!otherEditable}
-              initial={app.contacts.map((c) => ({
-                id: c.id,
-                kind: c.kind,
-                firstName: c.firstName,
-                lastName: c.lastName,
-                relation: c.relation,
-                phoneMobile: c.phoneMobile,
-                phoneHome: c.phoneHome,
-              }))}
-            />
-          ) : null}
+          {currentTab === "contacts" ? (() => {
+            // Load adapter: ApplicationContact rows → the two repeaters' JSON.
+            const toRow = (c: (typeof app.contacts)[number]) => ({
+              relation: c.relation ?? "",
+              lastName: c.lastName ?? "",
+              firstName: c.firstName ?? "",
+              phoneMobile: c.phoneMobile ?? "",
+              phoneHome: c.phoneHome ?? "",
+            });
+            const contactsInitial: Record<string, string> = {
+              contacts_urgence: JSON.stringify(
+                app.contacts.filter((c) => c.kind === "URGENCE").map(toRow),
+              ),
+              contacts_pickup: JSON.stringify(
+                app.contacts.filter((c) => c.kind === "PICKUP").map(toRow),
+              ),
+            };
+            return (
+              <DossierTabContacts
+                applicationId={app.id}
+                config={contactsConfig}
+                initial={contactsInitial}
+                disabled={!otherEditable}
+                renewal={isRenewal}
+              />
+            );
+          })() : null}
 
           {currentTab === "sante" ? (() => {
             const dossier =
@@ -671,8 +748,10 @@ export default async function DossierEditPage({
             return (
               <DossierTabSante
                 applicationId={app.id}
+                config={santeConfig}
+                initial={santeAnswers(parseSante(dossier.sante))}
                 disabled={!otherEditable}
-                initial={parseSante(dossier.sante)}
+                renewal={isRenewal}
               />
             );
           })() : null}

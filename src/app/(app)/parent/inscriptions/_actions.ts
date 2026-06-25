@@ -1261,21 +1261,7 @@ function mergeDossierAnswers(
 
 export async function saveFoyerTab(
   applicationId: string,
-  payload: {
-    addressCaza: string;
-    addressVillage: string;
-    addressStreet: string;
-    addressBuilding: string;
-    addressFloor: string;
-    addressDetails: string;
-    addressNotes: string;
-    siblings: Array<{
-      firstName: string;
-      birthYear: number | null;
-      className: string;
-      schoolName: string;
-    }>;
-  },
+  payload: unknown,
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await requireRole("PARENT");
   const tenantId = user.tenantId;
@@ -1290,6 +1276,40 @@ export async function saveFoyerTab(
     const app = await loadApplicationOwnedBy(applicationId, user.id);
     if (!app) return { ok: false, error: "not-found" };
 
+    // Config-native (Dars entity-fields) answers, keyed by field key.
+    const ans =
+      payload && typeof payload === "object"
+        ? (payload as Record<string, unknown>)
+        : {};
+    const s = (k: string) => (typeof ans[k] === "string" ? (ans[k] as string) : "");
+    const addressCaza = s("foyer_caza");
+    const addressVillage = s("foyer_village");
+    const addressStreet = s("foyer_street");
+    // Siblings repeater (foyer_siblings = JSON array of rows).
+    const sibRaw: unknown[] = (() => {
+      const v = ans.foyer_siblings;
+      if (typeof v !== "string" || !v) return [];
+      try {
+        const a = JSON.parse(v);
+        return Array.isArray(a) ? (a as unknown[]) : [];
+      } catch {
+        return [];
+      }
+    })();
+    const sibRows = sibRaw
+      .map((r) => {
+        const o = r && typeof r === "object" ? (r as Record<string, unknown>) : {};
+        const str = (k: string) => (typeof o[k] === "string" ? (o[k] as string) : "");
+        const by = parseInt(str("birthYear"), 10);
+        return {
+          firstName: str("firstName").trim(),
+          birthYear: Number.isFinite(by) ? by : null,
+          className: str("className").trim() || null,
+          schoolName: str("schoolName").trim() || null,
+        };
+      })
+      .filter((x) => x.firstName);
+
     // Locate the parent's Family via Guardian. Created at signup, but
     // defend against missing rows gracefully.
     const guardian = await db.guardian.findUnique({
@@ -1301,10 +1321,10 @@ export async function saveFoyerTab(
       await db.family.update({
         where: { id: guardian.familyId },
         data: {
-          addressStreet: payload.addressStreet || null,
-          addressHood: payload.addressVillage || null, // village mapped to hood for now
+          addressStreet: addressStreet || null,
+          addressHood: addressVillage || null, // village mapped to hood for now
           addressPostal: null,
-          addressCity: payload.addressCaza || null,
+          addressCity: addressCaza || null,
           addressCountry: "Liban",
         },
       });
@@ -1313,19 +1333,17 @@ export async function saveFoyerTab(
     // Replace sibling list — simplest semantics; parent re-types every
     // save. Volume is small so churn doesn't matter.
     await db.applicationSibling.deleteMany({ where: { applicationId } });
-    if (payload.siblings.length > 0) {
+    if (sibRows.length > 0) {
       await db.applicationSibling.createMany({
-        data: payload.siblings
-          .filter((s) => s.firstName.trim().length > 0)
-          .map((s, idx) => ({
-            tenantId,
-            applicationId,
-            order: idx,
-            firstName: s.firstName.trim(),
-            birthYear: s.birthYear,
-            className: s.className.trim() || null,
-            schoolName: s.schoolName.trim() || null,
-          })),
+        data: sibRows.map((r, idx) => ({
+          tenantId,
+          applicationId,
+          order: idx,
+          firstName: r.firstName,
+          birthYear: r.birthYear,
+          className: r.className,
+          schoolName: r.schoolName,
+        })),
       });
     }
 
@@ -1333,21 +1351,17 @@ export async function saveFoyerTab(
     // (Family doesn't have columns for those). Kept under the foyer
     // namespace so Phase 5 can move them without migration pain.
     const foyerExtras = {
-      building: payload.addressBuilding,
-      floor: payload.addressFloor,
-      details: payload.addressDetails,
-      notes: payload.addressNotes,
+      building: s("foyer_building"),
+      floor: s("foyer_floor"),
+      details: s("foyer_details"),
+      notes: s("foyer_notes"),
     };
 
     // Phase 4 — completion now honors the tenant's per-field overrides
     // from inscriptionFormConfig (hidden / required toggles).
     const tenantFormConfig = await loadInscriptionFormConfig(tenantId);
     const complete = evaluateFoyerComplete(
-      {
-        addressCaza: payload.addressCaza,
-        addressVillage: payload.addressVillage,
-        addressStreet: payload.addressStreet,
-      },
+      { addressCaza, addressVillage, addressStreet },
       tenantFormConfig,
     );
 
@@ -1567,7 +1581,18 @@ export async function saveTransportTab(
     const app = await loadApplicationOwnedBy(applicationId, user.id);
     if (!app) return { ok: false, error: "not-found" };
 
-    const data = parseTransport(payload);
+    // Config-native Services answers (Dars vocabulary, keyed by field key) sent
+    // by the entity-fields Transport tab. Coerce to strings; store as-is so the
+    // shape round-trips to Dars and parseTransport reads it.
+    const raw =
+      payload && typeof payload === "object"
+        ? (payload as Record<string, unknown>)
+        : {};
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (typeof v === "string") out[k] = v;
+      else if (typeof v === "boolean") out[k] = v ? "yes" : "no";
+    }
 
     // Maternelle (PS/MS/GS) → collation obligatoire: force Oui so it neither
     // blocks completion nor can be saved as Non.
@@ -1575,7 +1600,9 @@ export async function saveTransportTab(
       where: { id: applicationId },
       select: { niveau: true },
     });
-    if (isMaternelleNiveau(appNiveau?.niveau)) data.collation = true;
+    if (isMaternelleNiveau(appNiveau?.niveau)) out.collations = "yes";
+
+    const data = parseTransport(out);
 
     // Phase 4: completion respects tenant per-field overrides.
     const tenantFormConfig = await loadInscriptionFormConfig(tenantId);
@@ -1603,7 +1630,7 @@ export async function saveTransportTab(
         dossierAnswers: mergeDossierAnswers(
           app.dossierAnswers,
           "transport",
-          data as unknown as Record<string, unknown>,
+          out,
         ),
         tabsCompleted: mergeTabsCompleted(
           app.tabsCompleted,
@@ -1695,6 +1722,86 @@ async function refreshContactsCompletion(
   await db.application.update({
     where: { id: applicationId },
     data: { tabsCompleted: mergeTabsCompleted(app.tabsCompleted, "contacts", done) },
+  });
+}
+
+/**
+ * Bulk save for the config-driven Contacts tab (repeater edition). Receives the
+ * FieldsRenderer answers (contacts_urgence / contacts_pickup = JSON arrays of
+ * {relation,lastName,firstName,phoneMobile,phoneHome}) and rewrites the
+ * ApplicationContact rows. The canonical store stays ApplicationContact, so the
+ * acceptance bridge (→ authorized_persons) is untouched.
+ */
+export async function saveContactsTab(
+  applicationId: string,
+  payload: unknown,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await loadApplicationOwnedBy(applicationId, user.id);
+    if (!app) return { ok: false, error: "not-found" };
+
+    const ans =
+      payload && typeof payload === "object"
+        ? (payload as Record<string, unknown>)
+        : {};
+    const parseRows = (v: unknown): Array<Record<string, string>> => {
+      if (typeof v !== "string" || !v) return [];
+      try {
+        const arr = JSON.parse(v);
+        if (!Array.isArray(arr)) return [];
+        return arr.map((r) => {
+          const o: Record<string, string> = {};
+          if (r && typeof r === "object") {
+            for (const [k, val] of Object.entries(r as Record<string, unknown>)) {
+              o[k] = typeof val === "string" ? val : "";
+            }
+          }
+          return o;
+        });
+      } catch {
+        return [];
+      }
+    };
+
+    const toRow = (
+      r: Record<string, string>,
+      kind: "URGENCE" | "PICKUP",
+      order: number,
+    ) => ({
+      tenantId,
+      applicationId,
+      kind,
+      order,
+      firstName: (r.firstName ?? "").trim(),
+      lastName: (r.lastName ?? "").trim(),
+      relation: (r.relation ?? "").trim() || null,
+      phoneMobile: (r.phoneMobile ?? "").trim() || null,
+      phoneHome: (r.phoneHome ?? "").trim() || null,
+    });
+
+    const rows = [
+      ...parseRows(ans.contacts_urgence).map((r, i) => toRow(r, "URGENCE", i)),
+      ...parseRows(ans.contacts_pickup).map((r, i) => toRow(r, "PICKUP", i)),
+    ].filter((r) => r.firstName || r.lastName);
+
+    // Replace-all semantics (same as the sibling list in saveFoyerTab).
+    await db.applicationContact.deleteMany({ where: { applicationId } });
+    if (rows.length > 0) {
+      await db.applicationContact.createMany({ data: rows });
+    }
+
+    await db.application.update({
+      where: { id: applicationId },
+      data: {
+        tabsCompleted: mergeTabsCompleted(app.tabsCompleted, "contacts", true),
+      },
+    });
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    return { ok: true };
   });
 }
 
@@ -2050,18 +2157,6 @@ export async function deleteResponsable(
 
 // ── Santé tab ────────────────────────────────────────────────────
 
-const santeSchema = z.object({
-  allergies: z.string().trim().max(2000).optional(),
-  traitement: z.string().trim().max(2000).optional(),
-  doctorName: z.string().trim().max(120).optional(),
-  doctorPhone: z.string().trim().max(40).optional(),
-  vaccinationsUpToDate: z.boolean().nullable().optional(),
-  hasPai: z.boolean().nullable().optional(),
-  paiDetails: z.string().trim().max(2000).optional(),
-  diet: z.string().trim().max(2000).optional(),
-  notes: z.string().trim().max(2000).optional(),
-});
-
 export async function saveSanteTab(
   applicationId: string,
   payload: unknown,
@@ -2070,12 +2165,28 @@ export async function saveSanteTab(
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
-  const parsed = santeSchema.safeParse(payload);
-  if (!parsed.success) return { ok: false, error: "validation" };
-
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await loadApplicationOwnedBy(applicationId, user.id);
     if (!app) return { ok: false, error: "not-found" };
+
+    // Config-native answers (yes_no fields = "yes"/"no" strings); stored as-is
+    // into dossierAnswers.sante — parseSante reads both shapes.
+    const ans =
+      payload && typeof payload === "object"
+        ? (payload as Record<string, unknown>)
+        : {};
+    const s = (k: string) => (typeof ans[k] === "string" ? (ans[k] as string) : "");
+    const out: Record<string, string> = {
+      allergies: s("allergies"),
+      traitement: s("traitement"),
+      doctorName: s("doctorName"),
+      doctorPhone: s("doctorPhone"),
+      vaccinationsUpToDate: s("vaccinationsUpToDate"),
+      hasPai: s("hasPai"),
+      paiDetails: s("paiDetails"),
+      diet: s("diet"),
+      notes: s("notes"),
+    };
 
     // Phase 4 — completion respects tenant overrides. Vaccinations + PAI
     // are required by default; admin can flip either to optional or
@@ -2084,29 +2195,17 @@ export async function saveSanteTab(
     const need = (key: string) =>
       isFieldRequiredEffective(key, tenantFormConfig);
     let complete = true;
-    if (
-      need("sante.info.vaccinationsUpToDate") &&
-      (parsed.data.vaccinationsUpToDate === undefined ||
-        parsed.data.vaccinationsUpToDate === null)
-    ) {
+    if (need("sante.info.vaccinationsUpToDate") && !out.vaccinationsUpToDate) {
       complete = false;
     }
-    if (
-      complete &&
-      need("sante.info.hasPai") &&
-      (parsed.data.hasPai === undefined || parsed.data.hasPai === null)
-    ) {
+    if (complete && need("sante.info.hasPai") && !out.hasPai) {
       complete = false;
     }
 
     await db.application.update({
       where: { id: applicationId },
       data: {
-        dossierAnswers: mergeDossierAnswers(
-          app.dossierAnswers,
-          "sante",
-          parsed.data as unknown as Record<string, unknown>,
-        ),
+        dossierAnswers: mergeDossierAnswers(app.dossierAnswers, "sante", out),
         tabsCompleted: mergeTabsCompleted(app.tabsCompleted, "sante", complete),
       },
     });

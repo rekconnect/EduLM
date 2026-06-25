@@ -30,6 +30,7 @@ import {
   DOSSIER_BOUND_PROPS,
   DYNAMIC_LOOKUP_TYPES,
   FIELD_TYPES,
+  SUB_FIELD_TYPES,
   PRESET_LOOKUP_TYPES,
   USER_BOUND_PROPS,
   slugifyKey,
@@ -39,6 +40,8 @@ import {
   type FieldCategory,
   type FieldDef,
   type FieldType,
+  type SubFieldDef,
+  type SubFieldType,
   type UserBoundProp,
 } from "@/lib/entity-fields";
 import { presetOptionsForType } from "@/lib/lookups";
@@ -660,6 +663,159 @@ export function FieldsConfigForm({
   );
 }
 
+/**
+ * Editor for a repeater field's columns (sub-fields). Each column has a label,
+ * a key (auto-slugged from the label, editable), a sub-type, optional select
+ * options, and a required flag. Reorderable. Stored on `field.subFields`.
+ */
+function SubFieldsEditor({
+  subFields,
+  onChange,
+}: {
+  subFields: SubFieldDef[];
+  onChange: (next: SubFieldDef[]) => void;
+}) {
+  const t = useTranslations("settings");
+
+  function update(i: number, patch: Partial<SubFieldDef>) {
+    onChange(subFields.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+  }
+  function addCol() {
+    onChange([...subFields, { key: "", label: "", type: "short_text" }]);
+  }
+  function removeCol(i: number) {
+    onChange(subFields.filter((_, idx) => idx !== i));
+  }
+  function moveCol(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= subFields.length) return;
+    const next = [...subFields];
+    [next[i], next[j]] = [next[j]!, next[i]!];
+    onChange(next);
+  }
+
+  return (
+    <div className="sm:col-span-2 space-y-2 rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-sunken)] p-3">
+      <p className="text-sm font-medium text-[color:var(--color-foreground)]">
+        {t("fieldsConfig.repeaterColumns")}
+      </p>
+      {subFields.length === 0 ? (
+        <p className="text-xs text-[color:var(--color-foreground-muted)]">
+          {t("fieldsConfig.repeaterColumnsEmpty")}
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {subFields.map((sf, i) => (
+            <li
+              key={i}
+              className="space-y-2 rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] p-2"
+            >
+              <div className="grid gap-2 sm:grid-cols-[1fr_140px_auto]">
+                <Input
+                  value={sf.label}
+                  placeholder={t("fieldsConfig.label")}
+                  maxLength={200}
+                  onChange={(e) => {
+                    const label = e.target.value;
+                    const patch: Partial<SubFieldDef> = { label };
+                    // Auto-slug the key from the label while it tracks the slug.
+                    if (!sf.key || sf.key === slugifyKey(sf.label)) {
+                      patch.key = slugifyKey(label);
+                    }
+                    update(i, patch);
+                  }}
+                />
+                <Select
+                  value={sf.type}
+                  onChange={(e) =>
+                    update(i, { type: e.target.value as SubFieldType })
+                  }
+                >
+                  {SUB_FIELD_TYPES.map((tp) => (
+                    <option key={tp} value={tp}>
+                      {t(`fieldsConfig.type_${tp}` as never)}
+                    </option>
+                  ))}
+                </Select>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => moveCol(i, -1)}
+                    disabled={i === 0}
+                    className="rounded p-1 text-[color:var(--color-foreground-muted)] hover:text-[color:var(--color-foreground)] disabled:opacity-30"
+                    aria-label="↑"
+                  >
+                    <ChevronUp className="size-4" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveCol(i, 1)}
+                    disabled={i === subFields.length - 1}
+                    className="rounded p-1 text-[color:var(--color-foreground-muted)] hover:text-[color:var(--color-foreground)] disabled:opacity-30"
+                    aria-label="↓"
+                  >
+                    <ChevronDown className="size-4" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeCol(i)}
+                    className="rounded p-1 text-[color:var(--color-danger)] hover:bg-[color:var(--color-danger-soft)]"
+                    aria-label="×"
+                  >
+                    <Trash2 className="size-4" aria-hidden />
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Input
+                  className="w-44"
+                  value={sf.key}
+                  placeholder={t("fieldsConfig.repeaterColKey")}
+                  maxLength={80}
+                  onChange={(e) => update(i, { key: e.target.value })}
+                />
+                <label className="inline-flex items-center gap-1.5 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={sf.required ?? false}
+                    onChange={(e) =>
+                      update(i, { required: e.target.checked ? true : undefined })
+                    }
+                  />
+                  {t("fieldsConfig.required")}
+                </label>
+              </div>
+              {sf.type === "select" ? (
+                <Textarea
+                  rows={2}
+                  value={(sf.options ?? []).join("\n")}
+                  placeholder="Option 1\nOption 2"
+                  onChange={(e) =>
+                    update(i, {
+                      options: e.target.value
+                        .split("\n")
+                        .map((s) => s.trim())
+                        .filter((s) => s.length > 0),
+                    })
+                  }
+                />
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        type="button"
+        onClick={addCol}
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-[color:var(--color-brand-600)] transition-colors hover:text-[color:var(--color-brand-700)]"
+      >
+        <Plus className="size-4" aria-hidden />
+        {t("fieldsConfig.addColumn")}
+      </button>
+    </div>
+  );
+}
+
 function FieldRow({
   field,
   entity,
@@ -690,6 +846,7 @@ function FieldRow({
   const t = useTranslations("settings");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const showOptions = field.type === "select";
+  const showRepeater = field.type === "repeater";
   const isPreset = PRESET_LOOKUP_TYPES.has(field.type);
   const isDynamic = DYNAMIC_LOOKUP_TYPES.has(field.type);
   const isCrossField = CROSS_FIELD_LOOKUP_TYPES.has(field.type);
@@ -920,6 +1077,13 @@ function FieldRow({
             placeholder="Option 1\nOption 2"
           />
         </Field>
+      ) : null}
+
+      {showRepeater ? (
+        <SubFieldsEditor
+          subFields={field.subFields ?? []}
+          onChange={(subFields) => onUpdate({ subFields })}
+        />
       ) : null}
 
       {isPreset && !isDynamic && !isCrossField ? (

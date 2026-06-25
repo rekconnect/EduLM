@@ -239,7 +239,78 @@ export function parseTransport(raw: unknown): TransportData {
   d.altNotes = s(r.altNotes);
   d.collation = b3(r.collation);
   d.cantine = b3(r.cantine);
+
+  // Config-native (Services entity-fields) shape: the Transport tab can save
+  // answers under the Dars "registration" vocabulary (transport_aller/retour,
+  // collations, repas_chaud, transport_adresse_diff + transport_* address)
+  // instead of the legacy TransportData keys. Map those onto TransportData so
+  // every consumer (bridge, completion, admin view) keeps working unchanged.
+  // Purely additive — legacy dossiers carry none of these keys.
+  const yn = (v: unknown): boolean | null => {
+    const x = s(v).toLowerCase();
+    if (x === "yes" || x === "true" || x === "oui") return true;
+    if (x === "no" || x === "false" || x === "non") return false;
+    return null;
+  };
+  const modeOf = (v: unknown): TransportMode =>
+    s(v) === "Avec bus" ? "bus" : s(v) === "Avec parent" ? "parents" : "";
+  if ("transport_aller" in r && modeOf(r.transport_aller)) d.modeAller = modeOf(r.transport_aller);
+  if ("transport_retour" in r && modeOf(r.transport_retour)) d.modeRetour = modeOf(r.transport_retour);
+  if ("transport_adresse_diff" in r) {
+    const diff = yn(r.transport_adresse_diff);
+    if (diff !== null) d.hasAlternateAddress = diff;
+  }
+  if (s(r.transport_caza)) d.altCaza = s(r.transport_caza);
+  if (s(r.transport_village)) d.altVillage = s(r.transport_village);
+  if (s(r.transport_rue)) d.altStreet = s(r.transport_rue);
+  if (s(r.transport_immeuble)) d.altBuilding = s(r.transport_immeuble);
+  if (s(r.transport_etage)) d.altFloor = s(r.transport_etage);
+  if (s(r.transport_place)) d.altDetails = s(r.transport_place);
+  if (s(r.transport_remarque)) d.altNotes = s(r.transport_remarque);
+  if ("collations" in r) {
+    const c = yn(r.collations);
+    if (c !== null) d.collation = c;
+  }
+  if ("repas_chaud" in r) {
+    const c = yn(r.repas_chaud);
+    if (c !== null) d.cantine = c;
+  }
   return d;
+}
+
+/**
+ * Inverse of parseTransport's config-native mapping: TransportData → the Dars
+ * "Services" vocabulary (the exact keys the config form + Dars import use). Lets
+ * the config-rendered Transport tab load a legacy dossier (or re-emit a new one)
+ * with every field pre-filled. autocar is derived from the per-direction modes.
+ */
+export function serviceAnswersFromTransport(
+  d: TransportData,
+): Record<string, string> {
+  const answered = d.modeAller !== "" || d.modeRetour !== "";
+  const modeStr = (m: TransportMode) =>
+    m === "bus" ? "Avec bus" : m === "parents" ? "Avec parent" : "";
+  const yn3 = (b: boolean | null) => (b === true ? "yes" : b === false ? "no" : "");
+  return {
+    autocar:
+      d.modeAller === "bus" || d.modeRetour === "bus"
+        ? "yes"
+        : answered
+          ? "no"
+          : "",
+    transport_aller: modeStr(d.modeAller),
+    transport_retour: modeStr(d.modeRetour),
+    transport_adresse_diff: d.hasAlternateAddress ? "yes" : "no",
+    transport_caza: d.altCaza,
+    transport_village: d.altVillage,
+    transport_rue: d.altStreet,
+    transport_immeuble: d.altBuilding,
+    transport_etage: d.altFloor,
+    transport_place: d.altDetails,
+    transport_remarque: d.altNotes,
+    collations: yn3(d.collation),
+    repas_chaud: yn3(d.cantine),
+  };
 }
 
 export function isTransportComplete(d: TransportData): boolean {
@@ -286,8 +357,17 @@ export function parseSante(raw: unknown): SanteData {
   if (!raw || typeof raw !== "object") return d;
   const r = raw as Record<string, unknown>;
   const s = (v: unknown) => (typeof v === "string" ? v : "");
-  const b3 = (v: unknown): boolean | null =>
-    typeof v === "boolean" ? v : null;
+  // Shape-tolerant: legacy dossiers store booleans; config-native dossiers
+  // store "yes"/"no" strings from the yes_no fields. Accept both.
+  const b3 = (v: unknown): boolean | null => {
+    if (typeof v === "boolean") return v;
+    if (typeof v === "string") {
+      const x = v.toLowerCase();
+      if (x === "yes" || x === "true" || x === "oui") return true;
+      if (x === "no" || x === "false" || x === "non") return false;
+    }
+    return null;
+  };
   return {
     allergies: s(r.allergies),
     traitement: s(r.traitement),
@@ -298,6 +378,25 @@ export function parseSante(raw: unknown): SanteData {
     paiDetails: s(r.paiDetails),
     diet: s(r.diet),
     notes: s(r.notes),
+  };
+}
+
+/**
+ * SanteData → config-native answers (yes_no booleans → "yes"/"no" strings) for
+ * the entity-fields Santé tab. Lets a legacy or new dossier prefill the form.
+ */
+export function santeAnswers(d: SanteData): Record<string, string> {
+  const yn = (b: boolean | null) => (b === true ? "yes" : b === false ? "no" : "");
+  return {
+    allergies: d.allergies,
+    traitement: d.traitement,
+    doctorName: d.doctorName,
+    doctorPhone: d.doctorPhone,
+    vaccinationsUpToDate: yn(d.vaccinationsUpToDate),
+    hasPai: yn(d.hasPai),
+    paiDetails: d.paiDetails,
+    diet: d.diet,
+    notes: d.notes,
   };
 }
 

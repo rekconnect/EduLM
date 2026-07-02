@@ -253,6 +253,8 @@
       "type_phone": "Téléphone",
       "type_email": "E-mail",
       "type_photo": "Photo",
+      "type_multi_select": "Choix multiple",
+      "type_file": "Fichier (téléversement)",
       "type_repeater": "Liste répétable",
       "repeaterColumns": "Colonnes de la liste",
       "repeaterColumnsEmpty": "Aucune colonne. Ajoutez-en une.",

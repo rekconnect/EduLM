@@ -7,13 +7,7 @@ import { TenantConfigProvider } from "@/components/dossier/tenant-config-context
 import { PreviewEditModeProvider } from "@/components/dossier/preview-edit-mode-context";
 import { FieldEditDrawer } from "@/components/dossier/field-edit-drawer";
 import { FirstTimeBanner } from "./_first-time-banner";
-import { DossierTabScolarite } from "@/app/(app)/parent/inscriptions/[id]/edit/_tab-scolarite";
-import { DossierTabFinance } from "@/app/(app)/parent/inscriptions/[id]/edit/_tab-finance";
 import { DossierTabValidation } from "@/app/(app)/parent/inscriptions/[id]/edit/_tab-validation";
-import {
-  defaultFinance,
-} from "@/lib/dossier-content";
-import { defaultPedagogique } from "@/lib/pedagogique";
 import {
   type DossierLocale,
   type TenantInscriptionFormConfig,
@@ -42,52 +36,12 @@ const TAB_LABELS: Record<PreviewTabKey, string> = {
   validation: "Validation",
 };
 
-// ── Mock data — one realistic dossier-in-progress for all tabs ──
-// Maya Hajj, 17 years old, Terminale. Picked so the Scolarité
-// preview shows the Pédagogique Terminale block (the richest one).
-// Admin can change the niveau interactively to see other groups.
-
-const MOCK_SCOLARITE = {
-  previousSchool: "Lycée Abdel Kader",
-  previousClass: "1ère S",
-  previousNetwork: "autre",
-  attendedMlfBefore: false as boolean | null,
-  history: [],
-  ebepPrevious: false as boolean | null,
-  ebepPreviousFlags: {
-    PAI: false,
-    PAP: false,
-    PPS: false,
-    PPRE: false,
-    AESH: false,
-  },
-  ebepCurrent: false as boolean | null,
-  ebepCurrentFlags: {
-    PAI: false,
-    PAP: false,
-    PPS: false,
-    PPRE: false,
-    AESH: false,
-  },
-  bilansRealises: {
-    orthophonique: false,
-    psychologique: false,
-    psychomoteur: false,
-    psychoPediatrique: false,
-  },
-  dispenseLibanais: "non" as const,
-  entryDate: "2026-09-01",
-  section: "",
-};
-
 export function PreviewClient({
   inscriptionFormConfig,
   locale,
-  schoolName,
 }: {
   inscriptionFormConfig: TenantInscriptionFormConfig;
   locale: DossierLocale;
-  schoolName: string;
 }) {
   const [active, setActive] = useState<PreviewTabKey>("eleve");
 
@@ -145,18 +99,7 @@ export function PreviewClient({
           ) : null}
 
           {active === "scolarite" ? (
-            <DossierTabScolarite
-              applicationId="preview"
-              initial={MOCK_SCOLARITE}
-              initialEstablishmentId=""
-              initialNiveau="Tle"
-              initialPedagogique={defaultPedagogique()}
-              establishments={[]}
-              schoolName={schoolName}
-              defaultEntryDate="2026-09-01"
-              disabled={false}
-              editMode
-            />
+            <MigratedTabNotice tab="Scolarité" where="Champs élève" />
           ) : null}
 
           {active === "transport" ? (
@@ -172,12 +115,7 @@ export function PreviewClient({
           ) : null}
 
           {active === "finance" ? (
-            <DossierTabFinance
-              applicationId="preview"
-              initial={defaultFinance()}
-              disabled={false}
-              editMode
-            />
+            <MigratedTabNotice tab="Finance" where="Champs élève" />
           ) : null}
 
           {active === "validation" ? (

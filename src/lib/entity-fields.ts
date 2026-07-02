@@ -22,6 +22,7 @@ export const FIELD_TYPES = [
   "long_text",
   "yes_no",
   "select",
+  "multi_select",
   "country",
   "nationality",
   "lebanon_region",
@@ -35,6 +36,7 @@ export const FIELD_TYPES = [
   "phone",
   "email",
   "photo",
+  "file",
   "repeater",
 ] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];

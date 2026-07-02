@@ -845,7 +845,7 @@ function FieldRow({
 }) {
   const t = useTranslations("settings");
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const showOptions = field.type === "select";
+  const showOptions = field.type === "select" || field.type === "multi_select";
   const showRepeater = field.type === "repeater";
   const isPreset = PRESET_LOOKUP_TYPES.has(field.type);
   const isDynamic = DYNAMIC_LOOKUP_TYPES.has(field.type);

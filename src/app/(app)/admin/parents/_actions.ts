@@ -299,7 +299,18 @@ export async function updateParent(
   }
 
   let conflict = false;
+  let notParent = false;
   await runWithTenant({ tenantId, slug: null }, async () => {
+    // Guard: only PARENT accounts — an admin must not edit a peer admin by id
+    // (User is tenant-scoped but not role-scoped).
+    const parent = await db.user.findFirst({
+      where: { id, role: "PARENT" },
+      select: { id: true },
+    });
+    if (!parent) {
+      notParent = true;
+      return;
+    }
     // Ensure no other user in this tenant has the new email.
     const sameEmail = await db.user.findFirst({
       where: { email: parsed.data.email, NOT: { id } },
@@ -337,6 +348,7 @@ export async function updateParent(
     }
   });
 
+  if (notParent) return { formError: "not-found" };
   if (conflict) return { errors: { email: "exists" } };
   revalidatePath("/admin/parents");
   revalidatePath(`/admin/parents/${id}`);
@@ -348,15 +360,23 @@ export async function resetParentPassword(parentId: string): Promise<ParentFormS
   const tenantId = user.tenantId;
   if (!tenantId) return { formError: "no-tenant" };
   const newPassword = genTempPassword();
-  await runWithTenant({ tenantId, slug: null }, async () => {
+  const state = await runWithTenant({ tenantId, slug: null }, async () => {
+    // Guard: only PARENT accounts — never let an admin reset a peer admin's
+    // password by passing their id (User is tenant-scoped but not role-scoped).
+    const parent = await db.user.findFirst({
+      where: { id: parentId, role: "PARENT" },
+      select: { id: true },
+    });
+    if (!parent) return { formError: "not-found" } satisfies ParentFormState;
     const passwordHash = await bcrypt.hash(newPassword, 10);
     await db.user.update({
       where: { id: parentId },
       data: { passwordHash, status: "ACTIVE" },
     });
+    return { newPassword } satisfies ParentFormState;
   });
   revalidatePath(`/admin/parents/${parentId}`);
-  return { newPassword };
+  return state;
 }
 
 export async function toggleParentStatus(parentId: string) {
@@ -364,8 +384,8 @@ export async function toggleParentStatus(parentId: string) {
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
-    const cur = await db.user.findUnique({
-      where: { id: parentId },
+    const cur = await db.user.findFirst({
+      where: { id: parentId, role: "PARENT" },
       select: { status: true },
     });
     if (!cur) return;
@@ -475,12 +495,19 @@ export async function updateParentCustomAnswers(
     answers[fieldId] = value;
   }
 
-  await runWithTenant({ tenantId, slug: null }, async () => {
+  const ok = await runWithTenant({ tenantId, slug: null }, async () => {
+    const parent = await db.user.findFirst({
+      where: { id: parentUserId, role: "PARENT" },
+      select: { id: true },
+    });
+    if (!parent) return false;
     await db.user.update({
       where: { id: parentUserId },
       data: { customAnswers: answers },
     });
+    return true;
   });
+  if (!ok) return { ok: false, error: "not-found" };
   revalidatePath(`/admin/parents/${parentUserId}`);
   return { ok: true };
 }

@@ -439,9 +439,17 @@ export function parseFinance(raw: unknown): FinanceData {
   if (!raw || typeof raw !== "object") return d;
   const r = raw as Record<string, unknown>;
   const s = (v: unknown) => (typeof v === "string" ? v : "");
-  const b = (v: unknown) => v === true;
-  const b3 = (v: unknown): boolean | null =>
-    typeof v === "boolean" ? v : null;
+  // Shape-tolerant: legacy booleans OR config-native "yes"/"no" strings.
+  const b = (v: unknown) => v === true || v === "yes" || v === "true";
+  const b3 = (v: unknown): boolean | null => {
+    if (typeof v === "boolean") return v;
+    if (typeof v === "string") {
+      const x = v.toLowerCase();
+      if (x === "yes" || x === "true" || x === "oui") return true;
+      if (x === "no" || x === "false" || x === "non") return false;
+    }
+    return null;
+  };
   return {
     acknowledgedReglementInterieur: b(r.acknowledgedReglementInterieur),
     acknowledgedReglementFinancier: b(r.acknowledgedReglementFinancier),
@@ -451,6 +459,25 @@ export function parseFinance(raw: unknown): FinanceData {
     caisseLbpAutreAmount: s(r.caisseLbpAutreAmount),
     caisseUsd: s(r.caisseUsd),
     caisseUsdAutreAmount: s(r.caisseUsdAutreAmount),
+  };
+}
+
+/**
+ * FinanceData → config-native answers (acknowledgements + comité as yes_no
+ * "yes"/"no" strings) for the entity-fields Finance tab. caisse* stay as their
+ * stored value/amount strings.
+ */
+export function financeAnswers(d: FinanceData): Record<string, string> {
+  const yn = (b: boolean | null) => (b === true ? "yes" : b === false ? "no" : "");
+  return {
+    acknowledgedReglementInterieur: d.acknowledgedReglementInterieur ? "yes" : "",
+    acknowledgedReglementFinancier: d.acknowledgedReglementFinancier ? "yes" : "",
+    acknowledgedDroitsEntreeMlf: d.acknowledgedDroitsEntreeMlf ? "yes" : "",
+    comiteParents: yn(d.comiteParents),
+    caisseLbp: d.caisseLbp,
+    caisseLbpAutreAmount: d.caisseLbpAutreAmount,
+    caisseUsd: d.caisseUsd,
+    caisseUsdAutreAmount: d.caisseUsdAutreAmount,
   };
 }
 

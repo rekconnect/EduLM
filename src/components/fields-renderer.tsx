@@ -1,6 +1,7 @@
 "use client";
 
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { FileText, Pencil, Plus, Trash2 } from "lucide-react";
 import { Field, FormRow } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import {
@@ -30,6 +31,12 @@ export type FieldAnswers = Record<string, string>;
  */
 export type FieldExtras = {
   establishments?: Array<{ id: string; name: string; levels?: string[] }>;
+  /**
+   * Upload handler for `file` fields — provided by the dossier tab (bound to the
+   * application + a server upload action). Absent (e.g. in the /settings
+   * preview) ⇒ file inputs render a read-only "préview" notice.
+   */
+  onUploadFile?: (file: File) => Promise<{ path: string; name: string } | null>;
   /**
    * Parent's User record. Used to pre-fill custom parent fields whose
    * `userBoundTo` matches a property here. The renderer only reads this —
@@ -333,15 +340,32 @@ function FieldInput({
       input = (
         <Select {...commonProps}>
           <option value="">—</option>
-          {opts.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
+          {opts.map((o) => {
+            // Option entries may be "value|label" so the stored value can differ
+            // from the display (e.g. "3000000|3 000 000 LBP"). No pipe = both.
+            const sep = o.indexOf("|");
+            const val = sep >= 0 ? o.slice(0, sep) : o;
+            const lbl = sep >= 0 ? o.slice(sep + 1) : o;
+            return (
+              <option key={o} value={val}>
+                {lbl}
+              </option>
+            );
+          })}
         </Select>
       );
       break;
     }
+    case "multi_select":
+      input = (
+        <MultiSelectInput
+          field={field}
+          value={value}
+          onChange={onChange}
+          disabled={effectiveDisabled}
+        />
+      );
+      break;
     case "country":
     case "nationality":
     case "lebanon_region": {
@@ -479,6 +503,16 @@ function FieldInput({
           {...commonProps}
           type="url"
           placeholder="https://… (URL d'une image)"
+        />
+      );
+      break;
+    case "file":
+      input = (
+        <FileInput
+          value={value}
+          onChange={onChange}
+          extras={extras}
+          disabled={effectiveDisabled}
         />
       );
       break;
@@ -676,6 +710,183 @@ function SubFieldInput({
     default:
       return <Input {...common} type="text" maxLength={200} />;
   }
+}
+
+/** Parse a `multi_select` answer (JSON array of selected values). */
+function parseMultiSelect(value: string): string[] {
+  if (!value) return [];
+  try {
+    const a = JSON.parse(value);
+    return Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Multi-select field — toggle chips; the answer is a JSON array of the selected
+ * option values. Options support the "value|label" convention like `select`.
+ */
+function MultiSelectInput({
+  field,
+  value,
+  onChange,
+  disabled,
+}: {
+  field: FieldDef;
+  value: string;
+  onChange: (v: string) => void;
+  disabled: boolean;
+}) {
+  const selected = new Set(parseMultiSelect(value));
+  const opts = field.options ?? [];
+
+  function toggle(val: string) {
+    const next = new Set(selected);
+    if (next.has(val)) next.delete(val);
+    else next.add(val);
+    onChange(JSON.stringify([...next]));
+  }
+
+  if (opts.length === 0) {
+    return (
+      <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        Aucune option configurée.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {opts.map((o) => {
+        const sep = o.indexOf("|");
+        const val = sep >= 0 ? o.slice(0, sep) : o;
+        const lbl = sep >= 0 ? o.slice(sep + 1) : o;
+        const on = selected.has(val);
+        return (
+          <button
+            key={o}
+            type="button"
+            disabled={disabled}
+            onClick={() => toggle(val)}
+            aria-pressed={on}
+            className={
+              on
+                ? "rounded-full border border-[color:var(--color-brand-600)] bg-[color:var(--color-brand-50)] px-3 py-1 text-sm font-medium text-[color:var(--color-brand-700)] transition-colors disabled:opacity-50"
+                : "rounded-full border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-3 py-1 text-sm text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-sunken)] disabled:opacity-50"
+            }
+          >
+            {lbl}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Parse a `file` field answer ({path,name} JSON). */
+function parseFileAnswer(value: string): { path: string; name: string } | null {
+  if (!value) return null;
+  try {
+    const o = JSON.parse(value) as Record<string, unknown>;
+    if (o && typeof o === "object" && typeof o.path === "string") {
+      return {
+        path: o.path,
+        name: typeof o.name === "string" ? o.name : o.path,
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+/**
+ * File field — uploads to storage via `extras.onUploadFile` (provided by the
+ * dossier tab) and stores a {path,name} reference in the answer. Without an
+ * upload handler (e.g. the /settings preview) it shows a read-only notice.
+ */
+function FileInput({
+  value,
+  onChange,
+  extras,
+  disabled,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  extras?: FieldExtras;
+  disabled: boolean;
+}) {
+  const file = parseFileAnswer(value);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same filename
+    if (!f || !extras?.onUploadFile) return;
+    setError(null);
+    setUploading(true);
+    try {
+      const res = await extras.onUploadFile(f);
+      if (res) onChange(JSON.stringify(res));
+      else setError("Échec du téléversement");
+    } catch {
+      setError("Échec du téléversement");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  if (file) {
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] px-3 py-2">
+        <span className="flex min-w-0 items-center gap-2 text-sm">
+          <FileText
+            className="size-4 shrink-0 text-[color:var(--color-foreground-subtle)]"
+            aria-hidden
+          />
+          <span className="truncate">{file.name}</span>
+        </span>
+        {!disabled ? (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            className="shrink-0 text-xs font-medium text-[color:var(--color-danger)] hover:underline"
+          >
+            Supprimer
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (!extras?.onUploadFile) {
+    return (
+      <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        Téléversement disponible dans le dossier.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      <input
+        type="file"
+        onChange={handleSelect}
+        disabled={disabled || uploading}
+        className="block w-full text-sm text-[color:var(--color-foreground-muted)] file:me-3 file:rounded-md file:border-0 file:bg-[color:var(--color-surface-sunken)] file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-[color:var(--color-foreground)]"
+      />
+      {uploading ? (
+        <p className="text-xs text-[color:var(--color-foreground-muted)]">
+          Téléversement…
+        </p>
+      ) : null}
+      {error ? (
+        <p className="text-xs text-[color:var(--color-danger)]">{error}</p>
+      ) : null}
+    </div>
+  );
 }
 
 /**

@@ -1,24 +1,24 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { getTenantContext } from "./tenant-context";
 
 /**
- * Models that carry a `tenantId` column and must be auto-scoped on every
- * query. Keep this list in sync with `prisma/schema.prisma`.
+ * Every model that carries a `tenantId` column is auto-scoped on every query.
+ *
+ * DERIVED FROM THE PRISMA DMMF at startup rather than a hand-maintained list —
+ * this is default-DENY: any tenant-owned model (present or future) is scoped
+ * automatically, so a new model can never silently ship cross-tenant because
+ * someone forgot to add it here (which is exactly how the earlier 12-model
+ * allowlist drifted and leaked Application / TenantDocument / Announcement /
+ * ContactMessage / medical / transport across tenants). A model that genuinely
+ * needs cross-tenant access must go through `unscopedDb()`.
+ *
+ * `Tenant` itself has an `id`, not a `tenantId`, so it is correctly excluded.
  */
-const TENANT_SCOPED_MODELS = new Set([
-  "User",
-  "AcademicYear",
-  "Class",
-  "Student",
-  "Guardian",
-  "Family",
-  "Establishment",
-  "Enrollment",
-  "AttendanceRecord",
-  "DisciplineEvent",
-  "Invoice",
-  "Payment",
-]);
+const TENANT_SCOPED_MODELS = new Set(
+  Prisma.dmmf.datamodel.models
+    .filter((m) => m.fields.some((f) => f.name === "tenantId"))
+    .map((m) => m.name),
+);
 
 const READ_OPS = new Set([
   "findFirst",

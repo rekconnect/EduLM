@@ -253,6 +253,8 @@
       "type_phone": "هاتف",
       "type_email": "بريد إلكتروني",
       "type_photo": "صورة",
+      "type_multi_select": "اختيار متعدد",
+      "type_file": "ملف (تحميل)",
       "type_repeater": "قائمة متكررة",
       "repeaterColumns": "أعمدة القائمة",
       "repeaterColumnsEmpty": "لا أعمدة بعد. أضف عموداً.",

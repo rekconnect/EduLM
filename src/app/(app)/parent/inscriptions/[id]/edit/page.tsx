@@ -26,7 +26,6 @@ import {
   loadEntityFieldsConfig,
   listEstablishments,
 } from "../../../../settings/_actions";
-import { DossierTabPlaceholder } from "./_tab-placeholder";
 import { CancelApplicationDialog } from "./_cancel-dialog";
 import { DossierTabFoyer } from "./_tab-foyer";
 import { DossierResponsablesParents } from "./_tab-responsables-parents";
@@ -43,10 +42,21 @@ import {
   serviceAnswersFromTransport,
 } from "@/lib/dossier-content";
 import { parsePedagogique } from "@/lib/pedagogique";
+import {
+  scolariteAnswers,
+  SCOLARITE_IDS,
+  SCOLARITE_CATEGORY_NAMES,
+} from "@/lib/scolarite-config";
 import { DossierTabContacts } from "./_tab-contacts";
 import { DossierTabSante } from "./_tab-sante";
 import { DossierTabFinance } from "./_tab-finance";
-import { parseSante, santeAnswers, parseFinance } from "@/lib/dossier-content";
+import { DossierTabJustificatifs } from "./_tab-justificatifs";
+import {
+  parseSante,
+  santeAnswers,
+  parseFinance,
+  financeAnswers,
+} from "@/lib/dossier-content";
 import {
   fieldVisibleOnForm,
   fieldRequiredOnForm,
@@ -370,6 +380,42 @@ export default async function DossierEditPage({
         .filter((f) => santeCatIds.has(f.categoryId) && onForm(f))
         .map(withReq),
     };
+
+    // ── Finance tab (Dars entity-fields). ──
+    const financeCats = studentFieldsConfig.categories.filter(
+      (c) => c.name === "Finance",
+    );
+    const financeCatIds = new Set(financeCats.map((c) => c.id));
+    const financeConfig = {
+      categories: financeCats,
+      fields: studentFieldsConfig.fields
+        .filter((f) => financeCatIds.has(f.categoryId) && onForm(f))
+        .map(withReq),
+    };
+
+    // ── Justificatifs tab (Dars entity-fields) — file fields. ──
+    const justifCats = studentFieldsConfig.categories.filter(
+      (c) => c.name === "Justificatifs",
+    );
+    const justifCatIds = new Set(justifCats.map((c) => c.id));
+    const justificatifsConfig = {
+      categories: justifCats,
+      fields: studentFieldsConfig.fields
+        .filter((f) => justifCatIds.has(f.categoryId) && onForm(f))
+        .map(withReq),
+    };
+    // ── Scolarité tab (Dars entity-fields) — 4 "Scolarité (dossier)" sections. ──
+    const scolariteCats = studentFieldsConfig.categories.filter((c) =>
+      SCOLARITE_CATEGORY_NAMES.includes(c.name),
+    );
+    const scolariteCatIds = new Set(scolariteCats.map((c) => c.id));
+    const scolariteConfig = {
+      categories: scolariteCats,
+      fields: studentFieldsConfig.fields
+        .filter((f) => scolariteCatIds.has(f.categoryId) && onForm(f))
+        .map(withReq),
+    };
+
     const boolYn = (b: boolean | null | undefined) =>
       b === true ? "yes" : b === false ? "no" : "";
 
@@ -629,21 +675,29 @@ export default async function DossierEditPage({
               typeof app.dossierAnswers === "object"
                 ? (app.dossierAnswers as Record<string, unknown>)
                 : {};
+            // Load adapter: canonical nested stores → flat config answers.
+            const scolariteInitial: Record<string, string> = {
+              ...scolariteAnswers(
+                parseScolarite(dossier.scolarite),
+                parsePedagogique(dossier.pedagogique),
+              ),
+            };
+            // Prefill the entry-date default (was a prop on the old tab).
+            if (!scolariteInitial[SCOLARITE_IDS.entryDate]) {
+              scolariteInitial[SCOLARITE_IDS.entryDate] = app.cycle
+                .schoolStartDate
+                ? app.cycle.schoolStartDate.toISOString().slice(0, 10)
+                : "";
+            }
             return (
               <DossierTabScolarite
                 applicationId={app.id}
-                disabled={!otherEditable}
-                initial={parseScolarite(dossier.scolarite)}
+                config={scolariteConfig}
+                initial={scolariteInitial}
                 initialEstablishmentId={app.establishmentId ?? ""}
                 initialNiveau={app.niveau ?? ""}
-                initialPedagogique={parsePedagogique(dossier.pedagogique)}
                 establishments={establishmentsForRenderer}
-                schoolName={tenant?.name ?? ""}
-                defaultEntryDate={
-                  app.cycle.schoolStartDate
-                    ? app.cycle.schoolStartDate.toISOString().slice(0, 10)
-                    : ""
-                }
+                disabled={!otherEditable}
               />
             );
           })() : null}
@@ -764,8 +818,10 @@ export default async function DossierEditPage({
             return (
               <DossierTabFinance
                 applicationId={app.id}
+                config={financeConfig}
+                initial={financeAnswers(parseFinance(dossier.finance))}
                 disabled={!otherEditable}
-                initial={parseFinance(dossier.finance)}
+                renewal={isRenewal}
               />
             );
           })() : null}
@@ -792,13 +848,30 @@ export default async function DossierEditPage({
           {/* Justificatifs tab still falls through to the placeholder
               for now — Phase 5 will hook it up to the existing
               ApplicationDocument upload flow. */}
-          {currentTab === "justificatifs" ? (
-            <DossierTabPlaceholder
-              applicationId={app.id}
-              tab={currentTab}
-              completed={tabsCompleted[currentTab] === true}
-            />
-          ) : null}
+          {currentTab === "justificatifs" ? (() => {
+            const dossier =
+              app.dossierAnswers && typeof app.dossierAnswers === "object"
+                ? (app.dossierAnswers as Record<string, unknown>)
+                : {};
+            const justif =
+              dossier.justificatifs && typeof dossier.justificatifs === "object"
+                ? (dossier.justificatifs as Record<string, unknown>)
+                : {};
+            const justificatifsInitial: Record<string, string> = {};
+            for (const f of justificatifsConfig.fields) {
+              const v = justif[f.key];
+              if (typeof v === "string") justificatifsInitial[f.id] = v;
+            }
+            return (
+              <DossierTabJustificatifs
+                applicationId={app.id}
+                config={justificatifsConfig}
+                initial={justificatifsInitial}
+                disabled={!otherEditable}
+                renewal={isRenewal}
+              />
+            );
+          })() : null}
         </div>
         </TenantConfigProvider>
 

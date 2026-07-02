@@ -253,6 +253,8 @@
       "type_phone": "Phone",
       "type_email": "Email",
       "type_photo": "Photo",
+      "type_multi_select": "Multi-select",
+      "type_file": "File (upload)",
       "type_repeater": "Repeatable list",
       "repeaterColumns": "List columns",
       "repeaterColumnsEmpty": "No columns yet. Add one.",

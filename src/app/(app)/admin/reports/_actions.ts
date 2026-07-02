@@ -291,7 +291,12 @@ export function csv<T extends Record<string, unknown>>(
   columns: ReadonlyArray<{ key: keyof T; header: string }>,
 ): string {
   const escape = (v: unknown): string => {
-    const s = v == null ? "" : String(v);
+    let s = v == null ? "" : String(v);
+    // Formula-injection guard: many columns are parent-controlled dossier
+    // answers (child name, nationality, …). A value starting with = + - @
+    // (or tab/CR) is evaluated as a formula by Excel/LibreOffice, so prefix a
+    // single quote to force it to be treated as text. (OWASP CSV injection.)
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
     if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
     return s;
   };

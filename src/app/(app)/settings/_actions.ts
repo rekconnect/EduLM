@@ -314,12 +314,7 @@ export async function updateFamilyCodeSettings(
 // ── Dossier-state defaults (services gate) per context ──────────
 
 /** Tabs whose fields live in the System-B registry (hardcoded components). */
-const REGISTRY_TABS: DossierTab[] = [
-  "scolarite",
-  "finance",
-  "justificatifs",
-  "validation",
-];
+const REGISTRY_TABS: DossierTab[] = ["validation"];
 
 /**
  * Resolve the System-B registry fields (label/required/hidden) for each
@@ -344,14 +339,7 @@ export async function loadInscriptionRegistry(): Promise<{
   const locale = (await getLocale()) as DossierLocale;
   const fieldsByTab: Record<string, ResolvedField[]> = {};
   for (const tab of REGISTRY_TABS) {
-    let resolved = resolveFields(fieldsForTab(tab), config, locale);
-    // The image-rights consents are registered under tab="foyer" (key-compat)
-    // but actually render on the Autorisations tab (System-A auth_* fields).
-    // Keep them out of the Foyer editor so they aren't shown twice.
-    if (tab === "foyer") {
-      resolved = resolved.filter((f) => f.section !== "imageRights");
-    }
-    fieldsByTab[tab] = resolved;
+    fieldsByTab[tab] = resolveFields(fieldsForTab(tab), config, locale);
   }
   return { fieldsByTab, config, locale };
 }

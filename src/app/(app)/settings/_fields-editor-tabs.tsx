@@ -10,6 +10,7 @@ import type {
   DossierLocale,
 } from "@/lib/inscription-fields-resolver";
 import { DOSSIER_TABS, type DossierTab } from "@/lib/dossier-tabs";
+import { SCOLARITE_CATEGORY_NAMES } from "@/lib/scolarite-config";
 import { FieldsConfigForm } from "./_fields-config";
 import { RegistryTabEditor } from "./_registry-tab-editor";
 import { ParentCreateFieldsForm } from "./_parent-create-fields";
@@ -48,13 +49,18 @@ const INSCRIPTION_TABS: InscTabDef[] = [
   ELEVE_TAB,
   { id: "responsables", entity: "parent", kind: "live" },
   { id: "foyer", entity: "student", cats: ["Foyer"], kind: "live" },
-  { id: "scolarite", kind: "registry" },
+  {
+    id: "scolarite",
+    entity: "student",
+    cats: SCOLARITE_CATEGORY_NAMES,
+    kind: "live",
+  },
   { id: "sante", entity: "student", cats: ["Santé"], kind: "live" },
   { id: "transport", entity: "student", cats: ["Services"], kind: "live" },
   { id: "autorisations", entity: "student", cats: ["Autorisations"], kind: "live" },
   { id: "contacts", entity: "student", cats: ["Contacts"], kind: "live" },
-  { id: "finance", kind: "registry" },
-  { id: "justificatifs", kind: "registry" },
+  { id: "finance", entity: "student", cats: ["Finance"], kind: "live" },
+  { id: "justificatifs", entity: "student", cats: ["Justificatifs"], kind: "live" },
   { id: "validation", kind: "registry" },
 ];
 

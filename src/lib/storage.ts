@@ -3,6 +3,26 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 const BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? "documents";
 const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hour
 
+/**
+ * Allowed upload MIME types — justificatifs are ID docs, photos, bulletins and
+ * vaccination scans, so PDF + raster images only. Notably EXCLUDES text/html and
+ * image/svg+xml, which can carry script and would otherwise render (stored XSS)
+ * when an admin opens the signed URL. Downloads are additionally forced to
+ * attachment (see getSignedDownloadUrl) as defense in depth.
+ */
+const ALLOWED_UPLOAD_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/pjpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/heic",
+  "image/heif",
+  "image/tiff",
+  "image/bmp",
+]);
+
 let _client: SupabaseClient | null | undefined;
 
 /**
@@ -39,6 +59,13 @@ export async function uploadDocument(
   const client = getClient();
   if (!client) return null;
 
+  const mimeType = file.type || "";
+  if (!ALLOWED_UPLOAD_TYPES.has(mimeType)) {
+    throw new Error(
+      `Type de fichier non autorisé${mimeType ? ` (${mimeType})` : ""}. Formats acceptés : PDF, JPG, PNG, WEBP, GIF, HEIC, TIFF.`,
+    );
+  }
+
   const safeName = file.name
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, "-")
@@ -50,11 +77,11 @@ export async function uploadDocument(
   const { error } = await client.storage
     .from(BUCKET)
     .upload(path, new Uint8Array(arrayBuffer), {
-      contentType: file.type || "application/octet-stream",
+      contentType: mimeType,
       upsert: false,
     });
   if (error) throw new Error(`Storage upload failed: ${error.message}`);
-  return { path, size: file.size, mimeType: file.type || "application/octet-stream" };
+  return { path, size: file.size, mimeType };
 }
 
 /**
@@ -66,7 +93,9 @@ export async function getSignedDownloadUrl(storagePath: string): Promise<string 
   if (!client) return null;
   const { data, error } = await client.storage
     .from(BUCKET)
-    .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
+    // download:true → Content-Disposition: attachment, so the browser saves the
+    // file instead of rendering it inline (defuses HTML/SVG stored-XSS).
+    .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS, { download: true });
   if (error) return null;
   return data.signedUrl;
 }

@@ -68,7 +68,6 @@ export default async function InscriptionConfigPreviewPage() {
       <PreviewClient
         inscriptionFormConfig={inscriptionFormConfig}
         locale={dossierLocale}
-        schoolName={tenant.name}
       />
     </main>
   );

@@ -7,16 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { FieldsRenderer, type FieldAnswers } from "@/components/fields-renderer";
 import type { EntityFieldsConfig } from "@/lib/entity-fields";
-import { saveFinanceTab } from "../../_actions";
+import { saveJustificatifsTab, uploadDossierFile } from "../../_actions";
 
 /**
- * Finance tab — Dars entity-fields edition. Renders the student "Finance"
- * category (3 acknowledgements, comité des parents, caisse LBP/USD selects with
- * a conditional "autre" amount) via the shared FieldsRenderer. Answers persist
- * to dossierAnswers.finance; parseFinance reads the config-native shape. No
- * acceptance-bridge consumption.
+ * Justificatifs tab — Dars entity-fields edition. Renders the student
+ * "Justificatifs" category (config-defined `file` fields — one per required
+ * document) via FieldsRenderer, with an upload handler bound to the dossier.
+ * Files upload to storage and the answer keeps a {path,name} reference;
+ * answers persist under dossierAnswers.justificatifs.
  */
-export function DossierTabFinance({
+export function DossierTabJustificatifs({
   applicationId,
   config,
   initial,
@@ -27,15 +27,21 @@ export function DossierTabFinance({
   config: EntityFieldsConfig;
   initial: FieldAnswers;
   disabled: boolean;
-  /** Re-inscription: locks fields whose renewalPrefill is "locked". */
   renewal?: boolean;
 }) {
   const [answers, setAnswers] = useState<FieldAnswers>(initial);
   const [pending, start] = useTransition();
 
+  async function onUploadFile(file: File) {
+    const fd = new FormData();
+    fd.set("file", file);
+    const r = await uploadDossierFile(fd);
+    return r.ok && r.path ? { path: r.path, name: r.name ?? file.name } : null;
+  }
+
   function onSave() {
     start(async () => {
-      const r = await saveFinanceTab(applicationId, answers);
+      const r = await saveJustificatifsTab(applicationId, answers);
       if (r.ok) toast.success("Enregistré");
       else toast.error("Échec de l'enregistrement");
     });
@@ -43,12 +49,12 @@ export function DossierTabFinance({
 
   return (
     <Card>
-      <CardHeader title="Finance" />
+      <CardHeader title="Justificatifs" />
       <CardBody>
         <FieldsRenderer
           config={config}
           answers={answers}
-          extras={{ establishments: [] }}
+          extras={{ establishments: [], onUploadFile }}
           disabled={disabled}
           unlockBound
           renewal={renewal}

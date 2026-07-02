@@ -291,77 +291,6 @@ export async function createDossier(
 
 // ── Edit dossier core fields (name, DOB, scolarité) ──────────
 
-const dossierCoreSchema = z.object({
-  childFirstName: z.string().trim().min(1).max(80),
-  childLastName: z.string().trim().min(1).max(80),
-  childDob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  establishmentId: z.string().trim().min(1).optional(),
-  niveau: z.string().trim().min(1).max(40),
-});
-
-/**
- * Update the core dossier fields that were captured during creation. Parent
- * can correct a typo in the kid's name, switch the niveau choice, etc. —
- * without having to cancel and re-create the file.
- */
-export async function updateDossierCore(
-  applicationId: string,
-  _prev: { ok?: boolean; error?: string; errors?: Record<string, string> } | undefined,
-  formData: FormData,
-): Promise<{ ok?: boolean; error?: string; errors?: Record<string, string> }> {
-  const user = await requireRole("PARENT");
-  const tenantId = user.tenantId;
-  if (!tenantId) return { ok: false, error: "no-tenant" };
-
-  const parsed = dossierCoreSchema.safeParse({
-    childFirstName: String(formData.get("childFirstName") ?? ""),
-    childLastName: String(formData.get("childLastName") ?? ""),
-    childDob: String(formData.get("childDob") ?? ""),
-    establishmentId: String(formData.get("establishmentId") ?? "") || undefined,
-    niveau: String(formData.get("niveau") ?? ""),
-  });
-  if (!parsed.success) {
-    const flat = z.flattenError(parsed.error).fieldErrors as Record<string, string[] | undefined>;
-    const errors: Record<string, string> = {};
-    for (const [k, v] of Object.entries(flat)) if (v?.[0]) errors[k] = v[0];
-    return { ok: false, errors };
-  }
-
-  return runWithTenant({ tenantId, slug: null }, async () => {
-    const app = await db.application.findUnique({
-      where: { id: applicationId },
-      select: { id: true, submittedByUserId: true, status: true },
-    });
-    if (!app) return { ok: false, error: "not-found" };
-    if (app.submittedByUserId !== user.id) return { ok: false, error: "forbidden" };
-    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
-      return { ok: false, error: "locked" };
-    }
-
-    if (parsed.data.establishmentId) {
-      const est = await db.establishment.findUnique({
-        where: { id: parsed.data.establishmentId },
-        select: { id: true },
-      });
-      if (!est) return { ok: false, error: "establishment-not-found" };
-    }
-
-    await db.application.update({
-      where: { id: applicationId },
-      data: {
-        childFirstName: parsed.data.childFirstName,
-        childLastName: parsed.data.childLastName,
-        childDob: new Date(`${parsed.data.childDob}T00:00:00.000Z`),
-        establishmentId: parsed.data.establishmentId ?? null,
-        niveau: parsed.data.niveau,
-        requestedLevel: parsed.data.niveau, // keep legacy column in sync
-      },
-    });
-    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
-    revalidatePath("/parent/dashboard");
-    return { ok: true };
-  });
-}
 
 // ── Completion helpers (Élève + Scolarité) ────────────────────
 // Both tabs have data spread across multiple save actions, so the
@@ -483,216 +412,6 @@ const eleveEtatCivilSchema = z.object({
   childPlaceOfBirthAr: z.string().trim().max(80).optional(),
 });
 
-/**
- * Phase-1 Dars convergence: mirror the student état-civil / passeport inputs
- * into Application.studentAnswers under the canonical Dars field ids, so the
- * inscription form, the fiche, and the acceptance bridge all read the SAME
- * field set. The legacy Application columns are still written in parallel
- * (dropped in a later phase). prenom/nom/date_naissance stay column-bound
- * (dossierBoundTo) so they are intentionally NOT duplicated here. An empty
- * value clears the key.
- */
-function mergeStudentDarsAnswers(
-  existing: unknown,
-  patch: Record<string, string | null | undefined>,
-): Prisma.InputJsonValue {
-  const out: Record<string, unknown> =
-    existing && typeof existing === "object"
-      ? { ...(existing as Record<string, unknown>) }
-      : {};
-  for (const [k, v] of Object.entries(patch)) {
-    if (v == null || v.trim() === "") delete out[k];
-    else out[k] = v.trim();
-  }
-  return out as Prisma.InputJsonValue;
-}
-
-export async function saveEleveEtatCivil(
-  applicationId: string,
-  payload: unknown,
-): Promise<{ ok: boolean; error?: string; errors?: Record<string, string> }> {
-  const user = await requireRole("PARENT");
-  const tenantId = user.tenantId;
-  if (!tenantId) return { ok: false, error: "no-tenant" };
-
-  const parsed = eleveEtatCivilSchema.safeParse(payload);
-  if (!parsed.success) {
-    const flat = z.flattenError(parsed.error).fieldErrors as Record<
-      string,
-      string[] | undefined
-    >;
-    const errors: Record<string, string> = {};
-    for (const [k, v] of Object.entries(flat)) if (v?.[0]) errors[k] = v[0];
-    return { ok: false, errors };
-  }
-
-  return runWithTenant({ tenantId, slug: null }, async () => {
-    const app = await db.application.findUnique({
-      where: { id: applicationId },
-      select: { id: true, submittedByUserId: true, status: true, studentAnswers: true },
-    });
-    if (!app) return { ok: false, error: "not-found" };
-    if (app.submittedByUserId !== user.id) return { ok: false, error: "forbidden" };
-    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
-      return { ok: false, error: "locked" };
-    }
-
-    const nomPrenomAr = [parsed.data.childLastNameAr, parsed.data.childFirstNameAr]
-      .map((s) => (s ?? "").trim())
-      .filter(Boolean)
-      .join(" ");
-
-    await db.application.update({
-      where: { id: applicationId },
-      data: {
-        childFirstName: parsed.data.childFirstName,
-        childLastName: parsed.data.childLastName,
-        childDob: new Date(`${parsed.data.childDob}T00:00:00.000Z`),
-        childGender: parsed.data.childGender ?? null,
-        childPlaceOfBirth: parsed.data.childPlaceOfBirth || null,
-        childBirthCountry: parsed.data.childBirthCountry || null,
-        childFirstNameAr: parsed.data.childFirstNameAr || null,
-        childLastNameAr: parsed.data.childLastNameAr || null,
-        childPlaceOfBirthAr: parsed.data.childPlaceOfBirthAr || null,
-        studentAnswers: mergeStudentDarsAnswers(app.studentAnswers, {
-          pays_naissance: parsed.data.childBirthCountry,
-          lieu_naissance: parsed.data.childPlaceOfBirth,
-          nom_prenom_ar: nomPrenomAr,
-          lieu_naissance_ar: parsed.data.childPlaceOfBirthAr,
-        }),
-      },
-    });
-
-    // Refresh tabsCompleted.eleve so the badge updates immediately
-    // after saving. Re-fetch to include the row we just wrote, then run
-    // the completion checker against the tenant's per-field overrides
-    // (hidden / admin-marked-optional fields don't block the badge).
-    const [fresh, tenantFormConfig] = await Promise.all([
-      db.application.findUnique({
-        where: { id: applicationId },
-        select: { ...ELEVE_COMPLETION_SELECT, tabsCompleted: true },
-      }),
-      loadInscriptionFormConfig(tenantId),
-    ]);
-    if (fresh) {
-      await db.application.update({
-        where: { id: applicationId },
-        data: {
-          tabsCompleted: mergeTabsCompleted(
-            fresh.tabsCompleted,
-            "eleve",
-            evaluateEleveComplete(fresh, tenantFormConfig),
-          ),
-        },
-      });
-    }
-
-    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
-    revalidatePath("/parent/dashboard");
-    return { ok: true };
-  });
-}
-
-/**
- * Save the "Passeport / Carte d'identité" card — Lebanese-nationality
- * Yes/No plus up to 3 nationalities. Passport numbers + expiry land
- * here later.
- */
-const elevePassportSchema = z.object({
-  childIsLebanese: z.boolean().nullable().optional(),
-  childPassportLebanese: z.string().trim().max(40).optional(),
-  childNationality: z.string().trim().max(80).optional(),
-  childNationality2: z.string().trim().max(80).optional(),
-});
-
-export async function saveElevePassport(
-  applicationId: string,
-  payload: unknown,
-): Promise<{ ok: boolean; error?: string; errors?: Record<string, string> }> {
-  const user = await requireRole("PARENT");
-  const tenantId = user.tenantId;
-  if (!tenantId) return { ok: false, error: "no-tenant" };
-
-  const parsed = elevePassportSchema.safeParse(payload);
-  if (!parsed.success) {
-    const flat = z.flattenError(parsed.error).fieldErrors as Record<
-      string,
-      string[] | undefined
-    >;
-    const errors: Record<string, string> = {};
-    for (const [k, v] of Object.entries(flat)) if (v?.[0]) errors[k] = v[0];
-    return { ok: false, errors };
-  }
-
-  return runWithTenant({ tenantId, slug: null }, async () => {
-    const app = await db.application.findUnique({
-      where: { id: applicationId },
-      select: { id: true, submittedByUserId: true, status: true, studentAnswers: true },
-    });
-    if (!app) return { ok: false, error: "not-found" };
-    if (app.submittedByUserId !== user.id) return { ok: false, error: "forbidden" };
-    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
-      return { ok: false, error: "locked" };
-    }
-    // Only persist the Lebanese passport when the kid IS Lebanese.
-    // Saying "Non" wipes any previously entered value, so admin
-    // doesn't see stale data attached to a non-Lebanese child.
-    const persistLebanesePassport =
-      parsed.data.childIsLebanese === true
-        ? parsed.data.childPassportLebanese || null
-        : null;
-
-    await db.application.update({
-      where: { id: applicationId },
-      data: {
-        childIsLebanese:
-          parsed.data.childIsLebanese === undefined
-            ? undefined
-            : parsed.data.childIsLebanese,
-        childPassportLebanese: persistLebanesePassport,
-        childNationality: parsed.data.childNationality || null,
-        childNationality2: parsed.data.childNationality2 || null,
-        // Slot 3 was removed from the UI — null it out on every save
-        // so old DB values (from earlier sessions) don't linger.
-        childNationality3: null,
-        studentAnswers: mergeStudentDarsAnswers(app.studentAnswers, {
-          nationalite: parsed.data.childNationality,
-          nationalite2: parsed.data.childNationality2,
-          numero_identite: persistLebanesePassport ?? "",
-          isLebanese:
-            parsed.data.childIsLebanese == null
-              ? ""
-              : parsed.data.childIsLebanese
-                ? "yes"
-                : "no",
-        }),
-      },
-    });
-
-    const [fresh, tenantFormConfig] = await Promise.all([
-      db.application.findUnique({
-        where: { id: applicationId },
-        select: { ...ELEVE_COMPLETION_SELECT, tabsCompleted: true },
-      }),
-      loadInscriptionFormConfig(tenantId),
-    ]);
-    if (fresh) {
-      await db.application.update({
-        where: { id: applicationId },
-        data: {
-          tabsCompleted: mergeTabsCompleted(
-            fresh.tabsCompleted,
-            "eleve",
-            evaluateEleveComplete(fresh, tenantFormConfig),
-          ),
-        },
-      });
-    }
-
-    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
-    return { ok: true };
-  });
-}
 
 /**
  * Dars-unified Élève save: the Élève tab now renders the student
@@ -914,124 +633,6 @@ export async function saveMonoParental(
 
 // ── Save tenant custom answers on the dossier (Round 8) ──────
 
-/**
- * Collects every `f-<fieldId>` form entry, validates against the tenant's
- * field config (drops unknown ids), and writes to the requested column.
- * Used by both the parent + student sections on the dossier edit page.
- */
-async function saveAnswers(
-  applicationId: string,
-  formData: FormData,
-  entity: "parent" | "student",
-): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("PARENT");
-  const tenantId = user.tenantId;
-  if (!tenantId) return { ok: false, error: "no-tenant" };
-
-  // Verify the application belongs to this parent + load the right field
-  // config for this entity in one tenant-scoped roundtrip.
-  return runWithTenant({ tenantId, slug: null }, async () => {
-    const app = await db.application.findUnique({
-      where: { id: applicationId },
-      select: {
-        id: true,
-        submittedByUserId: true,
-        status: true,
-        tabsCompleted: true,
-        childFirstName: true,
-        childLastName: true,
-        childDob: true,
-        childGender: true,
-        childIsLebanese: true,
-        childPassportLebanese: true,
-        childNationality: true,
-        childPlaceOfBirth: true,
-        childBirthCountry: true,
-        childFirstNameAr: true,
-        childLastNameAr: true,
-        establishmentId: true,
-        niveau: true,
-      },
-    });
-    if (!app) return { ok: false, error: "not-found" };
-    if (app.submittedByUserId !== user.id) return { ok: false, error: "forbidden" };
-    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
-      return { ok: false, error: "locked" };
-    }
-
-    const tenant = await unscopedDb().tenant.findUnique({
-      where: { id: tenantId },
-      select: {
-        parentFieldsConfig: entity === "parent",
-        studentFieldsConfig: entity === "student",
-      },
-    });
-    const config: EntityFieldsConfig = parseEntityFieldsConfig(
-      entity === "parent"
-        ? tenant?.parentFieldsConfig
-        : tenant?.studentFieldsConfig,
-    );
-    const validIds = new Set(config.fields.map((f) => f.id));
-
-    const answers: Record<string, string> = {};
-    for (const [k, v] of formData.entries()) {
-      if (!k.startsWith("f-")) continue;
-      const fieldId = k.slice(2);
-      if (!validIds.has(fieldId)) continue;
-      const value = String(v).trim();
-      if (value.length === 0) continue;
-      if (value.length > 2000) continue;
-      answers[fieldId] = value;
-    }
-
-    // Auto-derive the tab's REMPLI/À REMPLIR badge from required-field
-    // presence. Honors active/showIf/hideIf so hidden fields don't
-    // hold the tab back. For Élève we additionally require the dossier
-    // identity (lastName/firstName/dob/establishment/niveau) since
-    // those live on Application columns, not in studentAnswers.
-    const visible = config.fields.filter(
-      (f) => evaluateShowIf(f, answers) === true,
-    );
-    const missingRequired = visible.filter((f) => {
-      if (f.required !== true) return false;
-      const v = answers[f.id];
-      return !v || v.length === 0;
-    });
-    let tabDone = missingRequired.length === 0;
-
-    // The Élève tab no longer renders tenant custom student fields,
-    // so writing studentAnswers shouldn't touch tabsCompleted.eleve
-    // either. For "parent" it still updates the Responsables badge.
-    const tabKey = entity === "parent" ? "responsables" : null;
-    const nextTabs = tabKey
-      ? mergeTabsCompleted(app.tabsCompleted, tabKey, tabDone)
-      : (app.tabsCompleted as Record<string, unknown>);
-
-    await db.application.update({
-      where: { id: applicationId },
-      data:
-        entity === "parent"
-          ? { parentAnswers: answers, tabsCompleted: nextTabs }
-          : { studentAnswers: answers, tabsCompleted: nextTabs },
-    });
-    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
-    return { ok: true };
-  });
-}
-
-export async function saveDossierParentAnswers(
-  applicationId: string,
-  formData: FormData,
-) {
-  return saveAnswers(applicationId, formData, "parent");
-}
-
-export async function saveDossierStudentAnswers(
-  applicationId: string,
-  formData: FormData,
-) {
-  return saveAnswers(applicationId, formData, "student");
-}
 
 // ── Submit dossier — validates required tenant fields (Round 8) ──────
 
@@ -1461,6 +1062,7 @@ export async function saveScolariteTab(
     parsePedagogique,
     isPedagogiqueCompleteFor,
   } = await import("@/lib/pedagogique");
+  const { scolariteFromAnswers } = await import("@/lib/scolarite-config");
 
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await db.application.findUnique({
@@ -1469,15 +1071,25 @@ export async function saveScolariteTab(
     });
     if (!app) return { ok: false, error: "not-found" };
 
-    const data = parseScolarite(payload);
-
-    // Establishment + niveau used to live on the Élève tab; they were
-    // moved here. Extract from the payload (string fields, not part of
-    // ScolariteData) and write to dedicated Application columns.
     const raw =
       payload && typeof payload === "object"
         ? (payload as Record<string, unknown>)
         : {};
+
+    // Config-native tab sends flat FieldsRenderer answers → rebuild the two
+    // canonical nested stores (ScolariteData + PedagogiqueData). Fall back to
+    // the legacy nested shape for any pre-migration client.
+    const rebuilt =
+      raw.answers && typeof raw.answers === "object"
+        ? scolariteFromAnswers(raw.answers as Record<string, string>)
+        : {
+            scolarite: parseScolarite(payload),
+            pedagogique: parsePedagogique(raw.pedagogique),
+          };
+    const data = rebuilt.scolarite;
+    const pedagogique = rebuilt.pedagogique;
+
+    // Establishment + niveau are structural selects → Application columns.
     const newEstablishmentId =
       typeof raw.establishmentId === "string" && raw.establishmentId
         ? raw.establishmentId
@@ -1493,8 +1105,6 @@ export async function saveScolariteTab(
       if (!est) return { ok: false, error: "establishment-not-found" };
     }
 
-    // Pedagogical card — parsed defensively, included in completion.
-    const pedagogique = parsePedagogique(raw.pedagogique);
     const niveauGroup = classifyNiveau(newNiveau);
     const pedagogiqueComplete = isPedagogiqueCompleteFor(
       niveauGroup,
@@ -1685,45 +1295,6 @@ export async function setDossierTabCompleted(
 
 // ── Autres contacts tab (urgence + pickup lists) ──────────────────
 
-const contactSchema = z.object({
-  kind: z.enum(["URGENCE", "PICKUP"]),
-  firstName: z.string().trim().min(1).max(80),
-  lastName: z.string().trim().min(1).max(80),
-  relation: z.string().trim().max(40).optional(),
-  phoneMobile: z.string().trim().max(40).optional(),
-  phoneHome: z.string().trim().max(40).optional(),
-});
-
-async function refreshContactsCompletion(
-  applicationId: string,
-  app: { tabsCompleted: unknown },
-  tenantId: string,
-): Promise<void> {
-  // Contacts tab is complete when at least one URGENCE contact exists.
-  // Pickup-authorized contacts are optional — the school falls back to
-  // the responsables list if the parent doesn't add any.
-  //
-  // Phase 4: if admin hides or marks-optional contacts.urgence.list,
-  // the tab passes regardless of whether any URGENCE contacts exist.
-  const tenantFormConfig = await loadInscriptionFormConfig(tenantId);
-  const urgenceRequired = isFieldRequiredEffective(
-    "contacts.urgence.list",
-    tenantFormConfig,
-  );
-  let done: boolean;
-  if (!urgenceRequired) {
-    done = true;
-  } else {
-    const urgenceCount = await db.applicationContact.count({
-      where: { applicationId, kind: "URGENCE" },
-    });
-    done = urgenceCount > 0;
-  }
-  await db.application.update({
-    where: { id: applicationId },
-    data: { tabsCompleted: mergeTabsCompleted(app.tabsCompleted, "contacts", done) },
-  });
-}
 
 /**
  * Bulk save for the config-driven Contacts tab (repeater edition). Receives the
@@ -1805,201 +1376,9 @@ export async function saveContactsTab(
   });
 }
 
-export async function saveContact(
-  applicationId: string,
-  contactId: string | null,
-  payload: unknown,
-): Promise<{ ok: boolean; error?: string; errors?: Record<string, string> }> {
-  const user = await requireRole("PARENT");
-  const tenantId = user.tenantId;
-  if (!tenantId) return { ok: false, error: "no-tenant" };
-
-  const parsed = contactSchema.safeParse(payload);
-  if (!parsed.success) {
-    const flat = z.flattenError(parsed.error).fieldErrors as Record<
-      string,
-      string[] | undefined
-    >;
-    const errors: Record<string, string> = {};
-    for (const [k, v] of Object.entries(flat)) if (v?.[0]) errors[k] = v[0];
-    return { ok: false, errors };
-  }
-
-  return runWithTenant({ tenantId, slug: null }, async () => {
-    const app = await db.application.findUnique({
-      where: { id: applicationId, submittedByUserId: user.id },
-      select: { id: true, status: true, tabsCompleted: true },
-    });
-    if (!app) return { ok: false, error: "not-found" };
-    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
-      return { ok: false, error: "locked" };
-    }
-
-    if (contactId) {
-      // Update — verify the row belongs to this application.
-      const existing = await db.applicationContact.findUnique({
-        where: { id: contactId },
-        select: { applicationId: true },
-      });
-      if (!existing || existing.applicationId !== applicationId) {
-        return { ok: false, error: "not-found" };
-      }
-      await db.applicationContact.update({
-        where: { id: contactId },
-        data: {
-          kind: parsed.data.kind,
-          firstName: parsed.data.firstName,
-          lastName: parsed.data.lastName,
-          relation: parsed.data.relation || null,
-          phoneMobile: parsed.data.phoneMobile || null,
-          phoneHome: parsed.data.phoneHome || null,
-        },
-      });
-    } else {
-      // Create — append at the end of the kind's list.
-      const maxOrder = await db.applicationContact.aggregate({
-        where: { applicationId, kind: parsed.data.kind },
-        _max: { order: true },
-      });
-      await db.applicationContact.create({
-        data: {
-          tenantId,
-          applicationId,
-          kind: parsed.data.kind,
-          order: (maxOrder._max.order ?? -1) + 1,
-          firstName: parsed.data.firstName,
-          lastName: parsed.data.lastName,
-          relation: parsed.data.relation || null,
-          phoneMobile: parsed.data.phoneMobile || null,
-          phoneHome: parsed.data.phoneHome || null,
-        },
-      });
-    }
-
-    await refreshContactsCompletion(applicationId, app, tenantId);
-    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
-    return { ok: true };
-  });
-}
-
-export async function deleteContact(
-  applicationId: string,
-  contactId: string,
-): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("PARENT");
-  const tenantId = user.tenantId;
-  if (!tenantId) return { ok: false, error: "no-tenant" };
-
-  return runWithTenant({ tenantId, slug: null }, async () => {
-    const app = await db.application.findUnique({
-      where: { id: applicationId, submittedByUserId: user.id },
-      select: { id: true, status: true, tabsCompleted: true },
-    });
-    if (!app) return { ok: false, error: "not-found" };
-    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
-      return { ok: false, error: "locked" };
-    }
-    const existing = await db.applicationContact.findUnique({
-      where: { id: contactId },
-      select: { applicationId: true },
-    });
-    if (!existing || existing.applicationId !== applicationId) {
-      return { ok: false, error: "not-found" };
-    }
-    await db.applicationContact.delete({ where: { id: contactId } });
-    await refreshContactsCompletion(applicationId, app, tenantId);
-    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
-    return { ok: true };
-  });
-}
 
 // ── Responsables (père / mère / tuteur) ──────────────────────────
 
-const responsableSchema = z.object({
-  kind: z.enum(["PERE", "MERE", "TUTEUR", "AUTRE"]),
-  civility: z.string().trim().max(10).optional(),
-  firstName: z.string().trim().max(80).optional(),
-  lastName: z.string().trim().min(1).max(80),
-  firstNameAr: z.string().trim().max(80).optional(),
-  lastNameAr: z.string().trim().max(80).optional(),
-  isLebanese: z.boolean().nullable().optional(),
-  nationality1: z.string().trim().max(60).optional(),
-  email: z.string().trim().max(160).optional(),
-  phoneMobile: z.string().trim().max(40).optional(),
-  phoneHome: z.string().trim().max(40).optional(),
-  profession: z.string().trim().max(120).optional(),
-  employer: z.string().trim().max(120).optional(),
-});
-
-export async function saveResponsable(
-  applicationId: string,
-  responsableId: string | null,
-  payload: unknown,
-): Promise<{ ok: boolean; error?: string; errors?: Record<string, string> }> {
-  const user = await requireRole("PARENT");
-  const tenantId = user.tenantId;
-  if (!tenantId) return { ok: false, error: "no-tenant" };
-
-  const parsed = responsableSchema.safeParse(payload);
-  if (!parsed.success) {
-    const flat = z.flattenError(parsed.error).fieldErrors as Record<
-      string,
-      string[] | undefined
-    >;
-    const errors: Record<string, string> = {};
-    for (const [k, v] of Object.entries(flat)) if (v?.[0]) errors[k] = v[0];
-    return { ok: false, errors };
-  }
-  const d = parsed.data;
-
-  return runWithTenant({ tenantId, slug: null }, async () => {
-    const app = await db.application.findUnique({
-      where: { id: applicationId, submittedByUserId: user.id },
-      select: { id: true, status: true },
-    });
-    if (!app) return { ok: false, error: "not-found" };
-    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
-      return { ok: false, error: "locked" };
-    }
-
-    const data = {
-      kind: d.kind,
-      civility: d.civility || null,
-      firstName: d.firstName || null,
-      lastName: d.lastName,
-      firstNameAr: d.firstNameAr || null,
-      lastNameAr: d.lastNameAr || null,
-      isLebanese: d.isLebanese ?? null,
-      nationality1: d.nationality1 || null,
-      email: d.email || null,
-      phoneMobile: d.phoneMobile || null,
-      phoneHome: d.phoneHome || null,
-      profession: d.profession || null,
-      employer: d.employer || null,
-    };
-
-    if (responsableId) {
-      const existing = await db.applicationResponsable.findUnique({
-        where: { id: responsableId },
-        select: { applicationId: true },
-      });
-      if (!existing || existing.applicationId !== applicationId) {
-        return { ok: false, error: "not-found" };
-      }
-      await db.applicationResponsable.update({ where: { id: responsableId }, data });
-    } else {
-      const maxOrder = await db.applicationResponsable.aggregate({
-        where: { applicationId },
-        _max: { order: true },
-      });
-      await db.applicationResponsable.create({
-        data: { tenantId, applicationId, order: (maxOrder._max.order ?? -1) + 1, ...data },
-      });
-    }
-    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
-    return { ok: true };
-  });
-}
 
 /**
  * Save a responsable's FULL parent-field answer set (the two-parent editor on
@@ -2216,17 +1595,6 @@ export async function saveSanteTab(
 
 // ── Finance tab ──────────────────────────────────────────────────
 
-const financeSchema = z.object({
-  acknowledgedReglementInterieur: z.boolean().optional(),
-  acknowledgedReglementFinancier: z.boolean().optional(),
-  acknowledgedDroitsEntreeMlf: z.boolean().optional(),
-  comiteParents: z.boolean().nullable().optional(),
-  caisseLbp: z.string().trim().max(40).optional(), // "3000000" | "6000000" | "9000000" | "none" | custom
-  caisseLbpAutreAmount: z.string().trim().max(20).optional(),
-  caisseUsd: z.string().trim().max(40).optional(),
-  caisseUsdAutreAmount: z.string().trim().max(20).optional(),
-});
-
 export async function saveFinanceTab(
   applicationId: string,
   payload: unknown,
@@ -2235,12 +1603,28 @@ export async function saveFinanceTab(
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
-  const parsed = financeSchema.safeParse(payload);
-  if (!parsed.success) return { ok: false, error: "validation" };
-
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await loadApplicationOwnedBy(applicationId, user.id);
     if (!app) return { ok: false, error: "not-found" };
+
+    // Config-native answers: acks + comité as "yes"/"no", caisse* as value
+    // strings. Stored as-is into dossierAnswers.finance — parseFinance reads
+    // both shapes.
+    const ans =
+      payload && typeof payload === "object"
+        ? (payload as Record<string, unknown>)
+        : {};
+    const s = (k: string) => (typeof ans[k] === "string" ? (ans[k] as string) : "");
+    const out: Record<string, string> = {
+      acknowledgedReglementInterieur: s("acknowledgedReglementInterieur"),
+      acknowledgedReglementFinancier: s("acknowledgedReglementFinancier"),
+      acknowledgedDroitsEntreeMlf: s("acknowledgedDroitsEntreeMlf"),
+      comiteParents: s("comiteParents"),
+      caisseLbp: s("caisseLbp"),
+      caisseLbpAutreAmount: s("caisseLbpAutreAmount"),
+      caisseUsd: s("caisseUsd"),
+      caisseUsdAutreAmount: s("caisseUsdAutreAmount"),
+    };
 
     // Phase 4 — completion respects tenant overrides. Three acks +
     // comité are required by default; admin can flip any to optional
@@ -2248,34 +1632,87 @@ export async function saveFinanceTab(
     const tenantFormConfig = await loadInscriptionFormConfig(tenantId);
     const need = (key: string) =>
       isFieldRequiredEffective(key, tenantFormConfig);
+    const isYes = (v: string | undefined) => v === "yes";
     let complete = true;
-    if (
-      need("finance.reglements.ackInterieur") &&
-      parsed.data.acknowledgedReglementInterieur !== true
-    ) {
+    if (need("finance.reglements.ackInterieur") && !isYes(out.acknowledgedReglementInterieur)) {
       complete = false;
     }
-    if (
-      complete &&
-      need("finance.reglements.ackFinancier") &&
-      parsed.data.acknowledgedReglementFinancier !== true
-    ) {
+    if (complete && need("finance.reglements.ackFinancier") && !isYes(out.acknowledgedReglementFinancier)) {
       complete = false;
     }
-    if (
-      complete &&
-      need("finance.droitsMlf.ack") &&
-      parsed.data.acknowledgedDroitsEntreeMlf !== true
-    ) {
+    if (complete && need("finance.droitsMlf.ack") && !isYes(out.acknowledgedDroitsEntreeMlf)) {
       complete = false;
     }
-    if (
-      complete &&
-      need("finance.comite.subscribe") &&
-      (parsed.data.comiteParents === undefined ||
-        parsed.data.comiteParents === null)
-    ) {
+    if (complete && need("finance.comite.subscribe") && !out.comiteParents) {
       complete = false;
+    }
+
+    await db.application.update({
+      where: { id: applicationId },
+      data: {
+        dossierAnswers: mergeDossierAnswers(app.dossierAnswers, "finance", out),
+        tabsCompleted: mergeTabsCompleted(
+          app.tabsCompleted,
+          "finance",
+          complete,
+        ),
+      },
+    });
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    return { ok: true };
+  });
+}
+
+// ── Justificatifs tab (file uploads) ─────────────────────────────
+
+/**
+ * Upload one dossier file to storage. Returns the storage path + original name
+ * to embed in a `file` field's answer. ~10 MB cap.
+ */
+export async function uploadDossierFile(
+  formData: FormData,
+): Promise<{ ok: boolean; path?: string; name?: string; error?: string }> {
+  const user = await requireRole("PARENT");
+  if (!user.tenantId) return { ok: false, error: "no-tenant" };
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "no-file" };
+  }
+  if (file.size > 10 * 1024 * 1024) return { ok: false, error: "too-large" };
+  const { uploadDocument } = await import("@/lib/storage");
+  try {
+    const res = await uploadDocument(user.tenantId, file);
+    if (!res) return { ok: false, error: "storage-not-configured" };
+    return { ok: true, path: res.path, name: file.name };
+  } catch {
+    return { ok: false, error: "upload-failed" };
+  }
+}
+
+/**
+ * Save the Justificatifs tab — config-driven `file` fields whose answers are
+ * {path,name} JSON strings (uploaded via uploadDossierFile). Stored under
+ * dossierAnswers.justificatifs.
+ */
+export async function saveJustificatifsTab(
+  applicationId: string,
+  payload: unknown,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole("PARENT");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await loadApplicationOwnedBy(applicationId, user.id);
+    if (!app) return { ok: false, error: "not-found" };
+
+    const ans =
+      payload && typeof payload === "object"
+        ? (payload as Record<string, unknown>)
+        : {};
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(ans)) {
+      if (typeof v === "string" && v) out[k] = v;
     }
 
     await db.application.update({
@@ -2283,14 +1720,10 @@ export async function saveFinanceTab(
       data: {
         dossierAnswers: mergeDossierAnswers(
           app.dossierAnswers,
-          "finance",
-          parsed.data as unknown as Record<string, unknown>,
+          "justificatifs",
+          out,
         ),
-        tabsCompleted: mergeTabsCompleted(
-          app.tabsCompleted,
-          "finance",
-          complete,
-        ),
+        tabsCompleted: mergeTabsCompleted(app.tabsCompleted, "justificatifs", true),
       },
     });
     revalidatePath(`/parent/inscriptions/${applicationId}/edit`);

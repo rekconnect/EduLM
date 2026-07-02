@@ -8,6 +8,7 @@ import { Button, LinkButton } from "@/components/ui/button";
 import { StaggerGrid } from "@/components/ui/stagger-grid";
 import { db } from "@/lib/db";
 import { withParentSession } from "@/lib/session";
+import { runWithTenant } from "@/lib/tenant-context";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { startRenewal } from "../applications/_actions";
@@ -291,12 +292,19 @@ async function NoChildrenState({
   };
 }) {
   const t = await getTranslations("parent");
-  const apps = await db.application.findMany({
-    where: { submittedByUserId: user.id, archived: false, deletedAt: null },
-    orderBy: { createdAt: "desc" },
-    take: 5,
-    include: { cycle: { select: { label: true } } },
-  });
+  // This is a nested async Server Component: React renders its body AFTER the
+  // withParentSession runWithTenant scope has popped, so re-establish tenant
+  // context around the (now tenant-scoped) Application query or it throws.
+  const apps = await runWithTenant(
+    { tenantId: user.tenantId, slug: null },
+    () =>
+      db.application.findMany({
+        where: { submittedByUserId: user.id, archived: false, deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        include: { cycle: { select: { label: true } } },
+      }),
+  );
 
   return (
       <main className="mx-auto max-w-3xl space-y-6 px-6 py-10">

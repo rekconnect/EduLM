@@ -22,31 +22,28 @@ export default async function AppLayout({
 }) {
   const user = await requireUser();
 
+  // The three per-navigation reads are independent — run them together
+  // instead of serially (this layout renders on every authenticated page):
+  // the mustChangePassword flag, the tenant brand/shell data, and nav labels.
+  const [acct, tenant, tNav] = await Promise.all([
+    unscopedDb().user.findUnique({
+      where: { id: user.id },
+      select: { mustChangePassword: true },
+    }),
+    user.tenantId
+      ? unscopedDb().tenant.findUnique({
+          where: { id: user.tenantId },
+          select: { name: true, brandLight: true, brandDark: true, logoUrl: true },
+        })
+      : Promise.resolve(null),
+    getTranslations("nav"),
+  ]);
+
   // Force users flagged for a password reset (e.g. bulk-onboarded parents
   // on the shared initial password) to set their own password before they
   // can use any authenticated page. /change-password lives OUTSIDE this
   // (app) group, so redirecting there does not loop.
-  const acct = await unscopedDb().user.findUnique({
-    where: { id: user.id },
-    select: { mustChangePassword: true },
-  });
   if (acct?.mustChangePassword) redirect("/change-password");
-
-  const tNav = await getTranslations("nav");
-
-  // One query for everything the shell needs: brand colors, logo, tenant name.
-  let tenant: {
-    name: string;
-    brandLight: string | null;
-    brandDark: string | null;
-    logoUrl: string | null;
-  } | null = null;
-  if (user.tenantId) {
-    tenant = await unscopedDb().tenant.findUnique({
-      where: { id: user.tenantId },
-      select: { name: true, brandLight: true, brandDark: true, logoUrl: true },
-    });
-  }
 
   const sections = navSectionsForRole(user.role, {
     dashboard: tNav("dashboard"),

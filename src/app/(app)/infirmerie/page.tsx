@@ -26,7 +26,21 @@ export default async function InfirmeriePage() {
         id: true,
         firstName: true,
         lastName: true,
-        medicalRecord: true,
+        // Only the flags the list renders — not the wide free-text columns
+        // (medications, hospitalization, familyHistory, remarks, …).
+        medicalRecord: {
+          select: {
+            asthma: true,
+            diabetic: true,
+            epilepsy: true,
+            cardiacProblem: true,
+            scoliosis: true,
+            favism: true,
+            hemophilia: true,
+            allergies: true,
+            unfitForSports: true,
+          },
+        },
         _count: { select: { medicalVisits: true, immunizations: true } },
         enrollments: {
           where: { academicYear: { isActive: true } },

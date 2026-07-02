@@ -66,28 +66,29 @@ export async function saveAttendance(formData: FormData): Promise<AttendanceSave
   const day = new Date(`${parsed.data.date}T00:00:00.000Z`);
   if (Number.isNaN(day.getTime())) return { ok: false, error: "Invalid date" };
 
-  let count = 0;
+  // Replace-all for the submitted roster in ONE transaction: deleteMany +
+  // createMany instead of N sequential upserts (~30 round trips → 2, and
+  // atomic — no half-saved roster on a mid-loop failure). Only the submitted
+  // students' rows for this day are touched, same as the old per-row upsert.
+  const studentIds = parsed.data.records.map((r) => r.studentId);
   await runWithTenant({ tenantId, slug: null }, async () => {
-    for (const r of parsed.data.records) {
-      await db.attendanceRecord.upsert({
-        where: { studentId_date: { studentId: r.studentId, date: day } },
-        update: {
-          status: r.status,
-          lateMinutes: r.lateMinutes,
-          note: r.note,
-        },
-        create: {
+    await db.$transaction([
+      db.attendanceRecord.deleteMany({
+        where: { date: day, studentId: { in: studentIds } },
+      }),
+      db.attendanceRecord.createMany({
+        data: parsed.data.records.map((r) => ({
           tenantId,
           studentId: r.studentId,
           date: day,
           status: r.status,
           lateMinutes: r.lateMinutes,
           note: r.note,
-        },
-      });
-      count++;
-    }
+        })),
+      }),
+    ]);
   });
+  const count = parsed.data.records.length;
 
   revalidatePath("/attendance");
   revalidatePath(`/students`);

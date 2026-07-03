@@ -1546,7 +1546,15 @@
     "loading": "Loading…",
     "required": "Required",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "previous": "Previous",
+    "next": "Next",
+    "paginationSummary": "{from}–{to} of {total}",
+    "paginationPageOf": "Page {page} / {pageCount}",
+    "month": "Month",
+    "year": "Year",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month"
   },
   "errors": {
     "generic": "Something went wrong. Please try again.",

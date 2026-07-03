@@ -10,26 +10,9 @@ import { FilterPill } from "@/components/ui/filter-pill";
 import { YearPicker } from "@/components/shell/year-picker";
 import { db } from "@/lib/db";
 import { withTenantSession } from "@/lib/session";
+import { sortLevels } from "@/lib/levels";
 
 const BASE = "/classes";
-
-const LEVEL_ORDER = [
-  "PS", "MS", "GS",
-  "CP", "CE1", "CE2", "CM1", "CM2",
-  "6ème", "5ème", "4ème", "3ème",
-  "Seconde", "Première", "Terminale",
-];
-
-function sortLevels(levels: string[]): string[] {
-  return [...new Set(levels)].sort((a, b) => {
-    const ai = LEVEL_ORDER.indexOf(a);
-    const bi = LEVEL_ORDER.indexOf(b);
-    if (ai === -1 && bi === -1) return a.localeCompare(b);
-    if (ai === -1) return 1;
-    if (bi === -1) return -1;
-    return ai - bi;
-  });
-}
 
 const SORTABLE_COLUMNS = ["name", "level", "section", "count"] as const;
 type SortKey = (typeof SORTABLE_COLUMNS)[number];

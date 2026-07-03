@@ -3,6 +3,7 @@
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import { CommandPalette } from "@/components/command-palette";
+import { ConfirmProvider } from "@/components/ui/confirm";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -12,7 +13,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       enableSystem
       disableTransitionOnChange={false}
     >
-      <CommandPalette>{children}</CommandPalette>
+      <CommandPalette>
+        <ConfirmProvider>{children}</ConfirmProvider>
+      </CommandPalette>
       <Toaster
         position="bottom-right"
         toastOptions={{

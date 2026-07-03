@@ -153,7 +153,20 @@ export default async function AdmissionsAdminListPage({
         db.application.findMany({
           where,
           orderBy: orderByFor(sortKey, sortDir),
-          include: {
+          // Narrow select — the list renders only these scalars + the two
+          // relations. Crucially this drops the four heavy JSON blobs
+          // (parentAnswers / studentAnswers / dossierAnswers / tabsCompleted)
+          // and ~50 other unused columns that the default row would haul.
+          select: {
+            id: true,
+            status: true,
+            childFirstName: true,
+            childLastName: true,
+            requestedLevel: true,
+            submittedAt: true,
+            existingStudentId: true,
+            archived: true,
+            deletedAt: true,
             cycle: { select: { id: true, label: true } },
             submittedBy: {
               select: {

@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import {
@@ -78,6 +79,7 @@ export function FieldsConfigForm({
 }: Props) {
   const t = useTranslations("settings");
   const tCommon = useTranslations("common");
+  const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
 
   // Bootstrap with default categories if the tenant has no config yet.
@@ -644,8 +646,13 @@ export function FieldsConfigForm({
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  if (!window.confirm(t("fieldsConfig.removeSectionConfirm")))
+                onClick={async () => {
+                  if (
+                    !(await confirm({
+                      title: t("fieldsConfig.removeSectionConfirm"),
+                      destructive: true,
+                    }))
+                  )
                     return;
                   removeCategory(activeCategory.id);
                   setActiveCategoryId(null);

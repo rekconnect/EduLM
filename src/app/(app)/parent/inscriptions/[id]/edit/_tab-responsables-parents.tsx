@@ -8,6 +8,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Select } from "@/components/ui/input";
 import { FieldsRenderer, type FieldAnswers } from "@/components/fields-renderer";
+import { useConfirm } from "@/components/ui/confirm";
 import type { EntityFieldsConfig } from "@/lib/entity-fields";
 import {
   saveResponsableAnswers,
@@ -117,6 +118,7 @@ function ParentCard({
 }) {
   const [pending, start] = useTransition();
   const [removing, startRemove] = useTransition();
+  const confirm = useConfirm();
   const isNew = row.id.startsWith("new-");
 
   function onSave() {
@@ -134,12 +136,13 @@ function ParentCard({
       }
     });
   }
-  function onDelete() {
+  async function onDelete() {
     if (isNew) {
       onRemoved();
       return;
     }
-    if (!window.confirm("Supprimer ce responsable ?")) return;
+    if (!(await confirm({ title: "Supprimer ce responsable ?", destructive: true })))
+      return;
     startRemove(async () => {
       const r = await deleteResponsable(applicationId, row.id);
       if (r.ok) {

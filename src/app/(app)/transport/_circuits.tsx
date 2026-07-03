@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Route, Plus, Trash2, Loader2, X, Pencil, Check } from "lucide-react";
 import { toast } from "sonner";
 import { Input, Select } from "@/components/ui/input";
+import { useConfirm } from "@/components/ui/confirm";
 
 export type CircuitDto = { id: string; autocarNumber: string; activite: string };
 
@@ -42,6 +43,7 @@ export function CircuitsView({
   const [editBus, setEditBus] = useState("");
   const [editAct, setEditAct] = useState("");
   const [pending, start] = useTransition();
+  const confirm = useConfirm();
 
   function submit() {
     if (!autocarNumber.trim()) {
@@ -82,8 +84,14 @@ export function CircuitsView({
     });
   }
 
-  function remove(c: CircuitDto) {
-    if (!window.confirm(`Supprimer le circuit « ${c.autocarNumber} - ${c.activite} » ?`)) return;
+  async function remove(c: CircuitDto) {
+    if (
+      !(await confirm({
+        title: `Supprimer le circuit « ${c.autocarNumber} - ${c.activite} » ?`,
+        destructive: true,
+      }))
+    )
+      return;
     start(async () => {
       const res = await onDelete(c.id);
       if (res.ok) {

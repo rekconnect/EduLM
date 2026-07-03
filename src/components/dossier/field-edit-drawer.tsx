@@ -21,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, RotateCcw, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
@@ -89,6 +90,7 @@ export function FieldEditDrawer() {
   const [localeTab, setLocaleTab] = useState<LocaleKey>("fr");
   const [pendingSave, startSave] = useTransition();
   const [pendingReset, startReset] = useTransition();
+  const confirm = useConfirm();
 
   // Reset form state whenever the active field changes (drawer reopens).
   useEffect(() => {
@@ -108,11 +110,14 @@ export function FieldEditDrawer() {
     hidden !== initialFormState.hidden;
 
   // ── Close handlers ────────────────────────────────────────────────
-  function closeDrawer() {
+  async function closeDrawer() {
     if (isDirty) {
-      const confirmed = window.confirm(
-        "Vous avez des modifications non enregistrées. Fermer quand même ?",
-      );
+      const confirmed = await confirm({
+        title: "Fermer sans enregistrer ?",
+        description: "Vous avez des modifications non enregistrées.",
+        confirmLabel: "Fermer",
+        destructive: true,
+      });
       if (!confirmed) return;
     }
     setActiveFieldKey(null);
@@ -147,12 +152,12 @@ export function FieldEditDrawer() {
     });
   }
 
-  function onReset() {
+  async function onReset() {
     if (!activeFieldKey) return;
     if (!hasOverride) return;
-    const confirmed = window.confirm(
-      "Réinitialiser ce champ à sa valeur par défaut ?",
-    );
+    const confirmed = await confirm({
+      title: "Réinitialiser ce champ à sa valeur par défaut ?",
+    });
     if (!confirmed) return;
     startReset(async () => {
       const r = await resetFieldOverride(activeFieldKey);

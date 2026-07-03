@@ -14,6 +14,7 @@ import {
   ArrowDown,
 } from "lucide-react";
 import { Input, Select } from "@/components/ui/input";
+import { lvlIdx } from "@/lib/levels";
 
 export type InfirmerieRow = {
   id: string;
@@ -29,14 +30,6 @@ export type InfirmerieRow = {
 };
 
 const PAGE_SIZE = 50;
-const LEVEL_ORDER = [
-  "PS", "MS", "GS", "CP", "CE1", "CE2", "CM1", "CM2",
-  "6ème", "5ème", "4ème", "3ème", "2nde", "1ère", "Terminale",
-];
-const lvlIdx = (l: string) => {
-  const i = LEVEL_ORDER.indexOf(l);
-  return i < 0 ? 99 : i;
-};
 
 type SortKey = "name" | "classe" | "visites" | "vaccins";
 

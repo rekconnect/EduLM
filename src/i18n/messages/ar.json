@@ -1546,7 +1546,15 @@
     "loading": "جاري التحميل…",
     "required": "مطلوب",
     "yes": "نعم",
-    "no": "لا"
+    "no": "لا",
+    "previous": "السابق",
+    "next": "التالي",
+    "paginationSummary": "{from}–{to} من {total}",
+    "paginationPageOf": "صفحة {page} / {pageCount}",
+    "month": "الشهر",
+    "year": "السنة",
+    "previousMonth": "الشهر السابق",
+    "nextMonth": "الشهر التالي"
   },
   "errors": {
     "generic": "حدث خطأ. حاول مجدداً.",

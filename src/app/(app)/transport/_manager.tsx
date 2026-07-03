@@ -24,11 +24,13 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Input, Select } from "@/components/ui/input";
+import { useConfirm } from "@/components/ui/confirm";
 import {
   YearPicker,
   UrlSelect,
   type YearOption,
 } from "@/components/shell/year-picker";
+import { lvlIdx } from "@/lib/levels";
 
 const PAGE_SIZE = 50;
 const ZONES = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
@@ -81,14 +83,6 @@ type Edit = {
   bus_remarques: string;
 };
 
-const LEVEL_ORDER = [
-  "PS", "MS", "GS", "CP", "CE1", "CE2", "CM1", "CM2",
-  "6ème", "5ème", "4ème", "3ème", "2nde", "1ère", "Terminale",
-];
-const lvlIdx = (l: string) => {
-  const i = LEVEL_ORDER.indexOf(l);
-  return i < 0 ? 99 : i;
-};
 const busNum = (v: string) => {
   const n = Number(v.trim());
   return v.trim() === "" ? Number.POSITIVE_INFINITY : Number.isFinite(n) ? n : 9e8;
@@ -159,6 +153,7 @@ export function TransportManager({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Edit | null>(null);
   const [pending, start] = useTransition();
+  const confirm = useConfirm();
   // "Inscrire un élève" panel.
   const [registering, setRegistering] = useState(false);
   const [regQuery, setRegQuery] = useState("");
@@ -345,11 +340,14 @@ export function TransportManager({
     });
   }
 
-  function deleteRow(r: BusRow) {
+  async function deleteRow(r: BusRow) {
     if (
-      !window.confirm(
-        `Supprimer l'affectation bus de ${r.name} pour ce trimestre ?\n(Trajets, bus, zones et montants de la période seront retirés.)`,
-      )
+      !(await confirm({
+        title: `Supprimer l'affectation bus de ${r.name} pour ce trimestre ?`,
+        description:
+          "Trajets, bus, zones et montants de la période seront retirés.",
+        destructive: true,
+      }))
     )
       return;
     start(async () => {

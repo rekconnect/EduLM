@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Popover,
@@ -68,6 +68,7 @@ export function DatePicker({
   const initialView = selected ?? new Date(maxYear - 6, 8, 1); // ~Sept of a plausible birth year
   const [viewYear, setViewYear] = useState(initialView.getFullYear());
   const [viewMonth, setViewMonth] = useState(initialView.getMonth());
+  const t = useTranslations("common");
 
   const intl = useMemo(
     () => ({
@@ -152,7 +153,7 @@ export function DatePicker({
         <div className="space-y-3">
           {/* Header: prev — month/year selects — next */}
           <div className="flex items-center justify-between gap-2">
-            <button type="button" className={navBtn} onClick={() => shiftMonth(-1)} aria-label="−1">
+            <button type="button" className={navBtn} onClick={() => shiftMonth(-1)} aria-label={t("previousMonth")}>
               <ChevronLeft className="size-4 rtl:rotate-180" aria-hidden />
             </button>
             <div className="flex items-center gap-1.5">
@@ -160,7 +161,7 @@ export function DatePicker({
                 value={viewMonth}
                 onChange={(e) => setViewMonth(Number(e.target.value))}
                 className="rounded-md border border-[color:var(--border)] bg-transparent px-2 py-1 text-sm capitalize outline-none focus-visible:border-[color:var(--primary)]"
-                aria-label="Mois"
+                aria-label={t("month")}
               >
                 {monthNames.map((mn, i) => (
                   <option key={i} value={i} className="capitalize">
@@ -172,7 +173,7 @@ export function DatePicker({
                 value={viewYear}
                 onChange={(e) => setViewYear(Number(e.target.value))}
                 className="rounded-md border border-[color:var(--border)] bg-transparent px-2 py-1 text-sm outline-none focus-visible:border-[color:var(--primary)]"
-                aria-label="Année"
+                aria-label={t("year")}
               >
                 {years.map((y) => (
                   <option key={y} value={y}>
@@ -181,7 +182,7 @@ export function DatePicker({
                 ))}
               </select>
             </div>
-            <button type="button" className={navBtn} onClick={() => shiftMonth(1)} aria-label="+1">
+            <button type="button" className={navBtn} onClick={() => shiftMonth(1)} aria-label={t("nextMonth")}>
               <ChevronRight className="size-4 rtl:rotate-180" aria-hidden />
             </button>
           </div>

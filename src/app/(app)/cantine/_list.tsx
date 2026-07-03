@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Input, Select } from "@/components/ui/input";
+import { lvlIdx } from "@/lib/levels";
+import { useConfirm } from "@/components/ui/confirm";
 
 // Collation stops after CM2 — mirrors the module rule.
 const COLLATION_EDIT_LEVELS = new Set(["PS", "MS", "GS", "CP", "CE1", "CE2", "CM1", "CM2"]);
@@ -35,14 +37,6 @@ export type ServiceRow = {
 };
 
 const PAGE_SIZE = 50;
-const LEVEL_ORDER = [
-  "PS", "MS", "GS", "CP", "CE1", "CE2", "CM1", "CM2",
-  "6ème", "5ème", "4ème", "3ème", "2nde", "1ère", "Terminale",
-];
-const lvlIdx = (l: string) => {
-  const i = LEVEL_ORDER.indexOf(l);
-  return i < 0 ? 99 : i;
-};
 
 type SortKey = "name" | "classe" | "collation" | "cantine";
 
@@ -58,6 +52,7 @@ export function ServicesList({
   }) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [q, setQ] = useState("");
   const [service, setService] = useState<"" | "collation" | "cantine" | "both">("");
   const [levelFilter, setLevelFilter] = useState("");
@@ -85,8 +80,14 @@ export function ServicesList({
       }
     });
   }
-  function remove(r: ServiceRow) {
-    if (!window.confirm(`Retirer ${r.name} de la cantine/collation pour cette année ?`)) return;
+  async function remove(r: ServiceRow) {
+    if (
+      !(await confirm({
+        title: `Retirer ${r.name} de la cantine/collation pour cette année ?`,
+        destructive: true,
+      }))
+    )
+      return;
     start(async () => {
       const res = await onSet({ studentId: r.id, cantine: false, collation: false });
       if (res.ok) {

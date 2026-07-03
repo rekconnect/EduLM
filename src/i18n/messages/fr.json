@@ -1546,7 +1546,15 @@
     "loading": "Chargement…",
     "required": "Requis",
     "yes": "Oui",
-    "no": "Non"
+    "no": "Non",
+    "previous": "Précédent",
+    "next": "Suivant",
+    "paginationSummary": "{from}–{to} sur {total}",
+    "paginationPageOf": "Page {page} / {pageCount}",
+    "month": "Mois",
+    "year": "Année",
+    "previousMonth": "Mois précédent",
+    "nextMonth": "Mois suivant"
   },
   "errors": {
     "generic": "Une erreur est survenue. Réessayez.",

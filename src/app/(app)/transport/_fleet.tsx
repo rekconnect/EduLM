@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Trash2, Loader2, Bus, X, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Input, Select } from "@/components/ui/input";
+import { useConfirm } from "@/components/ui/confirm";
 
 export type AutocarDto = {
   id: string;
@@ -50,6 +51,7 @@ export function FleetView({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Form>(EMPTY);
   const [pending, start] = useTransition();
+  const confirm = useConfirm();
   const set = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((p) => ({ ...p, [k]: e.target.value }));
 
@@ -79,8 +81,14 @@ export function FleetView({
     setAdding(true);
   }
 
-  function remove(a: AutocarDto) {
-    if (!window.confirm(`Supprimer l'autocar n° ${a.number}${a.plate ? ` (${a.plate})` : ""} ?`)) return;
+  async function remove(a: AutocarDto) {
+    if (
+      !(await confirm({
+        title: `Supprimer l'autocar n° ${a.number}${a.plate ? ` (${a.plate})` : ""} ?`,
+        destructive: true,
+      }))
+    )
+      return;
     start(async () => {
       const res = await onDelete(a.id);
       if (res.ok) {

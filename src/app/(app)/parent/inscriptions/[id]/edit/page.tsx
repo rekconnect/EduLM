@@ -257,20 +257,26 @@ export default async function DossierEditPage({
       f: F,
     ): F => ({ ...f, required: fieldRequiredOnForm(f, { renewal: isRenewal }) });
 
-    const eleveCats = studentFieldsConfig.categories.filter((c) =>
-      ELEVE_CATEGORY_NAMES.includes(c.name),
-    );
-    const eleveCatIds = new Set(eleveCats.map((c) => c.id));
-    const eleveConfig = {
-      categories: eleveCats,
-      // Exclude formHidden fields — import-/admin-only fields (Dars code,
-      // register, inherited community, internal emails) don't belong on the
-      // parent form, though they stay on the fiche. On a re-inscription,
-      // renewalHidden fields drop out too; inscription-only ones are added.
-      fields: studentFieldsConfig.fields
-        .filter((f) => eleveCatIds.has(f.categoryId) && onForm(f))
-        .map(withReq),
+    // Scope the student field config to a tab's category name(s). Excludes
+    // formHidden fields — import-/admin-only fields (Dars code, register,
+    // inherited community, internal emails) don't belong on the parent form,
+    // though they stay on the fiche; on a re-inscription, renewalHidden fields
+    // drop out and inscription-only ones are added (both via onForm). withReq
+    // resolves each field's required-ness for the current context.
+    const configForCategories = (names: readonly string[]) => {
+      const cats = studentFieldsConfig.categories.filter((c) =>
+        names.includes(c.name),
+      );
+      const ids = new Set(cats.map((c) => c.id));
+      return {
+        categories: cats,
+        fields: studentFieldsConfig.fields
+          .filter((f) => ids.has(f.categoryId) && onForm(f))
+          .map(withReq),
+      };
     };
+
+    const eleveConfig = configForCategories(ELEVE_CATEGORY_NAMES);
     // Same rule for the Responsables tab parent fields.
     const parentFormConfig = {
       ...parentFieldsConfig,
@@ -319,102 +325,17 @@ export default async function DossierEditPage({
       }
     }
 
-    // ── Autorisations tab (Dars entity-fields) ──────────────────────
-    const autorisationsCats = studentFieldsConfig.categories.filter(
-      (c) => c.name === "Autorisations",
-    );
-    const autCatIds = new Set(autorisationsCats.map((c) => c.id));
-    const autorisationsConfig = {
-      categories: autorisationsCats,
-      fields: studentFieldsConfig.fields
-        .filter((f) => autCatIds.has(f.categoryId) && onForm(f))
-        .map(withReq),
-    };
-
-    // ── Transport & restauration tab (Dars entity-fields) ──────────
-    // The "Services" category carries the exact Dars registration vocabulary
-    // (transport_aller/retour, collations, repas_chaud, alt address).
-    const transportCats = studentFieldsConfig.categories.filter(
-      (c) => c.name === "Services",
-    );
-    const transportCatIds = new Set(transportCats.map((c) => c.id));
-    const transportConfig = {
-      categories: transportCats,
-      fields: studentFieldsConfig.fields
-        .filter((f) => transportCatIds.has(f.categoryId) && onForm(f))
-        .map(withReq),
-    };
-
-    // ── Contacts tab (Dars entity-fields) — two repeaters (urgence/pickup). ──
-    const contactsCats = studentFieldsConfig.categories.filter(
-      (c) => c.name === "Contacts",
-    );
-    const contactsCatIds = new Set(contactsCats.map((c) => c.id));
-    const contactsConfig = {
-      categories: contactsCats,
-      fields: studentFieldsConfig.fields
-        .filter((f) => contactsCatIds.has(f.categoryId) && onForm(f))
-        .map(withReq),
-    };
-
-    // ── Foyer tab (Dars entity-fields) — address (cascade) + siblings repeater. ──
-    const foyerCats = studentFieldsConfig.categories.filter(
-      (c) => c.name === "Foyer",
-    );
-    const foyerCatIds = new Set(foyerCats.map((c) => c.id));
-    const foyerConfig = {
-      categories: foyerCats,
-      fields: studentFieldsConfig.fields
-        .filter((f) => foyerCatIds.has(f.categoryId) && onForm(f))
-        .map(withReq),
-    };
-
-    // ── Santé tab (Dars entity-fields). ──
-    const santeCats = studentFieldsConfig.categories.filter(
-      (c) => c.name === "Santé",
-    );
-    const santeCatIds = new Set(santeCats.map((c) => c.id));
-    const santeConfig = {
-      categories: santeCats,
-      fields: studentFieldsConfig.fields
-        .filter((f) => santeCatIds.has(f.categoryId) && onForm(f))
-        .map(withReq),
-    };
-
-    // ── Finance tab (Dars entity-fields). ──
-    const financeCats = studentFieldsConfig.categories.filter(
-      (c) => c.name === "Finance",
-    );
-    const financeCatIds = new Set(financeCats.map((c) => c.id));
-    const financeConfig = {
-      categories: financeCats,
-      fields: studentFieldsConfig.fields
-        .filter((f) => financeCatIds.has(f.categoryId) && onForm(f))
-        .map(withReq),
-    };
-
-    // ── Justificatifs tab (Dars entity-fields) — file fields. ──
-    const justifCats = studentFieldsConfig.categories.filter(
-      (c) => c.name === "Justificatifs",
-    );
-    const justifCatIds = new Set(justifCats.map((c) => c.id));
-    const justificatifsConfig = {
-      categories: justifCats,
-      fields: studentFieldsConfig.fields
-        .filter((f) => justifCatIds.has(f.categoryId) && onForm(f))
-        .map(withReq),
-    };
-    // ── Scolarité tab (Dars entity-fields) — 4 "Scolarité (dossier)" sections. ──
-    const scolariteCats = studentFieldsConfig.categories.filter((c) =>
-      SCOLARITE_CATEGORY_NAMES.includes(c.name),
-    );
-    const scolariteCatIds = new Set(scolariteCats.map((c) => c.id));
-    const scolariteConfig = {
-      categories: scolariteCats,
-      fields: studentFieldsConfig.fields
-        .filter((f) => scolariteCatIds.has(f.categoryId) && onForm(f))
-        .map(withReq),
-    };
+    // Per-tab configs — each scopes to its category name(s). The "Services"
+    // category carries the Dars transport vocabulary; "Scolarité (dossier)"
+    // spans 4 sections; the rest are one category each.
+    const autorisationsConfig = configForCategories(["Autorisations"]);
+    const transportConfig = configForCategories(["Services"]);
+    const contactsConfig = configForCategories(["Contacts"]);
+    const foyerConfig = configForCategories(["Foyer"]);
+    const santeConfig = configForCategories(["Santé"]);
+    const financeConfig = configForCategories(["Finance"]);
+    const justificatifsConfig = configForCategories(["Justificatifs"]);
+    const scolariteConfig = configForCategories(SCOLARITE_CATEGORY_NAMES);
 
     const boolYn = (b: boolean | null | undefined) =>
       b === true ? "yes" : b === false ? "no" : "";

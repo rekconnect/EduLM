@@ -1,11 +1,12 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
 /**
  * Server-rendered pager. `params` carries every filter to preserve across
  * page links (q, status, sort, year, …) — `page` is added per link. Renders
  * nothing for an empty result set.
  */
-export function Pagination({
+export async function Pagination({
   basePath,
   params,
   page,
@@ -33,18 +34,26 @@ export function Pagination({
   const to = Math.min(total, page * pageSize);
   const prevHref = page > 1 ? href(page - 1) : null;
   const nextHref = page < pageCount ? href(page + 1) : null;
+  const t = await getTranslations("common");
 
   return (
     <div className="flex items-center justify-between gap-3 pt-1">
       <p className="text-xs tabular-nums text-[color:var(--color-foreground-muted)]">
-        {from}–{to} sur {total}
+        {t("paginationSummary", {
+          from: String(from),
+          to: String(to),
+          total: String(total),
+        })}
       </p>
       <div className="flex items-center gap-2">
-        <PageLink href={prevHref} label="Précédent" />
+        <PageLink href={prevHref} label={t("previous")} />
         <span className="text-xs tabular-nums text-[color:var(--color-foreground-muted)]">
-          Page {page} / {pageCount}
+          {t("paginationPageOf", {
+            page: String(page),
+            pageCount: String(pageCount),
+          })}
         </span>
-        <PageLink href={nextHref} label="Suivant" />
+        <PageLink href={nextHref} label={t("next")} />
       </div>
     </div>
   );

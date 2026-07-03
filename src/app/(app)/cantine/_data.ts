@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { lvlIdx } from "@/lib/levels";
 import type { ServiceRow } from "./_list";
 
 // Collation is only offered up to CM2 — mirrors the fiche rule.
@@ -101,15 +102,6 @@ export const CANTINE_EXPORT_COLUMNS = [
   { key: "collation", header: "Collation", width: 10 },
   { key: "cantine", header: "Cantine", width: 10 },
 ] as const;
-
-const LEVEL_ORDER = [
-  "PS", "MS", "GS", "CP", "CE1", "CE2", "CM1", "CM2",
-  "6ème", "5ème", "4ème", "3ème", "2nde", "1ère", "Terminale",
-];
-const lvlIdx = (l: string) => {
-  const i = LEVEL_ORDER.indexOf(l);
-  return i < 0 ? 99 : i;
-};
 
 /** Rows → export records, sorted by level → name. */
 export function toExportRows(rows: ServiceRow[]): Array<Record<string, string>> {

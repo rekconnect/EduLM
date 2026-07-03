@@ -41,18 +41,25 @@ export default async function SignInPage({
   const forgotHref = withTenant("/forgot-password");
 
   // School identity for the branded login: logo + name + brand colors, looked
-  // up by slug. The green accent comes from the tenant's brandLight; the deep
-  // navy primary is fixed (the configured brandDark is a lighter sky-blue and
-  // reads weakly as a hero/button base).
+  // up by slug. BOTH the hero/primary and the accent are driven by the tenant's
+  // configured brand (brandDark / brandLight). The hexes below are only neutral
+  // fallbacks for tenants that haven't set a brand yet — NOT baked-in Montaigne
+  // colours, which used to leak onto every school's login screen.
   const tenantRow = slug
     ? await unscopedDb().tenant.findFirst({
         where: { slug },
-        select: { name: true, logoUrl: true, brandLight: true },
+        select: {
+          name: true,
+          logoUrl: true,
+          brandLight: true,
+          brandDark: true,
+        },
       })
     : null;
   const tenantName = tenantRow?.name ?? tenant ?? tApp("name");
   const logoUrl = tenantRow?.logoUrl ?? null;
   const accent = (tenantRow?.brandLight || "#2CB547").trim();
+  const primary = (tenantRow?.brandDark || "#143A6B").trim();
 
   // Per-tenant campus photo served from /public (drop the file as
   // `login-<slug>.jpg`). Missing file simply falls back to the navy hero.
@@ -98,8 +105,8 @@ export default async function SignInPage({
   }
 
   const brandVars = {
-    "--lm-primary": "#143A6B",
-    "--lm-primary-hover": "#0F2C52",
+    "--lm-primary": primary,
+    "--lm-primary-hover": `color-mix(in oklab, ${primary}, black 22%)`,
     "--lm-accent": accent,
   } as CSSProperties;
 
@@ -119,7 +126,7 @@ export default async function SignInPage({
         className="absolute inset-0"
         style={{
           background:
-            "linear-gradient(to top, rgba(11,27,52,0.94) 0%, rgba(20,58,107,0.55) 48%, rgba(20,58,107,0.18) 100%)",
+            "linear-gradient(to top, color-mix(in srgb, var(--lm-primary), black 22%) 0%, color-mix(in srgb, var(--lm-primary), transparent 45%) 48%, color-mix(in srgb, var(--lm-primary), transparent 82%) 100%)",
         }}
         aria-hidden
       />

@@ -120,6 +120,8 @@ model Tenant {
   invoices         Invoice[]
   payments         Payment[]
   financeSummaries FinanceSummary[]
+  payrollEmployees PayrollEmployee[]
+  payslips         Payslip[]
   admissionCycles  AdmissionCycle[]
   applications     Application[]
   documents        TenantDocument[]
@@ -782,6 +784,47 @@ model FinanceSummary {
 
   @@unique([tenantId, fiscalYear, currency, kind, groupNo])
   @@index([tenantId, fiscalYear])
+}
+
+/// Imported staff directory from Dars HR (Prs_Employee + Prs_EmplJobDesc).
+/// Read-only display for the payroll module.
+model PayrollEmployee {
+  id             String    @id @default(cuid())
+  tenantId       String
+  darsEmplId     Int       @unique // Prs_Employee.ID
+  displayName    String
+  jobTitle       String?
+  department     String?
+  employmentType String? // Employée / Professeur / Vacataire / Honoraire
+  active         Boolean   @default(true) // not Resigned
+  recruitedAt    DateTime?
+  resignedAt     DateTime?
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payslips Payslip[]
+
+  @@index([tenantId, active])
+}
+
+/// Imported payslips from Dars payroll (Pay_Salary). Net amounts only (LBP is
+/// primary; USD usually null). Amounts are ×100 in BigInt. Read-only.
+model Payslip {
+  id           String    @id @default(cuid())
+  tenantId     String
+  employeeId   String
+  darsSalaryId Int       @unique // Pay_Salary.IDS
+  year         Int
+  month        Int
+  netLbpCents  BigInt    @default(0)
+  netUsdCents  BigInt    @default(0)
+  paid         Boolean   @default(false)
+  salaryDate   DateTime?
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee PayrollEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, year, month])
+  @@index([employeeId])
 }
 
 // ───────────────────────── Admissions / nouvelle inscription ─────────────────────────

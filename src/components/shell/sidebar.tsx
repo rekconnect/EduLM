@@ -30,6 +30,7 @@ import {
   UtensilsCrossed,
   HeartPulse,
   Landmark,
+  Wallet,
   Search,
   PanelLeftClose,
   PanelLeftOpen,
@@ -72,6 +73,7 @@ const ICONS: Record<IconName, LucideIcon> = {
   cantine: UtensilsCrossed,
   infirmerie: HeartPulse,
   finance: Landmark,
+  payroll: Wallet,
 };
 void FileText;
 

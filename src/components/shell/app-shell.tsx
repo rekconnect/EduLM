@@ -38,6 +38,7 @@ export async function AppShell({
     cantine: tNav("cantine"),
     infirmerie: tNav("infirmerie"),
     finance: tNav("finance"),
+    payroll: tNav("payroll"),
     inscriptionForm: tNav("inscriptionForm"),
     myApplications: tNav("myApplications"),
     myAnnouncements: tNav("myAnnouncements"),

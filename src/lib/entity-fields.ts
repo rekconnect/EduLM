@@ -595,3 +595,28 @@ export function evaluateShowIf(
   if (field.showIf) return matchesRule(field.showIf, answers);
   return true;
 }
+
+/**
+ * Live "inherit from the father" fallback for DISPLAY. For each student field
+ * with `inheritParentKey`, when the student has no value of its own, surface the
+ * father's current answer for that parent key. Unlike the acceptance-time seed
+ * in `_apply-dossier` (which writes the value once), this reflects the father's
+ * value live wherever student fields are shown — so imported students (never
+ * seeded) still display it, and editing the parent is reflected immediately.
+ *
+ * Returns a copy of `childAnswers` with the inherited fallbacks filled in.
+ */
+export function applyInheritedValues(
+  fields: FieldDef[],
+  childAnswers: Record<string, string>,
+  fatherAnswers: Record<string, string>,
+): Record<string, string> {
+  const out = { ...childAnswers };
+  for (const f of fields) {
+    const pk = f.inheritParentKey?.trim();
+    if (pk && !out[f.key]?.trim() && fatherAnswers[pk]?.trim()) {
+      out[f.key] = fatherAnswers[pk];
+    }
+  }
+  return out;
+}

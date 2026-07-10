@@ -147,10 +147,10 @@ export default async function ParentChildPage({
                 ) : (
                   invoices.map((inv) => {
                     const paid = inv.payments.reduce(
-                      (a, p) => a + p.amountCents,
+                      (a, p) => a + Number(p.amountCents),
                       0,
                     );
-                    const balance = inv.totalCents - paid;
+                    const balance = Number(inv.totalCents) - paid;
                     return (
                       <TR key={inv.id}>
                         <TD className="font-mono text-xs text-[color:var(--color-foreground)]">

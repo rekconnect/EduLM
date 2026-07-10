@@ -76,12 +76,21 @@ export default async function YearsPage() {
                         )}
                       </TD>
                       <TD className="text-end">
-                        <DeleteYearButton
-                          yearId={y.id}
-                          yearLabel={y.label}
-                          classCount={y._count.classes}
-                          enrollmentCount={y._count.enrollments}
-                        />
+                        <div className="inline-flex items-center gap-1">
+                          <LinkButton
+                            href={`/admin/years/${y.id}/promote`}
+                            variant="ghost"
+                            size="sm"
+                          >
+                            Promouvoir
+                          </LinkButton>
+                          <DeleteYearButton
+                            yearId={y.id}
+                            yearLabel={y.label}
+                            classCount={y._count.classes}
+                            enrollmentCount={y._count.enrollments}
+                          />
+                        </div>
                       </TD>
                     </TR>
                   );

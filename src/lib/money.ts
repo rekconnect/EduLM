@@ -4,9 +4,10 @@
  * decimal/thousands separators, currency symbol placement, RTL support.
  */
 
-export function centsToDecimalString(cents: number): string {
-  const sign = cents < 0 ? "-" : "";
-  const n = Math.abs(cents);
+export function centsToDecimalString(cents: number | bigint): string {
+  const c = Number(cents);
+  const sign = c < 0 ? "-" : "";
+  const n = Math.abs(c);
   const whole = Math.floor(n / 100);
   const dec = (n % 100).toString().padStart(2, "0");
   return `${sign}${whole}.${dec}`;
@@ -25,22 +26,23 @@ export function decimalStringToCents(value: string): number | null {
 }
 
 export function formatMoney(
-  cents: number,
+  cents: number | bigint,
   currency: string,
   locale = "fr-FR",
 ): string {
+  const c = Number(cents);
   try {
     return new Intl.NumberFormat(locale, {
       style: "currency",
       currency,
       currencyDisplay: "symbol",
-    }).format(cents / 100);
+    }).format(c / 100);
   } catch {
-    return `${centsToDecimalString(cents)} ${currency}`;
+    return `${centsToDecimalString(c)} ${currency}`;
   }
 }
 
-/** Sum line totals (cents × quantity). */
-export function sumLines(lines: { amountCents: number; quantity: number }[]): number {
-  return lines.reduce((acc, l) => acc + l.amountCents * l.quantity, 0);
+/** Sum line totals (cents × quantity). Accepts BigInt columns from Prisma. */
+export function sumLines(lines: { amountCents: number | bigint; quantity: number }[]): number {
+  return lines.reduce((acc, l) => acc + Number(l.amountCents) * l.quantity, 0);
 }

@@ -368,6 +368,7 @@
     "transport": "Transport",
     "cantine": "Cantine / Collation",
     "infirmerie": "Infirmerie",
+    "finance": "Finances",
     "settings": "Paramètres",
     "admissions": "Admissions",
     "applications": "Mes inscriptions",
@@ -434,14 +435,11 @@
   "dashboard": {
     "welcome": "Bonjour, {name}",
     "overviewLabel": "Aperçu",
-    "thisWeekLabel": "Cette semaine",
     "statStudents": "Élèves inscrits",
     "statClasses": "Classes actives",
     "statTeachers": "Enseignants",
     "statParents": "Parents",
-    "noActiveYear": "Aucune année scolaire active. Configurez-en une dans Paramètres.",
-    "statAbsencesWeek": "Absences (7j)",
-    "statIncidentsWeek": "Incidents (7j)"
+    "noActiveYear": "Aucune année scolaire active. Configurez-en une dans Paramètres."
   },
   "students": {
     "title": "Élèves",
@@ -449,6 +447,7 @@
     "createCta": "Ajouter un élève",
     "search": "Rechercher par nom…",
     "filterAll": "Tous",
+    "filterNew": "Nouveaux inscrits",
     "allClasses": "Toutes les classes",
     "empty": "Aucun élève. Cliquez sur \"Ajouter un élève\" pour commencer.",
     "emptySearch": "Aucun élève ne correspond à votre recherche.",

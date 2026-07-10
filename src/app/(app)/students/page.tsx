@@ -137,9 +137,6 @@ export default async function StudentsPage({
         ? classIdParam
         : undefined;
 
-    // Class filter implies a year scope; ignore the scope=all toggle when set.
-    const restrictToYear = scope !== "all" || !!classFilter;
-
     const sortKey: SortKey = (SORTABLE_COLUMNS as readonly string[]).includes(
       sort ?? "",
     )
@@ -152,6 +149,23 @@ export default async function StudentsPage({
     ).includes(status ?? "")
       ? (status as StudentStatus)
       : undefined;
+
+    // "Nouveaux inscrits" — pupils enrolled in the SELECTED year but NOT in the
+    // year immediately before it (new arrivals + returners for that year).
+    // `years` is sorted startDate desc, so [idx + 1] is the previous year.
+    const isNewFilter = status === "new";
+    const selectedYearIdx = years.findIndex((y) => y.id === selectedYearId);
+    const prevYearId =
+      selectedYearIdx >= 0 ? years[selectedYearIdx + 1]?.id : undefined;
+
+    // Class filter implies a year scope. But leaver statuses (retiré / diplômé)
+    // are cross-year by nature — a graduate/leaver isn't enrolled in the current
+    // year, so restricting to it makes the list look almost empty. Drop the year
+    // restriction for those two so they show across all years.
+    const isLeaverStatus =
+      statusFilter === "WITHDRAWN" || statusFilter === "GRADUATED";
+    const restrictToYear =
+      (scope !== "all" || !!classFilter) && !isLeaverStatus;
 
     const whereClause: Prisma.StudentWhereInput = {
       AND: [
@@ -169,6 +183,15 @@ export default async function StudentsPage({
             ? { enrollments: { some: { academicYearId: selectedYearId } } }
             : {},
         statusFilter ? { status: statusFilter } : {},
+        // New-for-the-year: enrolled in the selected year, not the previous one.
+        isNewFilter && selectedYearId
+          ? {
+              enrollments: { some: { academicYearId: selectedYearId } },
+              ...(prevYearId
+                ? { NOT: { enrollments: { some: { academicYearId: prevYearId } } } }
+                : {}),
+            }
+          : {},
       ],
     };
 
@@ -247,8 +270,8 @@ export default async function StudentsPage({
                 <input type="hidden" name="classId" value={classFilter} />
               ) : null}
               <input type="hidden" name="scope" value={scope} />
-              {statusFilter ? (
-                <input type="hidden" name="status" value={statusFilter} />
+              {statusFilter || isNewFilter ? (
+                <input type="hidden" name="status" value={statusFilter ?? "new"} />
               ) : null}
               <input type="hidden" name="sort" value={sortKey} />
               <input type="hidden" name="dir" value={sortDir} />
@@ -288,7 +311,7 @@ export default async function StudentsPage({
             <FilterPill
               href={hrefWith(BASE, { ...filterPreserve, status: undefined })}
               label={t("filterAll")}
-              active={!statusFilter}
+              active={!statusFilter && !isNewFilter}
             />
             {STATUSES.map((s) => (
               <FilterPill
@@ -299,6 +322,12 @@ export default async function StudentsPage({
                 tone={STATUS_TONE[s]}
               />
             ))}
+            <FilterPill
+              href={hrefWith(BASE, { ...filterPreserve, status: "new" })}
+              label={t("filterNew")}
+              active={isNewFilter}
+              tone={STATUS_TONE.ENROLLED}
+            />
           </div>
 
           {selectedYear ? (
@@ -306,11 +335,13 @@ export default async function StudentsPage({
               <span className="font-medium text-[color:var(--color-foreground)]">
                 {count}
               </span>{" "}
-              {classFilter
-                ? `· Élèves de ${selectedClassName} (${selectedYear.label})`
-                : restrictToYear
-                  ? `· Élèves inscrits en ${selectedYear.label}`
-                  : `· Tous les élèves — classe affichée pour ${selectedYear.label}`}
+              {isNewFilter
+                ? `· Nouveaux inscrits en ${selectedYear.label}`
+                : classFilter
+                  ? `· Élèves de ${selectedClassName} (${selectedYear.label})`
+                  : restrictToYear
+                    ? `· Élèves inscrits en ${selectedYear.label}`
+                    : `· Tous les élèves — classe affichée pour ${selectedYear.label}`}
               {!selectedYear.isActive ? " · année non active" : ""}
             </p>
           ) : null}
@@ -321,11 +352,11 @@ export default async function StudentsPage({
                 <GraduationCap className="size-6" aria-hidden />
               </div>
               <p className="max-w-xs text-sm text-[color:var(--color-foreground-muted)]">
-                {query || statusFilter || classFilter
+                {query || statusFilter || classFilter || isNewFilter
                   ? t("emptySearch")
                   : t("empty")}
               </p>
-              {!query && !statusFilter && !classFilter ? (
+              {!query && !statusFilter && !classFilter && !isNewFilter ? (
                 <div className="mt-5">
                   <LinkButton href="/students/new" size="sm" className="gap-1.5">
                     <Plus className="size-4" aria-hidden />

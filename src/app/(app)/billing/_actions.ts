@@ -156,6 +156,7 @@ export async function recordPayment(invoiceId: string, formData: FormData) {
       include: { payments: { select: { amountCents: true } } },
     });
     if (!invoice) return;
+    if (invoice.darsInvoiceId != null) return; // imported from Dars — read-only
 
     const paidAt = parsed.data.paidAt
       ? new Date(`${parsed.data.paidAt}T00:00:00.000Z`)
@@ -175,9 +176,9 @@ export async function recordPayment(invoiceId: string, formData: FormData) {
     });
 
     const totalPaid =
-      invoice.payments.reduce((acc, p) => acc + p.amountCents, 0) + amountCents;
+      invoice.payments.reduce((acc, p) => acc + Number(p.amountCents), 0) + amountCents;
     const newStatus =
-      totalPaid >= invoice.totalCents
+      totalPaid >= Number(invoice.totalCents)
         ? "PAID"
         : totalPaid > 0
           ? "PARTIALLY_PAID"
@@ -188,7 +189,7 @@ export async function recordPayment(invoiceId: string, formData: FormData) {
     });
 
     notifyContext = {
-      remainingCents: Math.max(0, invoice.totalCents - totalPaid),
+      remainingCents: Math.max(0, Number(invoice.totalCents) - totalPaid),
       paidAt,
     };
   });
@@ -271,6 +272,8 @@ export async function deleteInvoice(invoiceId: string) {
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
+    const inv = await db.invoice.findUnique({ where: { id: invoiceId }, select: { darsInvoiceId: true } });
+    if (inv?.darsInvoiceId != null) return; // imported from Dars — read-only
     await db.invoice.delete({ where: { id: invoiceId } });
   });
   revalidatePath("/billing");
@@ -282,6 +285,8 @@ export async function issueInvoice(invoiceId: string) {
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
+    const inv = await db.invoice.findUnique({ where: { id: invoiceId }, select: { darsInvoiceId: true } });
+    if (inv?.darsInvoiceId != null) return; // imported from Dars — read-only
     await db.invoice.update({
       where: { id: invoiceId },
       data: { status: "ISSUED", issuedAt: new Date() },
@@ -342,7 +347,7 @@ async function notifyParentOfInvoiceIssued(tenantId: string, invoiceId: string) 
       tenantName: tenant.name,
       invoiceNumber: invoice.number,
       studentName: `${invoice.student.firstName} ${invoice.student.lastName}`,
-      totalCents: invoice.totalCents,
+      totalCents: Number(invoice.totalCents),
       currency: invoice.currency,
       dueAt: invoice.dueAt,
       invoiceId,

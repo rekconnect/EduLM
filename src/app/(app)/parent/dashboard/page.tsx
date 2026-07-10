@@ -176,8 +176,8 @@ export default async function ParentDashboardPage() {
 
                 const balanceByCurrency = new Map<string, number>();
                 for (const inv of c.invoices) {
-                  const paid = inv.payments.reduce((a, p) => a + p.amountCents, 0);
-                  const bal = inv.totalCents - paid;
+                  const paid = inv.payments.reduce((a, p) => a + Number(p.amountCents), 0);
+                  const bal = Number(inv.totalCents) - paid;
                   if (bal > 0) {
                     balanceByCurrency.set(
                       inv.currency,

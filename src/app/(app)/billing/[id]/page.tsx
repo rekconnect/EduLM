@@ -57,9 +57,10 @@ export default async function InvoiceDetailPage({
     });
     if (!invoice) notFound();
 
-    const paid = invoice.payments.reduce((a, p) => a + p.amountCents, 0);
-    const balance = invoice.totalCents - paid;
+    const paid = invoice.payments.reduce((a, p) => a + Number(p.amountCents), 0);
+    const balance = Number(invoice.totalCents) - paid;
     const isAdmin = user.role === "SCHOOL_ADMIN";
+    const imported = invoice.darsInvoiceId != null;
     const boundDelete = deleteInvoice.bind(null, id);
     const boundIssue = issueInvoice.bind(null, id);
 
@@ -141,7 +142,7 @@ export default async function InvoiceDetailPage({
                       {formatMoney(l.amountCents, invoice.currency)}
                     </TD>
                     <TD className="text-right font-medium tabular-nums">
-                      {formatMoney(l.amountCents * l.quantity, invoice.currency)}
+                      {formatMoney(Number(l.amountCents) * l.quantity, invoice.currency)}
                     </TD>
                   </TR>
                 ))}
@@ -186,17 +187,22 @@ export default async function InvoiceDetailPage({
                 </ul>
               )}
 
-              {isAdmin && balance > 0 && invoice.status !== "CANCELLED" ? (
+              {isAdmin && !imported && balance > 0 && invoice.status !== "CANCELLED" ? (
                 <RecordPaymentForm
                   invoiceId={invoice.id}
                   defaultAmount={centsToDecimalString(balance)}
                   currency={invoice.currency}
                 />
               ) : null}
+              {imported ? (
+                <p className="mt-2 text-xs text-[color:var(--color-foreground-muted)]">
+                  Importée de Dars — lecture seule (soldes et paiements gérés dans Dars).
+                </p>
+              ) : null}
             </CardBody>
           </Card>
 
-          {isAdmin ? (
+          {isAdmin && !imported ? (
             <div className="flex items-center justify-end gap-2">
               {invoice.status === "DRAFT" ? (
                 <form action={boundIssue}>

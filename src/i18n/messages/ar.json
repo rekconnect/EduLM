@@ -368,6 +368,7 @@
     "transport": "النقل",
     "cantine": "المقصف / الوجبة الخفيفة",
     "infirmerie": "العيادة",
+    "finance": "المالية",
     "settings": "الإعدادات",
     "admissions": "التسجيلات",
     "applications": "تسجيلاتي",
@@ -434,17 +435,15 @@
   "dashboard": {
     "welcome": "مرحباً، {name}",
     "overviewLabel": "نظرة عامة",
-    "thisWeekLabel": "هذا الأسبوع",
     "statStudents": "الطلاب المسجلون",
     "statClasses": "الصفوف النشطة",
     "statTeachers": "المعلمون",
     "statParents": "الأهل",
-    "noActiveYear": "لا توجد سنة دراسية نشطة. فعّل سنة من الإعدادات.",
-    "statAbsencesWeek": "غيابات (٧ أيام)",
-    "statIncidentsWeek": "حوادث (٧ أيام)"
+    "noActiveYear": "لا توجد سنة دراسية نشطة. فعّل سنة من الإعدادات."
   },
   "students": {
     "filterAll": "الكل",
+    "filterNew": "المسجلون الجدد",
     "allClasses": "كل الصفوف",
     "title": "الطلاب",
     "subtitle": "أدِر الطلاب المسجلين في مدرستك.",

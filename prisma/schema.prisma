@@ -119,6 +119,7 @@ model Tenant {
   disciplineEvents DisciplineEvent[]
   invoices         Invoice[]
   payments         Payment[]
+  financeSummaries FinanceSummary[]
   admissionCycles  AdmissionCycle[]
   applications     Application[]
   documents        TenantDocument[]
@@ -714,9 +715,10 @@ model Invoice {
   studentId      String
   academicYearId String
   number         String
+  darsInvoiceId  Int?          @unique
   issuedAt       DateTime      @default(now())
   dueAt          DateTime?
-  totalCents     Int
+  totalCents     BigInt
   currency       String        @default("USD")
   status         InvoiceStatus @default(DRAFT)
   notes          String?
@@ -736,7 +738,7 @@ model InvoiceLine {
   id          String @id @default(cuid())
   invoiceId   String
   description String
-  amountCents Int
+  amountCents BigInt
   quantity    Int    @default(1)
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
@@ -748,7 +750,7 @@ model Payment {
   id            String        @id @default(cuid())
   tenantId      String
   invoiceId     String
-  amountCents   Int
+  amountCents   BigInt
   method        PaymentMethod
   paidAt        DateTime      @default(now())
   recordedById  String
@@ -761,6 +763,25 @@ model Payment {
 
   @@index([tenantId, invoiceId])
   @@index([tenantId, paidAt])
+}
+
+/// Imported P&L summary from the Dars general ledger (Cpt_*), one row per
+/// fiscal year × currency × income/expense group. Read-only display only — NOT
+/// a ledger; the finance dashboard aggregates these into income-vs-expenses.
+model FinanceSummary {
+  id          String @id @default(cuid())
+  tenantId    String
+  fiscalYear  String // "2025-2026" (Cpt_Period, Oct–Sep)
+  currency    String // "USD" | "LBP"
+  kind        String // "INCOME" (plan class 7) | "EXPENSE" (class 6)
+  groupNo     String // account group, e.g. "62", "70"
+  label       String // group description
+  amountCents BigInt // net amount ×100, positive
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, fiscalYear, currency, kind, groupNo])
+  @@index([tenantId, fiscalYear])
 }
 
 // ───────────────────────── Admissions / nouvelle inscription ─────────────────────────

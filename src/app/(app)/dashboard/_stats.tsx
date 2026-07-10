@@ -6,29 +6,15 @@ import {
   LayoutGrid,
   GraduationCap,
   UsersRound,
-  UserMinus,
-  AlertTriangle,
   type LucideIcon,
 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-
-type StatTone = "neutral" | "warning" | "danger";
 
 type StatItem = {
   key: string;
   label: string;
   value: number | string;
   icon: LucideIcon;
-  tone?: StatTone;
-};
-
-const TONE_RING: Record<StatTone, string> = {
-  neutral:
-    "bg-[color:var(--color-surface-sunken)] text-[color:var(--color-foreground-muted)]",
-  warning:
-    "bg-[color:var(--color-warning-soft)] text-[color:var(--color-warning-soft-fg)]",
-  danger:
-    "bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger-soft-fg)]",
 };
 
 export type DashboardStatsProps = {
@@ -36,8 +22,6 @@ export type DashboardStatsProps = {
   classes: number;
   teachers: number;
   parents: number;
-  absencesWeek: number;
-  disciplineWeek: number;
 };
 
 export function DashboardStats(props: DashboardStatsProps) {
@@ -51,42 +35,12 @@ export function DashboardStats(props: DashboardStatsProps) {
     { key: "parents",  label: t("statParents"),  value: props.parents,  icon: UsersRound },
   ];
 
-  const weekly: StatItem[] = [
-    {
-      key: "absencesWeek",
-      label: t("statAbsencesWeek"),
-      value: props.absencesWeek,
-      icon: UserMinus,
-      tone: props.absencesWeek > 0 ? "warning" : "neutral",
-    },
-    {
-      key: "disciplineWeek",
-      label: t("statIncidentsWeek"),
-      value: props.disciplineWeek,
-      icon: AlertTriangle,
-      tone: props.disciplineWeek > 0 ? "danger" : "neutral",
-    },
-  ];
-
   return (
     <div className="space-y-8">
       <Section title={t("overviewLabel")}>
-        <Grid columns={4}>
+        <Grid>
           {overview.map((item, i) => (
             <StatCard key={item.key} item={item} index={i} shouldReduce={!!shouldReduce} />
-          ))}
-        </Grid>
-      </Section>
-
-      <Section title={t("thisWeekLabel")}>
-        <Grid columns={2}>
-          {weekly.map((item, i) => (
-            <StatCard
-              key={item.key}
-              item={item}
-              index={overview.length + i}
-              shouldReduce={!!shouldReduce}
-            />
           ))}
         </Grid>
       </Section>
@@ -105,12 +59,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Grid({ columns, children }: { columns: 2 | 4; children: React.ReactNode }) {
-  const cls =
-    columns === 4
-      ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-      : "grid gap-4 sm:grid-cols-2";
-  return <div className={cls}>{children}</div>;
+function Grid({ children }: { children: React.ReactNode }) {
+  return <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{children}</div>;
 }
 
 function StatCard({
@@ -123,7 +73,6 @@ function StatCard({
   shouldReduce: boolean;
 }) {
   const Icon = item.icon;
-  const tone = TONE_RING[item.tone ?? "neutral"];
 
   return (
     <motion.div
@@ -142,7 +91,7 @@ function StatCard({
           {item.label}
         </p>
         <span
-          className={`inline-flex size-8 items-center justify-center rounded-md ${tone} transition-colors duration-200 ease-out`}
+          className="inline-flex size-8 items-center justify-center rounded-md bg-[color:var(--color-surface-sunken)] text-[color:var(--color-foreground-muted)] transition-colors duration-200 ease-out"
           aria-hidden
         >
           <Icon className="size-4" />

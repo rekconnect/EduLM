@@ -10,25 +10,36 @@ export default async function DashboardPage() {
     if (user.role === "PARENT") redirect("/parent/dashboard");
     const t = await getTranslations("dashboard");
 
-    // 7-day attendance window for the dashboard absence counter.
-    const since = new Date();
-    since.setUTCDate(since.getUTCDate() - 7);
-    since.setUTCHours(0, 0, 0, 0);
-
     // Everything below uses the auto-scoped `db` — Prisma extension injects
     // the tenant filter from AsyncLocalStorage on every query.
-    const [students, classes, teachers, parents, activeYear, absencesWeek, disciplineWeek] =
-      await Promise.all([
-        db.student.count({ where: { status: "ENROLLED" } }),
-        // Only the ACTIVE year's classes — each year carries its own Class
-        // rows, so a bare count() sums all years (268 instead of ~67).
-        db.class.count({ where: { academicYear: { isActive: true } } }),
-        db.user.count({ where: { role: "TEACHER" } }),
-        db.user.count({ where: { role: "PARENT" } }),
-        db.academicYear.findFirst({ where: { isActive: true }, select: { label: true } }),
-        db.attendanceRecord.count({ where: { date: { gte: since }, status: "ABSENT" } }),
-        db.disciplineEvent.count({ where: { date: { gte: since } } }),
-      ]);
+    const [students, classes, teachers, parents, activeYear] = await Promise.all([
+      // Students enrolled in the ACTIVE year — not a global status count.
+      // `status: "ENROLLED"` over-counts once next year's incoming pupils
+      // (already enrolled for the upcoming year) are marked ENROLLED too.
+      db.student.count({
+        where: { enrollments: { some: { academicYear: { isActive: true } } } },
+      }),
+      // Only the ACTIVE year's classes — each year carries its own Class
+      // rows, so a bare count() sums all years (268 instead of ~67).
+      db.class.count({ where: { academicYear: { isActive: true } } }),
+      db.user.count({ where: { role: "TEACHER" } }),
+      // Parents of ACTIVE-year pupils — not every parent account ever created.
+      // A bare role: "PARENT" count includes parents of graduated/departed
+      // students, so it never changes with the year (2052 vs ~1240).
+      db.user.count({
+        where: {
+          role: "PARENT",
+          guardianProfile: {
+            childLinks: {
+              some: {
+                student: { enrollments: { some: { academicYear: { isActive: true } } } },
+              },
+            },
+          },
+        },
+      }),
+      db.academicYear.findFirst({ where: { isActive: true }, select: { label: true } }),
+    ]);
 
     return (
         <main className="mx-auto max-w-6xl px-6 py-10">
@@ -41,8 +52,6 @@ export default async function DashboardPage() {
             classes={classes}
             teachers={teachers}
             parents={parents}
-            absencesWeek={absencesWeek}
-            disciplineWeek={disciplineWeek}
           />
         </main>
     );

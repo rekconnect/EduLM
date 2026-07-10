@@ -27,6 +27,7 @@ export type ParcoursEntry = {
   className: string;
   level: string;
   services: string; // billing tokens, e.g. "Transport, Cantine, Collation"
+  isActive: boolean; // the tenant's current academic year → default selection
 };
 
 // Collation is only offered up to CM2 — never in collège / lycée (6ème+).
@@ -142,7 +143,12 @@ export function StudentYearView({
     ...new Set([...parcours.map((p) => p.year), ...Object.keys(registrationByYear)]),
   ].sort((a, b) => b.localeCompare(a));
 
-  const [year, setYear] = useState(parcours[0]?.year ?? years[0] ?? "");
+  // Default to the CURRENT (active) year — not the newest, which is next year's
+  // pre-registration draft. Falls back to newest when the pupil isn't enrolled
+  // in the active year (e.g. a brand-new student only in next year).
+  const [year, setYear] = useState(
+    parcours.find((p) => p.isActive)?.year ?? parcours[0]?.year ?? years[0] ?? "",
+  );
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
   const [pending, start] = useTransition();

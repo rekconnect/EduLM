@@ -45,11 +45,11 @@ async function main() {
     console.log(`\nFamily invoices (${familyInvoices.length}):`);
     let outstanding = 0;
     for (const inv of familyInvoices) {
-      const paid = inv.payments.reduce((a, p) => a + p.amountCents, 0);
-      const balance = inv.totalCents - paid;
+      const paid = inv.payments.reduce((a, p) => a + Number(p.amountCents), 0);
+      const balance = Number(inv.totalCents) - paid;
       if (balance > 0) outstanding += balance;
       console.log(
-        `  ${inv.number} ${inv.student.lastName} ${inv.student.firstName} — ${inv.status} — total $${(inv.totalCents / 100).toFixed(2)} paid $${(paid / 100).toFixed(2)} bal $${(balance / 100).toFixed(2)}`,
+        `  ${inv.number} ${inv.student.lastName} ${inv.student.firstName} — ${inv.status} — total $${(Number(inv.totalCents) / 100).toFixed(2)} paid $${(paid / 100).toFixed(2)} bal $${(balance / 100).toFixed(2)}`,
       );
     }
     console.log(`\nOutstanding balance for Sami's family: $${(outstanding / 100).toFixed(2)}`);

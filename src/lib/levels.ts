@@ -52,6 +52,17 @@ export function lvlIdx(level: string): number {
   return i < 0 ? LEVEL_ORDER.length : i;
 }
 
+/**
+ * The level a student advances to on a year rollover. Returns `null` when the
+ * student graduates / has no next level — i.e. Terminale (the last level) or an
+ * unrecognised level string. Accepts either spelling.
+ */
+export function nextLevel(level: string): string | null {
+  const i = LEVEL_ORDER.indexOf(canonicalLevel(level));
+  if (i < 0 || i >= LEVEL_ORDER.length - 1) return null;
+  return LEVEL_ORDER[i + 1]!;
+}
+
 /** Dedupe + sort level strings into canonical order (unknowns last, then alpha). */
 export function sortLevels(levels: string[]): string[] {
   return [...new Set(levels)].sort((a, b) => {

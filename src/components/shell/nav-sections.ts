@@ -23,7 +23,8 @@ export type IconName =
   | "inscriptionForm"
   | "transport"
   | "cantine"
-  | "infirmerie";
+  | "infirmerie"
+  | "finance";
 
 export type NavItem = {
   label: string;
@@ -57,6 +58,7 @@ type Labels = {
   transport: string;
   cantine: string;
   infirmerie: string;
+  finance: string;
   inscriptionForm: string;
   myApplications: string;
   myAnnouncements: string;
@@ -103,6 +105,7 @@ export function navSectionsForRole(role: Role, l: Labels): NavSection[] {
             { label: l.parents, href: "/admin/parents", icon: "parents" },
             { label: l.classes, href: "/classes", icon: "classes" },
             { label: l.billing, href: "/billing", icon: "billing" },
+            { label: l.finance, href: "/finance", icon: "finance" },
             { label: l.transport, href: "/transport", icon: "transport" },
             { label: l.cantine, href: "/cantine", icon: "cantine" },
             { label: l.infirmerie, href: "/infirmerie", icon: "infirmerie" },

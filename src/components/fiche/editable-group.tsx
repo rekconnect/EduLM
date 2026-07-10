@@ -87,12 +87,21 @@ export function EditableGroup({
   title,
   fields,
   initialValues,
+  displayValues,
   onSave,
   rtl = false,
 }: {
   title: string;
   fields: FieldDef[];
+  /** The record's OWN values — seed the edit inputs and get saved as-is. */
   initialValues: Record<string, string>;
+  /**
+   * Read-mode display values, when they differ from what's edited/saved — e.g.
+   * a student field inheriting the father's communauté. Falls back to the own
+   * value when a key is empty, so editing (and saving) still operates on the
+   * record's OWN value and never materialises an inherited fallback.
+   */
+  displayValues?: Record<string, string>;
   onSave: (values: Record<string, string>) => Promise<{ ok: boolean; error?: string }>;
   rtl?: boolean;
 }) {
@@ -129,7 +138,11 @@ export function EditableGroup({
   }
 
   const readRows = visible
-    .map((f) => [f.label, f.type === "yes_no" ? YESNO(values[f.key] ?? "") : values[f.key] ?? ""] as [string, string])
+    .map((f) => {
+      // Own value wins; fall back to the inherited display value when empty.
+      const raw = values[f.key] || displayValues?.[f.key] || "";
+      return [f.label, f.type === "yes_no" ? YESNO(raw) : raw] as [string, string];
+    })
     .filter(([, v]) => v && v.trim().length > 0);
 
   return (

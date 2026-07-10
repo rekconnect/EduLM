@@ -29,6 +29,7 @@ import {
   Bus,
   UtensilsCrossed,
   HeartPulse,
+  Landmark,
   Search,
   PanelLeftClose,
   PanelLeftOpen,
@@ -41,6 +42,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useCommandPalette } from "@/components/command-palette";
 import { cn } from "@/lib/utils";
 import { signOutAction } from "@/lib/sign-out-action";
+import { YearSwitcher } from "./year-switcher";
 import {
   Tooltip,
   TooltipContent,
@@ -69,6 +71,7 @@ const ICONS: Record<IconName, LucideIcon> = {
   transport: Bus,
   cantine: UtensilsCrossed,
   infirmerie: HeartPulse,
+  finance: Landmark,
 };
 void FileText;
 
@@ -81,6 +84,8 @@ type SidebarProps = {
   sections: NavSection[];
   signOutLabel: string;
   logoUrl?: string | null;
+  /** Academic years for the global switcher (admins only; empty otherwise). */
+  years?: { id: string; label: string; isActive: boolean }[];
 };
 
 export function Sidebar({
@@ -90,6 +95,7 @@ export function Sidebar({
   sections,
   signOutLabel,
   logoUrl,
+  years,
 }: SidebarProps) {
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -269,6 +275,18 @@ export function Sidebar({
         >
           <CommandPaletteTrigger collapsed={collapsed} />
         </div>
+
+        {/* Global academic-year switcher (admins only) */}
+        {years && years.length > 0 ? (
+          <div className={cn("shrink-0", collapsed ? "px-1.5 pt-2" : "px-3 pt-2")}>
+            <YearSwitcher
+              years={years.map((y) => ({ id: y.id, label: y.label }))}
+              activeId={(years.find((y) => y.isActive) ?? years[0]!).id}
+              activeLabel={(years.find((y) => y.isActive) ?? years[0]!).label}
+              collapsed={collapsed}
+            />
+          </div>
+        ) : null}
 
         {/* Nav */}
         <nav

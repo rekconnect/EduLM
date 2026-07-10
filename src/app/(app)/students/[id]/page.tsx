@@ -32,7 +32,11 @@ import {
   type ImmunizationData,
   type VisitData,
 } from "@/components/fiche/medical-section";
-import type { EntityFieldsConfig, FieldDef } from "@/lib/entity-fields";
+import {
+  applyInheritedValues,
+  type EntityFieldsConfig,
+  type FieldDef,
+} from "@/lib/entity-fields";
 import { db } from "@/lib/db";
 import { withTenantSession } from "@/lib/session";
 import {
@@ -202,6 +206,7 @@ export default async function StudentDetailPage({
       className: e.class.name,
       level: e.class.level,
       services: servicesByYear[e.academicYear.label] ?? "",
+      isActive: e.academicYear.isActive,
     }));
 
     // Active-year level drives the level-aware "Renseignements pédagogiques".
@@ -336,6 +341,17 @@ export default async function StudentDetailPage({
       student.guardianLinks.find((l) => l.guardian.relation === "pere")
         ?.guardian.user.customAnswers,
     );
+
+    // Live "inherit from the father" fallback: student fields with
+    // `inheritParentKey` (e.g. communauté) surface the father's CURRENT value
+    // when the student has none of its own — so Dars-imported pupils display it
+    // and a parent edit is reflected immediately. The acceptance-time seed in
+    // `_apply-dossier` only ran for students onboarded through the accept flow.
+    const effectiveStudentAnswers = applyInheritedValues(
+      studentFieldsConfig.fields,
+      initialStudentAnswers,
+      fatherCa,
+    );
     const arabicSections: ArabicSection[] = [
       {
         title: "معلومات الأب والقيد",
@@ -405,6 +421,7 @@ export default async function StudentDetailPage({
                   title="Informations complémentaires"
                   fields={complementFields}
                   initialValues={initialStudentAnswers}
+                  displayValues={effectiveStudentAnswers}
                   onSave={saveFiche}
                 />
               </div>
@@ -423,6 +440,7 @@ export default async function StudentDetailPage({
             title="Scolarité"
             fields={scolariteFields}
             initialValues={initialStudentAnswers}
+            displayValues={effectiveStudentAnswers}
             onSave={saveFiche}
           />,
         ),

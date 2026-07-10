@@ -65,8 +65,8 @@ export default async function ParentInvoicesPage() {
 
     const outstanding = new Map<string, number>();
     for (const inv of invoices) {
-      const paid = inv.payments.reduce((a, p) => a + p.amountCents, 0);
-      const bal = inv.totalCents - paid;
+      const paid = inv.payments.reduce((a, p) => a + Number(p.amountCents), 0);
+      const bal = Number(inv.totalCents) - paid;
       if (bal > 0) {
         outstanding.set(inv.currency, (outstanding.get(inv.currency) ?? 0) + bal);
       }
@@ -122,10 +122,10 @@ export default async function ParentInvoicesPage() {
               <tbody>
                 {invoices.map((inv) => {
                   const paid = inv.payments.reduce(
-                    (a, p) => a + p.amountCents,
+                    (a, p) => a + Number(p.amountCents),
                     0,
                   );
-                  const balance = inv.totalCents - paid;
+                  const balance = Number(inv.totalCents) - paid;
                   const isOverdue = inv.status === "OVERDUE";
                   return (
                     <TR key={inv.id}>

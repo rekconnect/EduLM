@@ -1,5 +1,9 @@
 import { Users, Home, Baby, History } from "lucide-react";
-import type { EntityFieldsConfig, FieldDef } from "@/lib/entity-fields";
+import {
+  applyInheritedValues,
+  type EntityFieldsConfig,
+  type FieldDef,
+} from "@/lib/entity-fields";
 import { EditableGroup } from "@/components/fiche/editable-group";
 import { StudentYearView } from "@/components/fiche/student-year-view";
 import { SectionTitle } from "@/components/fiche/section-title";
@@ -35,7 +39,13 @@ export type FicheStudent = {
   yearLabel: string | null;
   status: string;
   answers: Record<string, string>;
-  parcours: Array<{ year: string; className: string; level: string; services: string }>;
+  parcours: Array<{
+    year: string;
+    className: string;
+    level: string;
+    services: string;
+    isActive: boolean;
+  }>;
   /** Per-year registration snapshot (Isc_ModifStudents by SYear). */
   registrationByYear: Record<string, Record<string, string>>;
 };
@@ -245,6 +255,11 @@ export function FamilyFiche({
                     title={grp.title}
                     fields={grp.fields}
                     initialValues={s.answers}
+                    displayValues={applyInheritedValues(
+                      studentConfig.fields,
+                      s.answers,
+                      father?.answers ?? {},
+                    )}
                     onSave={saveStudentFiche.bind(null, s.id)}
                   />
                 ))}
@@ -254,6 +269,7 @@ export function FamilyFiche({
                   <StudentYearView
                     parcours={s.parcours}
                     registrationByYear={s.registrationByYear}
+                    fallback={s.answers}
                   />
                 )}
               </Panel>

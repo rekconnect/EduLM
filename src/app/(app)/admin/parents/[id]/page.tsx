@@ -401,6 +401,7 @@ export default async function ParentDetailPage({
         className: e.class.name,
         level: e.class.level,
         services: servicesByYear[e.academicYear.label] ?? "",
+        isActive: e.academicYear.isActive,
       }));
       return {
         id: st.id,

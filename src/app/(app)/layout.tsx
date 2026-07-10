@@ -25,7 +25,7 @@ export default async function AppLayout({
   // The three per-navigation reads are independent — run them together
   // instead of serially (this layout renders on every authenticated page):
   // the mustChangePassword flag, the tenant brand/shell data, and nav labels.
-  const [acct, tenant, tNav] = await Promise.all([
+  const [acct, tenant, tNav, years] = await Promise.all([
     unscopedDb().user.findUnique({
       where: { id: user.id },
       select: { mustChangePassword: true },
@@ -37,6 +37,15 @@ export default async function AppLayout({
         })
       : Promise.resolve(null),
     getTranslations("nav"),
+    // Academic years for the global switcher — admins only (they can flip the
+    // active year; other roles just inherit it).
+    user.role === "SCHOOL_ADMIN" && user.tenantId
+      ? unscopedDb().academicYear.findMany({
+          where: { tenantId: user.tenantId },
+          orderBy: { startDate: "desc" },
+          select: { id: true, label: true, isActive: true },
+        })
+      : Promise.resolve([] as { id: string; label: string; isActive: boolean }[]),
   ]);
 
   // Force users flagged for a password reset (e.g. bulk-onboarded parents
@@ -64,6 +73,7 @@ export default async function AppLayout({
     transport: tNav("transport"),
     cantine: tNav("cantine"),
     infirmerie: tNav("infirmerie"),
+    finance: tNav("finance"),
     inscriptionForm: tNav("inscriptionForm"),
     myApplications: tNav("myApplications"),
     myAnnouncements: tNav("myAnnouncements"),
@@ -96,6 +106,7 @@ export default async function AppLayout({
         sections={sections}
         signOutLabel={tNav("signOut")}
         logoUrl={tenant?.logoUrl ?? null}
+        years={years}
       />
       <div className="min-w-0 flex-1">{children}</div>
     </div>

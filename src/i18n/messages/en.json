@@ -368,6 +368,7 @@
     "transport": "Transport",
     "cantine": "Canteen / Snack",
     "infirmerie": "Infirmary",
+    "finance": "Finance",
     "settings": "Settings",
     "admissions": "Admissions",
     "applications": "My applications",
@@ -434,17 +435,15 @@
   "dashboard": {
     "welcome": "Hello, {name}",
     "overviewLabel": "Overview",
-    "thisWeekLabel": "This week",
     "statStudents": "Enrolled students",
     "statClasses": "Active classes",
     "statTeachers": "Teachers",
     "statParents": "Parents",
-    "noActiveYear": "No active academic year. Configure one in Settings.",
-    "statAbsencesWeek": "Absences (7d)",
-    "statIncidentsWeek": "Incidents (7d)"
+    "noActiveYear": "No active academic year. Configure one in Settings."
   },
   "students": {
     "filterAll": "All",
+    "filterNew": "New enrollees",
     "allClasses": "All classes",
     "title": "Students",
     "subtitle": "Manage students enrolled in your school.",

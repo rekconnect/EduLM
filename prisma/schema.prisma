@@ -791,7 +791,7 @@ model FinanceSummary {
 model PayrollEmployee {
   id             String    @id @default(cuid())
   tenantId       String
-  darsEmplId     Int       @unique // Prs_Employee.ID
+  darsEmplId     Int?      @unique // Prs_Employee.ID (null = created in EduLM)
   displayName    String
   jobTitle       String?
   department     String?
@@ -812,7 +812,7 @@ model Payslip {
   id           String    @id @default(cuid())
   tenantId     String
   employeeId   String
-  darsSalaryId Int       @unique // Pay_Salary.IDS
+  darsSalaryId Int?      @unique // Pay_Salary.IDS (null = created in EduLM)
   year         Int
   month        Int
   netLbpCents  BigInt    @default(0)

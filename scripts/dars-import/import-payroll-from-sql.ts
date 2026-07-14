@@ -122,11 +122,12 @@ async function main() {
     return;
   }
 
-  await prisma.payslip.deleteMany({ where: { tenantId: tenant.id } });
-  await prisma.payrollEmployee.deleteMany({ where: { tenantId: tenant.id } });
+  // Replace only IMPORTED rows (darsId set) — preserve anything created in EduLM.
+  await prisma.payslip.deleteMany({ where: { tenantId: tenant.id, darsSalaryId: { not: null } } });
+  await prisma.payrollEmployee.deleteMany({ where: { tenantId: tenant.id, darsEmplId: { not: null } } });
   for (const c of chunk(empData, 500)) await prisma.payrollEmployee.createMany({ data: c });
   const created = await prisma.payrollEmployee.findMany({
-    where: { tenantId: tenant.id },
+    where: { tenantId: tenant.id, darsEmplId: { not: null } },
     select: { id: true, darsEmplId: true },
   });
   const idByDars = new Map(created.map((e) => [e.darsEmplId, e.id]));

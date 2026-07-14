@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Search, Users, CalendarClock } from "lucide-react";
+import { Search, Users, CalendarClock, Plus } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
+import { LinkButton } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
@@ -68,7 +69,16 @@ export default async function PayrollPage({
 
     return (
       <main className="mx-auto max-w-6xl space-y-6 px-6 py-10">
-        <PageHeader title="Paie" description="Personnel & masse salariale (données Dars, lecture seule)" />
+        <PageHeader
+          title="Paie"
+          description="Personnel & masse salariale"
+          action={
+            <LinkButton href="/payroll/employees/new" size="sm" className="gap-1.5">
+              <Plus className="size-4" aria-hidden />
+              Nouvel employé
+            </LinkButton>
+          }
+        />
 
         <div className="grid gap-4 sm:grid-cols-3">
           <Stat label="Employés actifs" value={`${activeCount}`} sub={`sur ${totalCount} au total`} icon={<Users className="size-4" />} />
@@ -149,7 +159,14 @@ export default async function PayrollPage({
                     const last = latestByEmp.get(e.id);
                     return (
                       <TR key={e.id}>
-                        <TD className="font-medium">{e.displayName}</TD>
+                        <TD className="font-medium">
+                          <Link
+                            href={`/payroll/employees/${e.id}`}
+                            className="text-[color:var(--color-foreground)] transition-colors hover:text-[color:var(--color-brand-600)] hover:underline"
+                          >
+                            {e.displayName}
+                          </Link>
+                        </TD>
                         <TD className="text-[color:var(--color-foreground-muted)]">{e.jobTitle || "—"}</TD>
                         <TD className="text-[color:var(--color-foreground-muted)]">{e.employmentType || "—"}</TD>
                         <TD className="tabular-nums text-[color:var(--color-foreground-muted)]">
@@ -181,7 +198,7 @@ export default async function PayrollPage({
 
         <p className="text-xs text-[color:var(--color-foreground-subtle)]">
           Source : paie Dars (Prs_Employee, Pay_Salary), 2018–2024, en livres libanaises (le montant USD n'est pas
-          renseigné). Lecture seule. La LBP ayant fortement varié, les montants mensuels ne sont pas comparables d'une
+          renseigné). Vous pouvez ajouter/modifier des employés et bulletins. La LBP ayant fortement varié, les montants mensuels ne sont pas comparables d'une
           année à l'autre.
         </p>
       </main>

@@ -15,16 +15,23 @@ export type EmployeeInitial = {
   employmentType: string | null;
   active: boolean;
   recruitedAt: string | null;
+  email: string | null;
+  supervisorId: string | null;
+  taxCategory: string | null;
+  defaultDaysPerMonth: number | null;
+  kmDistance: number | null;
 };
 
 export function EmployeeForm({
   action,
   initial,
   submitLabel,
+  supervisors = [],
 }: {
   action: (prev: FormState, fd: FormData) => Promise<FormState>;
   initial?: EmployeeInitial;
   submitLabel: string;
+  supervisors?: { id: string; displayName: string }[];
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(action, {});
 
@@ -66,6 +73,66 @@ export function EmployeeForm({
           </label>
         </Field>
       </FormRow>
+
+      <Field label="Responsable (validation des demandes)" htmlFor="supervisorId">
+        <Select id="supervisorId" name="supervisorId" defaultValue={initial?.supervisorId ?? ""}>
+          <option value="">— Aucun —</option>
+          {supervisors.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.displayName}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      <FormRow>
+        <Field label="Catégorie NSF/impôt" htmlFor="taxCategory">
+          <Input
+            id="taxCategory"
+            name="taxCategory"
+            defaultValue={initial?.taxCategory ?? ""}
+            placeholder="Ex. Professeur, Admin"
+          />
+        </Field>
+        <Field label="Jours/mois (fixe, facultatif)" htmlFor="defaultDaysPerMonth" error={state.errors?.defaultDaysPerMonth}>
+          <Input
+            id="defaultDaysPerMonth"
+            name="defaultDaysPerMonth"
+            type="number"
+            min="0"
+            max="31"
+            defaultValue={initial?.defaultDaysPerMonth ?? ""}
+            placeholder="jours ouvrés du mois"
+          />
+        </Field>
+      </FormRow>
+
+      <Field label="Distance domicile → école (km, aller simple)" htmlFor="kmDistance">
+        <Input
+          id="kmDistance"
+          name="kmDistance"
+          inputMode="decimal"
+          defaultValue={initial?.kmDistance ?? ""}
+          placeholder="0"
+        />
+      </Field>
+
+      <div>
+        <Field label="E-mail professionnel (accès portail)" htmlFor="email" error={state.errors?.email}>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            defaultValue={initial?.email ?? ""}
+            placeholder="prenom.nom@lycee-montaigne.edu.lb"
+            autoComplete="off"
+          />
+        </Field>
+        <p className="mt-1.5 text-xs text-[color:var(--color-foreground-muted)]">
+          Donne accès au portail du personnel via la connexion Microsoft — aucun mot de passe à
+          créer. Laisser vide pour ne pas ouvrir d&apos;accès.
+        </p>
+      </div>
 
       {state.formError ? (
         <p className="text-sm text-[color:var(--color-danger)]" role="alert">

@@ -20,10 +20,10 @@ export async function GET(req: Request) {
     return NextResponse.json(EMPTY);
   }
 
-  // Parents (PARENT role users) — only school admins / teachers see these.
-  // Students + classes — same audience. Parents searching from the palette
-  // get nothing here for now; they have a small fixed nav set.
-  if (user.role === "PARENT" || user.role === "SUPER_ADMIN") {
+  // People/class search is for school admins and teachers ONLY. Everyone else
+  // (STAFF, PARENT, SUPER_ADMIN) gets nothing — a staff/parent user must never
+  // receive student, parent, or class records from the palette.
+  if (user.role !== "SCHOOL_ADMIN" && user.role !== "TEACHER") {
     return NextResponse.json(EMPTY);
   }
 

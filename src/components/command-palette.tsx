@@ -24,6 +24,12 @@ import {
   Megaphone,
   Inbox,
   Settings,
+  Landmark,
+  Wallet,
+  CalendarClock,
+  ClipboardCheck,
+  Building2,
+  MessageSquare,
   Sun,
   Moon,
   Monitor,
@@ -31,6 +37,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useTheme } from "next-themes";
+import type { Role } from "@prisma/client";
 import {
   CommandDialog,
   CommandEmpty,
@@ -42,11 +49,16 @@ import {
 } from "@/components/ui/command";
 import type { SearchResults } from "@/app/api/search/route";
 
-type Ctx = { open: boolean; setOpen: (v: boolean) => void };
+type Ctx = {
+  open: boolean;
+  setOpen: (v: boolean) => void;
+  setRole: (r: Role | null) => void;
+};
 
 const CommandPaletteContext = createContext<Ctx>({
   open: false,
   setOpen: () => {},
+  setRole: () => {},
 });
 
 export function useCommandPalette() {
@@ -61,10 +73,112 @@ type CmdItem = {
   keywords?: string[];
 };
 
+type CmdGroup = { heading: string; items: CmdItem[] };
+
 const EMPTY_RESULTS: SearchResults = { parents: [], students: [], classes: [] };
+
+// Only admins and teachers can search people/classes — matches the /api/search
+// gate. Staff and parents get a curated fixed nav only.
+const CAN_SEARCH = (role: Role | null) => role === "SCHOOL_ADMIN" || role === "TEACHER";
+
+/**
+ * Role-appropriate quick-nav for the palette. Curated (not every page) — a fast
+ * jump list, kept in sync with what each role can actually reach so a staff or
+ * parent user never sees admin destinations.
+ */
+function navGroupsForRole(role: Role | null, t: (k: string) => string): CmdGroup[] {
+  switch (role) {
+    case "STAFF":
+      return [
+        {
+          heading: t("cmdkNav"),
+          items: [
+            { label: t("dashboard"), href: "/staff", icon: LayoutDashboard },
+            { label: t("myRequests"), href: "/staff/requests", icon: CalendarClock },
+            { label: t("teamApprovals"), href: "/staff/approvals", icon: ClipboardCheck },
+            { label: t("myPayslips"), href: "/staff/payslips", icon: Wallet },
+          ],
+        },
+      ];
+    case "PARENT":
+      return [
+        {
+          heading: t("cmdkNav"),
+          items: [
+            { label: t("dashboard"), href: "/parent/dashboard", icon: LayoutDashboard },
+            { label: t("myApplications"), href: "/parent/applications", icon: FileSpreadsheet },
+            { label: t("myInvoices"), href: "/parent/invoices", icon: Receipt },
+            { label: t("myAnnouncements"), href: "/parent/announcements", icon: Megaphone },
+            { label: t("myDocuments"), href: "/parent/documents", icon: FolderOpen },
+            { label: t("contact"), href: "/parent/contact", icon: MessageSquare },
+          ],
+        },
+      ];
+    case "TEACHER":
+      return [
+        {
+          heading: t("cmdkNav"),
+          items: [
+            { label: t("dashboard"), href: "/dashboard", icon: LayoutDashboard },
+            { label: t("students"), href: "/students", icon: GraduationCap },
+            { label: t("attendance"), href: "/attendance", icon: CalendarCheck },
+            { label: t("discipline"), href: "/discipline", icon: AlertTriangle },
+            { label: t("settings"), href: "/settings", icon: Settings },
+          ],
+        },
+      ];
+    case "SUPER_ADMIN":
+      return [
+        {
+          heading: t("cmdkNav"),
+          items: [
+            { label: t("tenants"), href: "/super-admin", icon: Building2 },
+            { label: t("settings"), href: "/settings", icon: Settings },
+          ],
+        },
+      ];
+    case "SCHOOL_ADMIN":
+      return [
+        {
+          heading: t("cmdkNav"),
+          items: [
+            { label: t("dashboard"), href: "/dashboard", icon: LayoutDashboard },
+            { label: t("students"), href: "/students", icon: GraduationCap },
+            { label: t("parents"), href: "/admin/parents", icon: Users },
+            { label: t("classes"), href: "/classes", icon: School },
+            { label: t("billing"), href: "/billing", icon: Receipt },
+            { label: t("finance"), href: "/finance", icon: Landmark },
+            { label: t("payroll"), href: "/payroll", icon: Wallet },
+            { label: t("staffRequests"), href: "/payroll/requests", icon: ClipboardCheck },
+            { label: t("attendance"), href: "/attendance", icon: CalendarCheck },
+            { label: t("discipline"), href: "/discipline", icon: AlertTriangle },
+          ],
+        },
+        {
+          heading: t("cmdkCommunication"),
+          items: [
+            { label: t("announcements"), href: "/admin/announcements", icon: Megaphone },
+            { label: t("documents"), href: "/admin/documents", icon: FolderOpen },
+            { label: t("messages"), href: "/admin/messages", icon: Inbox },
+          ],
+        },
+        {
+          heading: t("cmdkAdmin"),
+          items: [
+            { label: t("years"), href: "/admin/years", icon: Calendar },
+            { label: t("admissions"), href: "/admissions-admin", icon: FileSpreadsheet },
+            { label: t("settings"), href: "/settings", icon: Settings },
+          ],
+        },
+      ];
+    default:
+      return [];
+  }
+}
 
 export function CommandPalette({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [role, setRole] = useState<Role | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults>(EMPTY_RESULTS);
   const [searching, setSearching] = useState(false);
@@ -72,6 +186,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
   const tNav = useTranslations("nav");
   const tTheme = useTranslations("theme");
   const { setTheme } = useTheme();
+  const canSearch = CAN_SEARCH(role);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -93,10 +208,11 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
     }
   }, [open]);
 
-  // Debounced server search. Skips when query is too short.
+  // Debounced server search. Skips when query is too short or the role can't
+  // search people/classes (staff/parents) — no request is even made.
   useEffect(() => {
     const q = query.trim();
-    if (q.length < 2) {
+    if (q.length < 2 || !canSearch) {
       setResults(EMPTY_RESULTS);
       setSearching(false);
       return;
@@ -114,7 +230,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
       return () => ac.abort();
     }, 200);
     return () => clearTimeout(handle);
-  }, [query]);
+  }, [query, canSearch]);
 
   const go = useCallback(
     (href: string) => {
@@ -132,29 +248,9 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
     [setTheme],
   );
 
-  const ctxValue = useMemo(() => ({ open, setOpen }), [open]);
+  const ctxValue = useMemo(() => ({ open, setOpen, setRole }), [open]);
 
-  const nav: CmdItem[] = [
-    { label: tNav("dashboard"), href: "/dashboard", icon: LayoutDashboard },
-    { label: tNav("students"), href: "/students", icon: GraduationCap },
-    { label: tNav("parents"), href: "/admin/parents", icon: Users },
-    { label: tNav("classes"), href: "/classes", icon: School },
-    { label: tNav("attendance"), href: "/attendance", icon: CalendarCheck },
-    { label: tNav("discipline"), href: "/discipline", icon: AlertTriangle },
-    { label: tNav("billing"), href: "/billing", icon: Receipt },
-  ];
-
-  const comms: CmdItem[] = [
-    { label: tNav("announcements"), href: "/admin/announcements", icon: Megaphone },
-    { label: tNav("documents"), href: "/admin/documents", icon: FolderOpen },
-    { label: tNav("messages"), href: "/admin/messages", icon: Inbox },
-  ];
-
-  const adminItems: CmdItem[] = [
-    { label: tNav("years"), href: "/admin/years", icon: Calendar },
-    { label: tNav("admissions"), href: "/admissions-admin", icon: FileSpreadsheet },
-    { label: tNav("settings"), href: "/settings", icon: Settings },
-  ];
+  const groups = useMemo(() => navGroupsForRole(role, tNav), [role, tNav]);
 
   const hasResults =
     results.parents.length > 0 ||
@@ -258,27 +354,13 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
 
           {hasResults ? <CommandSeparator /> : null}
 
-          <CommandGroup heading={tNav("cmdkNav")}>
-            {nav.map((item) => (
-              <PaletteItem key={item.href} item={item} onGo={go} />
-            ))}
-          </CommandGroup>
-
-          <CommandSeparator />
-
-          <CommandGroup heading={tNav("cmdkCommunication")}>
-            {comms.map((item) => (
-              <PaletteItem key={item.href} item={item} onGo={go} />
-            ))}
-          </CommandGroup>
-
-          <CommandSeparator />
-
-          <CommandGroup heading={tNav("cmdkAdmin")}>
-            {adminItems.map((item) => (
-              <PaletteItem key={item.href} item={item} onGo={go} />
-            ))}
-          </CommandGroup>
+          {groups.map((group) => (
+            <CommandGroup key={group.heading} heading={group.heading}>
+              {group.items.map((item) => (
+                <PaletteItem key={item.href} item={item} onGo={go} />
+              ))}
+            </CommandGroup>
+          ))}
 
           <CommandSeparator />
 

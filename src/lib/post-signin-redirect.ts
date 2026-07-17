@@ -11,6 +11,8 @@ export function postSignInPath(role: Role): string {
     case "SCHOOL_ADMIN":
     case "TEACHER":
       return "/dashboard";
+    case "STAFF":
+      return "/staff";
     case "PARENT":
       return "/parent/dashboard";
   }

@@ -31,6 +31,9 @@ import {
   HeartPulse,
   Landmark,
   Wallet,
+  CalendarClock,
+  ClipboardCheck,
+  CalendarOff,
   Search,
   PanelLeftClose,
   PanelLeftOpen,
@@ -44,6 +47,7 @@ import { useCommandPalette } from "@/components/command-palette";
 import { cn } from "@/lib/utils";
 import { signOutAction } from "@/lib/sign-out-action";
 import { YearSwitcher } from "./year-switcher";
+import { NotificationBell, type BellItem } from "./notification-bell";
 import {
   Tooltip,
   TooltipContent,
@@ -74,6 +78,9 @@ const ICONS: Record<IconName, LucideIcon> = {
   infirmerie: HeartPulse,
   finance: Landmark,
   payroll: Wallet,
+  requests: CalendarClock,
+  approvals: ClipboardCheck,
+  holidays: CalendarOff,
 };
 void FileText;
 
@@ -88,6 +95,9 @@ type SidebarProps = {
   logoUrl?: string | null;
   /** Academic years for the global switcher (admins only; empty otherwise). */
   years?: { id: string; label: string; isActive: boolean }[];
+  /** Staff-portal notifications (undefined for roles without a bell). */
+  notifications?: BellItem[];
+  unreadCount?: number;
 };
 
 export function Sidebar({
@@ -98,6 +108,8 @@ export function Sidebar({
   signOutLabel,
   logoUrl,
   years,
+  notifications,
+  unreadCount = 0,
 }: SidebarProps) {
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -105,6 +117,14 @@ export function Sidebar({
   const pathname = usePathname();
   const tNav = useTranslations("nav");
   const shouldReduce = useReducedMotion();
+  const { setRole } = useCommandPalette();
+
+  // Tell the command palette which role is active so it shows role-appropriate
+  // destinations (and gates people/class search) — the palette is mounted above
+  // this layout and otherwise has no role context.
+  useEffect(() => {
+    setRole(role);
+  }, [role, setRole]);
 
   // Hydrate collapse state from localStorage (after mount to avoid SSR mismatch).
   useEffect(() => {
@@ -147,7 +167,9 @@ export function Sidebar({
       ? "/super-admin"
       : role === "PARENT"
         ? "/parent/dashboard"
-        : "/dashboard";
+        : role === "STAFF"
+          ? "/staff"
+          : "/dashboard";
 
   return (
     <TooltipProvider delayDuration={250}>
@@ -336,7 +358,12 @@ export function Sidebar({
             >
               {userLabel}
             </span>
-            <ThemeToggle />
+            <div className={cn("flex items-center gap-1", collapsed && "flex-col")}>
+              {notifications ? (
+                <NotificationBell items={notifications} unreadCount={unreadCount} collapsed={collapsed} />
+              ) : null}
+              <ThemeToggle />
+            </div>
           </div>
           <form action={signOutAction} className={collapsed ? "flex justify-center" : ""}>
             {collapsed ? (

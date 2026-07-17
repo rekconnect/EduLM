@@ -1,9 +1,16 @@
 import { redirect } from "next/navigation";
-import type { Role } from "@prisma/client";
+import type { PayrollEmployee, Role } from "@prisma/client";
 import { auth } from "./auth";
 import { db } from "./db";
 import { runWithTenant } from "./tenant-context";
 import { postSignInPath } from "./post-signin-redirect";
+
+// Roles allowed inside the staff-facing admin app (the (app) pages guarded by
+// withTenantSession). PARENT and STAFF have their own portals and must be
+// bounced to them — otherwise they could read the full admin surface
+// (students, medical, discipline…) since those pages carry no per-page role
+// check of their own.
+const ADMIN_APP_ROLES: Role[] = ["SCHOOL_ADMIN", "TEACHER"];
 
 export type SessionUser = {
   id: string;
@@ -52,10 +59,44 @@ export async function withTenantSession<T>(
   fn: (user: SessionUser & { tenantId: string }) => Promise<T>,
 ): Promise<T> {
   const user = await requireUser();
-  if (user.role === "SUPER_ADMIN") redirect("/super-admin");
+  if (!ADMIN_APP_ROLES.includes(user.role)) redirect(postSignInPath(user.role));
   if (!user.tenantId) redirect("/sign-in");
   const bound = user as SessionUser & { tenantId: string };
   return runWithTenant({ tenantId: bound.tenantId, slug: null }, () => fn(bound));
+}
+
+/**
+ * Require a staff-side user (STAFF/TEACHER/SCHOOL_ADMIN), resolve their
+ * PayrollEmployee record, and run inside the tenant scope. The employee is
+ * matched by claimed userId first, then by email (claimed lazily on first
+ * visit so records linked by the admin before the user ever signed in still
+ * attach). `employee` is null when no record matches — pages show a friendly
+ * "not linked yet" state.
+ */
+export async function withStaffSession<T>(
+  fn: (
+    user: SessionUser & { tenantId: string },
+    employee: PayrollEmployee | null,
+  ) => Promise<T>,
+): Promise<T> {
+  const user = await requireRole(["STAFF", "TEACHER", "SCHOOL_ADMIN"]);
+  if (!user.tenantId) redirect("/sign-in");
+  const bound = user as SessionUser & { tenantId: string };
+  return runWithTenant({ tenantId: bound.tenantId, slug: null }, async () => {
+    let employee = await db.payrollEmployee.findFirst({ where: { userId: bound.id } });
+    if (!employee && bound.email) {
+      const unclaimed = await db.payrollEmployee.findFirst({
+        where: { email: { equals: bound.email, mode: "insensitive" }, userId: null },
+      });
+      if (unclaimed) {
+        employee = await db.payrollEmployee.update({
+          where: { id: unclaimed.id },
+          data: { userId: bound.id },
+        });
+      }
+    }
+    return fn(bound, employee);
+  });
 }
 
 /**

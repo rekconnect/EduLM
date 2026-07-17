@@ -25,7 +25,10 @@ export type IconName =
   | "cantine"
   | "infirmerie"
   | "finance"
-  | "payroll";
+  | "payroll"
+  | "requests"
+  | "approvals"
+  | "holidays";
 
 export type NavItem = {
   label: string;
@@ -62,6 +65,11 @@ type Labels = {
   finance: string;
   payroll: string;
   inscriptionForm: string;
+  myPayslips: string;
+  myRequests: string;
+  teamApprovals: string;
+  staffRequests: string;
+  holidays: string;
   myApplications: string;
   myAnnouncements: string;
   myDocuments: string;
@@ -109,6 +117,7 @@ export function navSectionsForRole(role: Role, l: Labels): NavSection[] {
             { label: l.billing, href: "/billing", icon: "billing" },
             { label: l.finance, href: "/finance", icon: "finance" },
             { label: l.payroll, href: "/payroll", icon: "payroll" },
+            { label: l.staffRequests, href: "/payroll/requests", icon: "requests" },
             { label: l.transport, href: "/transport", icon: "transport" },
             { label: l.cantine, href: "/cantine", icon: "cantine" },
             { label: l.infirmerie, href: "/infirmerie", icon: "infirmerie" },
@@ -127,6 +136,7 @@ export function navSectionsForRole(role: Role, l: Labels): NavSection[] {
           title: l.sectionConfig,
           items: [
             { label: l.years, href: "/admin/years", icon: "years" },
+            { label: l.holidays, href: "/admin/holidays", icon: "holidays" },
             {
               label: l.inscriptionForm,
               href: "/admin/inscription-config",
@@ -153,6 +163,21 @@ export function navSectionsForRole(role: Role, l: Labels): NavSection[] {
         {
           title: l.sectionAccount,
           items: [{ label: l.settings, href: "/settings", icon: "settings" }],
+        },
+      ];
+
+    case "STAFF":
+      return [
+        {
+          items: [{ label: l.dashboard, href: "/staff", icon: "dashboard" }],
+        },
+        {
+          title: l.sectionAccount,
+          items: [
+            { label: l.myRequests, href: "/staff/requests", icon: "requests" },
+            { label: l.teamApprovals, href: "/staff/approvals", icon: "approvals" },
+            { label: l.myPayslips, href: "/staff/payslips", icon: "payroll" },
+          ],
         },
       ];
 

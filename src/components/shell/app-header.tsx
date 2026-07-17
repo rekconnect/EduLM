@@ -34,6 +34,11 @@ async function navForRole(role: Role): Promise<NavItem[]> {
         { label: t("attendance"), href: "/attendance" },
         { label: t("discipline"), href: "/discipline" },
       ];
+    case "STAFF":
+      return [
+        { label: t("dashboard"), href: "/staff" },
+        { label: t("payroll"), href: "/staff/payslips" },
+      ];
     case "PARENT":
       return [
         { label: t("dashboard"), href: "/parent/dashboard" },
@@ -68,7 +73,9 @@ export async function AppHeader({
                 ? "/super-admin"
                 : role === "PARENT"
                   ? "/parent/dashboard"
-                  : "/dashboard"
+                  : role === "STAFF"
+                    ? "/staff"
+                    : "/dashboard"
             }
             className="text-base font-semibold tracking-tight"
           >

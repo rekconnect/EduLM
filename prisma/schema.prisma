@@ -24,6 +24,9 @@ enum Role {
   SUPER_ADMIN
   SCHOOL_ADMIN
   TEACHER
+  // Non-teaching staff (or any personnel) whose home surface is the staff
+  // portal (/staff): payslips, and later attendance requests + approvals.
+  STAFF
   PARENT
 }
 
@@ -122,6 +125,11 @@ model Tenant {
   financeSummaries FinanceSummary[]
   payrollEmployees PayrollEmployee[]
   payslips         Payslip[]
+  attendanceRequests AttendanceRequest[]
+  staffNotifications StaffNotification[]
+  holidays           TenantHoliday[]
+  salaryComponents   SalaryComponent[]
+  payrollSettings    TenantPayrollSettings?
   admissionCycles  AdmissionCycle[]
   applications     Application[]
   documents        TenantDocument[]
@@ -192,6 +200,8 @@ model User {
   sentMessages       ContactMessage[]  @relation("ContactSender")
   readMessages       ContactMessage[]  @relation("ContactReader")
   inscriptionFormAuditEntries TenantConfigAuditLog[]
+  payrollEmployee    PayrollEmployee?
+  staffNotifications StaffNotification[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -799,11 +809,180 @@ model PayrollEmployee {
   active         Boolean   @default(true) // not Resigned
   recruitedAt    DateTime?
   resignedAt     DateTime?
+  // Staff-portal link: professional email set by the admin (provisions a
+  // STAFF User for Microsoft sign-in) and the claimed EduLM account. userId
+  // is filled on provisioning or lazily on first portal visit (email match).
+  email          String?
+  userId         String?   @unique
+  // Optional line manager. When set, this employee's attendance requests route
+  // to the supervisor first (PENDING_SUPERVISOR) before the finance stage.
+  supervisorId   String?
+  // Payroll: tax/NFS rate bracket (keys into TenantPayrollSettings.taxRates /
+  // nfsRates). Null → 0% (no statutory deduction). Default working days for the
+  // monthly run when set (else the month's Mon–Fri count is used).
+  taxCategory        String?
+  defaultDaysPerMonth Int?
+  // One-way distance for the transport formula (km). 0 → transport = the floor.
+  kmDistance         Float    @default(0)
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  payslips Payslip[]
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  supervisor PayrollEmployee?  @relation("EmployeeSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
+  reports    PayrollEmployee[] @relation("EmployeeSupervisor")
+  payslips   Payslip[]
+  salaryComponents   SalaryComponent[]
+  requests           AttendanceRequest[] @relation("RequestEmployee")
+  supervisedRequests AttendanceRequest[] @relation("RequestSupervisor")
 
   @@index([tenantId, active])
+  @@index([tenantId, email])
+  @@index([tenantId, supervisorId])
+}
+
+enum SalaryComponentKind {
+  EARNING // adds to gross pay
+  DEDUCTION // recurring subtraction (e.g. loan repayment, advance)
+}
+
+/// Per-tenant payroll configuration for the monthly run: statutory rate brackets
+/// (keyed by employee taxCategory, stored as decimals e.g. 0.02 = 2%), the
+/// default working days per month, and an LBP-per-USD exchange rate for
+/// cross-currency display. One row per tenant.
+model TenantPayrollSettings {
+  id                  String   @id @default(cuid())
+  tenantId            String   @unique
+  exchangeRate        Float? // LBP per 1 USD
+  workingDaysPerMonth Int      @default(22)
+  taxRates            Json     @default("{}") // { "<category>": 0.02, ... }
+  nfsRates            Json     @default("{}")
+  // Transport allowance formula inputs (all admin-editable so a fuel/rate change
+  // updates every employee at once). perDay = km≤20 ? minTransport
+  //   : max(km ÷ kmPerLitre × fuelPrice × 2 (round trip), minTransport).
+  fuelPriceCents      BigInt   @default(0) // per litre, in fuelPriceCurrency
+  fuelPriceCurrency   String   @default("USD")
+  minTransportCents   BigInt   @default(0) // per-day floor, USD
+  kmPerLitre          Float    @default(7.5)
+  updatedAt           DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+/// A recurring pay line on an employee's monthly salary. Flexible so any school
+/// can model its structure: Base (EARNING, fixed), Transport (EARNING, perDay —
+/// multiplied by worked days, so absences reduce it), bonuses, recurring
+/// deductions. Dual-currency: an employee can hold both USD and LBP components.
+/// Statutory NSSF/tax are entered per payslip run, not modeled here.
+model SalaryComponent {
+  id          String              @id @default(cuid())
+  tenantId    String
+  employeeId  String
+  kind        SalaryComponentKind @default(EARNING)
+  label       String
+  currency    String // "USD" | "LBP"
+  amountCents BigInt              @default(0) // monthly amount, or per-working-day when perDay
+  perDay      Boolean             @default(false)
+  // Whether NSF + tax apply to this line. Base = true; Transport = false
+  // ("transport is alone"). Tax/NFS = sum(taxable earnings) × rate[category].
+  taxable     Boolean             @default(false)
+  sortOrder   Int                 @default(0)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee PayrollEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, employeeId])
+}
+
+enum AttendanceRequestKind {
+  ABSENCE // full / multi-day absence
+  PERMISSION // short permission: arrive late / leave early
+  PRESENCE // declared presence day (e.g. working a normally-off day) — single day, optional hours
+  PERMANENCE // on-duty / permanence day — single day, optional hours
+}
+
+enum AttendanceRequestStatus {
+  PENDING_SUPERVISOR
+  PENDING_FINANCE
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// A staff absence / permission request moving through the two-step approval
+/// chain: (submit) → PENDING_SUPERVISOR (if the employee has a supervisor) →
+/// PENDING_FINANCE → APPROVED. REJECTED at either stage; CANCELLED by the
+/// requester while still awaiting the supervisor. Admins can undo a final
+/// decision back to PENDING_FINANCE.
+model AttendanceRequest {
+  id           String                  @id @default(cuid())
+  tenantId     String
+  employeeId   String
+  kind         AttendanceRequestKind
+  status       AttendanceRequestStatus @default(PENDING_SUPERVISOR)
+  startDate    DateTime // UTC midnight
+  endDate      DateTime
+  startTime    String? // "HH:MM" — PERMISSION only
+  endTime      String?
+  reason       String
+  // Supervisor snapshot at submit time (so re-parenting later doesn't reroute
+  // an in-flight request). Null when the employee had no supervisor.
+  supervisorId String?
+  supervisorDecisionByUserId String?
+  supervisorDecisionAt       DateTime?
+  financeDecisionByUserId    String?
+  financeDecisionAt          DateTime?
+  decisionNote String? // rejection reason / note, shown to the requester
+  // Working days the request spans (Mon–Fri in [startDate,endDate], minus
+  // holidays) — the deductible unit. Null for PERMISSION (hours, not a day).
+  // Snapshotted at submit against the holiday calendar then.
+  workingDays  Int?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee   PayrollEmployee  @relation("RequestEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  supervisor PayrollEmployee? @relation("RequestSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, status])
+  @@index([tenantId, employeeId])
+  @@index([tenantId, supervisorId, status])
+}
+
+/// A non-working day for the school (public holiday or a school break day).
+/// Used to exclude days from attendance-request working-day counts. One row per
+/// calendar day; multi-day breaks are expanded to one row per day on entry.
+model TenantHoliday {
+  id        String   @id @default(cuid())
+  tenantId  String
+  date      DateTime // UTC midnight
+  label     String
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, date])
+  @@index([tenantId, date])
+}
+
+/// Lightweight per-user notification for the staff portal bell. Emitted on
+/// request transitions (submitted → supervisor, decided → requester). No
+/// realtime; the count is read on each server render. readAt = seen.
+model StaffNotification {
+  id        String    @id @default(cuid())
+  tenantId  String
+  userId    String
+  kind      String // REQUEST_SUBMITTED | REQUEST_APPROVED | REQUEST_REJECTED | REQUEST_FORWARDED | REQUEST_CANCELLED
+  title     String
+  body      String?
+  href      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, readAt])
 }
 
 /// Imported payslips from Dars payroll (Pay_Salary). Net amounts only (LBP is
@@ -819,6 +998,14 @@ model Payslip {
   netUsdCents  BigInt    @default(0)
   paid         Boolean   @default(false)
   salaryDate   DateTime?
+  // Monthly-run fields. generatedAt set when produced by the run (vs a Dars
+  // import or a manual entry). daysWorked + breakdown (per-currency line detail,
+  // days, tax/nfs/transport) drive the payslip view + PDF. publishedAt gates
+  // staff visibility — staff see a payslip only once its month is published.
+  daysWorked   Int?
+  breakdown    Json?
+  generatedAt  DateTime?
+  publishedAt  DateTime?
 
   tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   employee PayrollEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)

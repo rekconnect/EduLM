@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/shell/sidebar";
 import { navSectionsForRole } from "@/components/shell/nav-sections";
 import { requireUser } from "@/lib/session";
 import { unscopedDb } from "@/lib/db";
+import { getStaffShellData } from "@/lib/staff-portal";
 
 /**
  * Layout for every authenticated page. Persistent across navigations within
@@ -25,7 +26,7 @@ export default async function AppLayout({
   // The three per-navigation reads are independent — run them together
   // instead of serially (this layout renders on every authenticated page):
   // the mustChangePassword flag, the tenant brand/shell data, and nav labels.
-  const [acct, tenant, tNav, years] = await Promise.all([
+  const [acct, tenant, tNav, years, staffShell] = await Promise.all([
     unscopedDb().user.findUnique({
       where: { id: user.id },
       select: { mustChangePassword: true },
@@ -46,6 +47,7 @@ export default async function AppLayout({
           select: { id: true, label: true, isActive: true },
         })
       : Promise.resolve([] as { id: string; label: string; isActive: boolean }[]),
+    getStaffShellData(user),
   ]);
 
   // Force users flagged for a password reset (e.g. bulk-onboarded parents
@@ -76,6 +78,11 @@ export default async function AppLayout({
     finance: tNav("finance"),
     payroll: tNav("payroll"),
     inscriptionForm: tNav("inscriptionForm"),
+    myPayslips: tNav("myPayslips"),
+    myRequests: tNav("myRequests"),
+    teamApprovals: tNav("teamApprovals"),
+    staffRequests: tNav("staffRequests"),
+    holidays: tNav("holidays"),
     myApplications: tNav("myApplications"),
     myAnnouncements: tNav("myAnnouncements"),
     myDocuments: tNav("myDocuments"),
@@ -88,6 +95,23 @@ export default async function AppLayout({
     sectionAccount: tNav("sectionAccount"),
     sectionSuperAdmin: tNav("sectionSuperAdmin"),
   });
+
+  // Decorate the nav with attendance-request state: hide "Team approvals" for
+  // staff who supervise nobody, and badge the pending queues.
+  const decoratedSections = staffShell
+    ? sections.map((section) => ({
+        ...section,
+        items: section.items
+          .filter((item) => item.href !== "/staff/approvals" || staffShell.isSupervisor)
+          .map((item) => {
+            if (item.href === "/staff/approvals" && staffShell.supervisorPending > 0)
+              return { ...item, badge: staffShell.supervisorPending };
+            if (item.href === "/payroll/requests" && staffShell.financePending > 0)
+              return { ...item, badge: staffShell.financePending };
+            return item;
+          }),
+      }))
+    : sections;
 
   const brandStyle = {
     ...(tenant?.brandLight
@@ -104,10 +128,12 @@ export default async function AppLayout({
         role={user.role}
         userLabel={user.name ?? user.email}
         tenantLabel={tenant?.name}
-        sections={sections}
+        sections={decoratedSections}
         signOutLabel={tNav("signOut")}
         logoUrl={tenant?.logoUrl ?? null}
         years={years}
+        notifications={staffShell?.notifications}
+        unreadCount={staffShell?.unreadCount}
       />
       <div className="min-w-0 flex-1">{children}</div>
     </div>

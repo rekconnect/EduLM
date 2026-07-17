@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { AuthError } from "next-auth";
 import { getTranslations } from "next-intl/server";
-import { auth, signIn } from "@/lib/auth";
+import { auth, signIn, microsoftSignInEnabled } from "@/lib/auth";
 import { unscopedDb } from "@/lib/db";
 import { extractTenantSlugFromHost } from "@/lib/tenant-resolve";
 import { postSignInPath } from "@/lib/post-signin-redirect";
@@ -102,6 +102,11 @@ export default async function SignInPage({
       }
       throw err;
     }
+  }
+
+  async function signInWithMicrosoft() {
+    "use server";
+    await signIn("microsoft-entra-id", { redirectTo: "/post-signin" });
   }
 
   const brandVars = {
@@ -224,12 +229,38 @@ export default async function SignInPage({
                     role="alert"
                     className="rounded-md border border-[color:var(--color-danger)]/30 bg-[color:var(--color-danger-soft)] px-3 py-2 text-sm text-[color:var(--color-danger-soft-fg)]"
                   >
-                    {t("errorInvalid")}
+                    {error === "NoAccount" ? t("errorNoAccount") : t("errorInvalid")}
                   </div>
                 ) : null}
 
                 <SignInSubmit label={t("submit")} pendingLabel={tCommon("loading")} />
               </form>
+
+              {microsoftSignInEnabled ? (
+                <>
+                  <div className="my-5 flex items-center gap-3" aria-hidden>
+                    <span className="h-px flex-1 bg-[color:var(--color-border-subtle)]" />
+                    <span className="text-xs uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
+                      {t("orContinue")}
+                    </span>
+                    <span className="h-px flex-1 bg-[color:var(--color-border-subtle)]" />
+                  </div>
+                  <form action={signInWithMicrosoft}>
+                    <button
+                      type="submit"
+                      className="flex w-full items-center justify-center gap-2.5 rounded-md border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-4 py-2 text-sm font-medium text-[color:var(--color-foreground)] transition-colors duration-200 ease-out hover:bg-[color:var(--color-surface-hover)] active:scale-[0.99]"
+                    >
+                      <svg viewBox="0 0 21 21" className="size-4 shrink-0" aria-hidden>
+                        <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                        <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                        <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                        <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+                      </svg>
+                      {t("microsoft")}
+                    </button>
+                  </form>
+                </>
+              ) : null}
             </div>
 
             <p className="mt-4 text-center text-sm">

@@ -73,10 +73,18 @@ export default async function PayrollPage({
           title="Paie"
           description="Personnel & masse salariale"
           action={
-            <LinkButton href="/payroll/employees/new" size="sm" className="gap-1.5">
-              <Plus className="size-4" aria-hidden />
-              Nouvel employé
-            </LinkButton>
+            <div className="flex items-center gap-2">
+              <Link href="/payroll/settings" className="text-sm text-[color:var(--color-brand-600)] hover:underline">
+                Paramètres
+              </Link>
+              <Link href="/payroll/run" className="text-sm text-[color:var(--color-brand-600)] hover:underline">
+                Générer la paie
+              </Link>
+              <LinkButton href="/payroll/employees/new" size="sm" className="gap-1.5">
+                <Plus className="size-4" aria-hidden />
+                Nouvel employé
+              </LinkButton>
+            </div>
           }
         />
 

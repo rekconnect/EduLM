@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Plus, Pencil, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -83,7 +84,12 @@ export function PayslipsManager({
               ) : (
                 <TR key={s.id}>
                   <TD className="font-medium">
-                    {MONTHS[s.month]} {s.year}
+                    <Link
+                      href={`/payroll/payslips/${s.id}`}
+                      className="text-[color:var(--color-foreground)] transition-colors hover:text-[color:var(--color-brand-600)] hover:underline"
+                    >
+                      {MONTHS[s.month]} {s.year}
+                    </Link>
                     {s.imported ? (
                       <span className="ms-2 text-[10px] text-[color:var(--color-foreground-subtle)]">Dars</span>
                     ) : null}

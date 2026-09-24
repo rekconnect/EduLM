@@ -443,9 +443,9 @@ export function TransportManager({
         ].map((s) => (
           <div
             key={s.label}
-            className="flex items-center gap-3 rounded-lg border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] px-4 py-3"
+            className="flex items-center gap-3 rounded-lg border border-[color:var(--color-brand-100)] bg-[color:var(--color-brand-50)] px-4 py-3"
           >
-            <span className="shrink-0 text-[color:var(--color-foreground-subtle)]">{s.icon}</span>
+            <span className="shrink-0 text-[color:var(--color-brand-600)]">{s.icon}</span>
             <div className="min-w-0">
               <div className="text-lg font-semibold tabular-nums text-[color:var(--color-foreground)]">{s.value}</div>
               <div className="truncate text-xs text-[color:var(--color-foreground-muted)]" title={s.label}>{s.label}</div>

@@ -12,7 +12,7 @@ import { darsQuery, closeDars, DARS_COLLEGE_ID as C } from "./lib/dars-pool.js";
 import { parseFlags, resolveTenant } from "./lib/tenant.js";
 
 const prisma = new PrismaClient();
-const ANNEES = [2022, 2023, 2024, 2025, 2026];
+const ANNEES = [2022, 2023, 2024, 2025, 2026, 2027]; // bump at annual rollover
 
 async function serviceSet(code: string, annee: number): Promise<Set<number>> {
   const rows = await darsQuery<{ Id_Eleve: number }>(

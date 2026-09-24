@@ -75,10 +75,12 @@ async function main() {
     `SELECT ID, Qaza, QazaAR FROM Isc_Qaza WHERE Id_College = ${C}`,
   );
   const qazaFr = new Map(qazaRows.map((q) => [Number(q.ID), clean(q.Qaza)]));
-  const townRows = await darsQuery<{ Id_Town: number; TownName: string | null }>(
-    `SELECT Id_Town, TownName FROM Isc_Town WHERE Id_College = ${C}`,
+  const qazaAr = new Map(qazaRows.map((q) => [Number(q.ID), clean(q.QazaAR)]));
+  const townRows = await darsQuery<{ Id_Town: number; TownName: string | null; TownNameAR: string | null }>(
+    `SELECT Id_Town, TownName, TownNameAR FROM Isc_Town WHERE Id_College = ${C}`,
   );
   const townName = new Map(townRows.map((t) => [Number(t.Id_Town), clean(t.TownName)]));
+  const townNameAr = new Map(townRows.map((t) => [Number(t.Id_Town), clean(t.TownNameAR)]));
   const classRows = await darsQuery<{ ID_Class: number; ClassName: string | null; Section: string | null }>(
     `SELECT ID_Class, ClassName, Section FROM Isc_Classes WHERE Id_College = ${C}`,
   );
@@ -114,7 +116,7 @@ async function main() {
   const addrIds = [...new Set(dParents.map((p) => Number(p.Id_Address)).filter((x) => x > 0))];
   const addrRows = addrIds.length
     ? await darsQuery<Record<string, unknown>>(
-        `SELECT ID, Id_Qaza, Building, AddressFloor, PoBox, AddressRemark, StreetAr, BuildingAr, PlaceDetailsAr
+        `SELECT ID, Id_Qaza, Id_Town, Building, AddressFloor, PoBox, AddressRemark, StreetAr, BuildingAr, PlaceDetailsAr
          FROM Isc_Address WHERE Id_College = ${C} AND ID IN (${inList(addrIds)})`,
       )
     : [];
@@ -174,6 +176,11 @@ async function main() {
       out.adresse_rue_ar = clean(a.StreetAr as string);
       out.adresse_immeuble_ar = clean(a.BuildingAr as string);
       out.adresse_place_ar = clean(a.PlaceDetailsAr as string);
+      // البلدة / القضاء in Arabic (Isc_Town.TownNameAR / Isc_Qaza.QazaAR).
+      const vAr = townNameAr.get(Number(a.Id_Town)) ?? "";
+      out.adresse_village_ar = vAr === "--" ? "" : vAr;
+      const qAr = qazaAr.get(Number(a.Id_Qaza)) ?? "";
+      out.adresse_qaza_ar = qAr === "--" ? "" : qAr;
     }
     // Drop empties so we don't bloat customAnswers
     for (const k of Object.keys(out)) if (!out[k]) delete out[k];

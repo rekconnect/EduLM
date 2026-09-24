@@ -132,6 +132,8 @@ export const PARENT_FIELDS: SeedField[] = [
   { key: "adresse_rue_ar", label: "الشارع (Rue AR)", type: "short_text", category: "Info Arabe" },
   { key: "adresse_immeuble_ar", label: "المبنى (Immeuble AR)", type: "short_text", category: "Info Arabe" },
   { key: "adresse_place_ar", label: "تفاصيل (Place AR)", type: "short_text", category: "Info Arabe" },
+  { key: "adresse_village_ar", label: "البلدة (Village AR)", type: "short_text", category: "Info Arabe" },
+  { key: "adresse_qaza_ar", label: "القضاء (Qaza AR)", type: "short_text", category: "Info Arabe" },
 ];
 
 export const STUDENT_CATEGORIES = [

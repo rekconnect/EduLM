@@ -75,9 +75,10 @@ export async function PayslipDocument({
       {/* Breakdown, per currency */}
       {data.breakdown && currencies.length > 0 ? (
         <div className="space-y-6">
-          {currencies.map((ccy) => (
-            <CurrencySection key={ccy} ccy={ccy} d={data.breakdown!.byCurrency[ccy]} t={t} />
-          ))}
+          {currencies.map((ccy) => {
+            const detail = data.breakdown!.byCurrency[ccy];
+            return detail ? <CurrencySection key={ccy} ccy={ccy} d={detail} t={t} /> : null;
+          })}
         </div>
       ) : (
         <div className="space-y-2">

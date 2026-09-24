@@ -97,13 +97,6 @@ export async function loadBusRows(opts?: {
       : (activeYear?.id ?? "");
   const selected = years.find((y) => y.id === selectedYearId);
   const label = selected?.label ?? "";
-  const trim: Trimester = (TRIMESTERS as readonly string[]).includes(opts?.trim ?? "")
-    ? (opts!.trim as Trimester)
-    : DEFAULT_TRIM;
-  const period = periodKey(label, trim);
-  // Legacy flat keys correspond to the active year's T3 (the pre-period state).
-  const legacyApplies = !!selected?.isActive && trim === "T3";
-
   const students = await db.student.findMany({
     where: { enrollments: { some: { academicYearId: selectedYearId } } },
     select: {
@@ -127,6 +120,28 @@ export async function loadBusRows(opts?: {
     },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
   });
+
+  // Trimester: explicit ?trim= wins; otherwise show the most recent trimester
+  // that actually has assignments for this year (at rollover the fresh import
+  // lives in T1 while T3 is still empty), falling back to DEFAULT_TRIM.
+  const explicitTrim = (TRIMESTERS as readonly string[]).includes(opts?.trim ?? "");
+  let trim: Trimester = explicitTrim ? (opts!.trim as Trimester) : DEFAULT_TRIM;
+  if (!explicitTrim) {
+    outer: for (const t of ["T3", "T2", "T1"] as const) {
+      for (const s of students) {
+        const p = parsePeriods((s.customAnswers ?? {}) as Record<string, unknown>)[
+          periodKey(label, t)
+        ];
+        if (p && (p.as === "yes" || p.rs === "yes")) {
+          trim = t;
+          break outer;
+        }
+      }
+    }
+  }
+  const period = periodKey(label, trim);
+  // Legacy flat keys correspond to the active year's T3 (the pre-period state).
+  const legacyApplies = !!selected?.isActive && trim === "T3";
 
   const rows: BusRow[] = [];
   const candidates: Array<{ id: string; name: string; className: string }> = [];

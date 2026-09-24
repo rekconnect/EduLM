@@ -32,7 +32,10 @@ import { parseFlags, resolveTenant } from "./lib/tenant.js";
 const prisma = new PrismaClient();
 
 const DEFAULT_VERSEMENT = 54; // 3e trimestre 2025-2026
-const TRIM = "T3"; // the trimester the /transport table shows by default
+// Target trimester key — override with --trim=T1|T2|T3 (a versement IS one
+// trimester's billing, so at rollover pass the new year's first versement
+// together with --trim=T1).
+const TRIM = "T3";
 
 const norm = (s: string) =>
   s
@@ -61,6 +64,12 @@ async function main() {
   const { tenantName, confirm } = parseFlags();
   const vArg = process.argv.find((a) => a.startsWith("--versement="));
   const VID = vArg ? Number(vArg.split("=")[1]) : DEFAULT_VERSEMENT;
+  const tArg = process.argv.find((a) => a.startsWith("--trim="));
+  const trimArg = tArg ? tArg.split("=")[1] : TRIM;
+  if (!["T1", "T2", "T3"].includes(trimArg ?? "")) {
+    console.error(`--trim invalide: ${trimArg} (attendu T1, T2 ou T3)`);
+    process.exit(1);
+  }
   const tenant = await resolveTenant(prisma, tenantName);
   console.log(confirm ? "MODE: APPLY" : "MODE: DRY-RUN (pass --confirm to write)");
 
@@ -72,7 +81,7 @@ async function main() {
     console.error("No active academic year — set one first (/admin/years).");
     process.exit(1);
   }
-  const PERIOD = `${activeYear.label}|${TRIM}`;
+  const PERIOD = `${activeYear.label}|${trimArg}`;
   console.log(`Cible: bus_periods["${PERIOD}"] · versement ${VID}`);
 
   // ── Dars: billing per student for this versement (montant/net) ──

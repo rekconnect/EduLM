@@ -628,7 +628,10 @@ export function TransportManager({
         <table className="w-full min-w-[2280px] text-sm">
           <thead>
             <tr className="text-xs uppercase tracking-wider text-[color:var(--color-foreground-subtle)] [&>th]:sticky [&>th]:top-0 [&>th]:z-10 [&>th]:h-8 [&>th]:border-b [&>th]:border-[color:var(--color-border-subtle)] [&>th]:bg-[color:var(--color-surface-raised)]">
-              <th className="px-3" colSpan={2} />
+              {/* Frozen élève corner: sticky on both axes so the group row
+                  never slides over the frozen name column. */}
+              <th className="sticky start-0 z-30! px-3" />
+              <th className="px-3" />
               <th className="border-s border-[color:var(--color-border-subtle)] px-3 text-start font-semibold" colSpan={5}>
                 <span className="inline-flex items-center gap-1"><Sunrise className="size-3.5" aria-hidden /> AS — Aller (matin)</span>
               </th>
@@ -647,7 +650,7 @@ export function TransportManager({
               <th className="border-s border-[color:var(--color-border-subtle)] px-3" colSpan={2} />
             </tr>
             <tr className="text-start text-xs uppercase tracking-wider text-[color:var(--color-foreground-subtle)] [&>th]:sticky [&>th]:top-8 [&>th]:z-10 [&>th]:border-b [&>th]:border-[color:var(--color-border-subtle)] [&>th]:bg-[color:var(--color-surface-raised)]">
-              <SortTh label="Élève" k="name" />
+              <SortTh label="Élève" k="name" className="start-0 z-30! border-e border-[color:var(--color-border-subtle)]" />
               <SortTh label="Classe" k="classe" />
               <SortTh label="AS" k="as" className="border-s border-[color:var(--color-border-subtle)]" />
               <SortTh label="Bus N°" k="bus_matin" />
@@ -680,11 +683,20 @@ export function TransportManager({
                 <tr
                   key={r.id}
                   className={
-                    "border-b border-[color:var(--color-border-subtle)] last:border-0 " +
-                    (isEditing ? "bg-[color:var(--color-brand-500)]/5" : "hover:bg-[color:var(--color-surface-hover)]")
+                    "group border-b border-[color:var(--color-border-subtle)] last:border-0 " +
+                    (isEditing ? "bg-[color:var(--color-brand-50)]" : "hover:bg-[color:var(--color-brand-50)]")
                   }
                 >
-                  <td className="px-3 py-1.5">
+                  {/* Frozen élève column — opaque bg (matching the row state)
+                      so scrolled columns pass underneath, not through. */}
+                  <td
+                    className={
+                      "sticky start-0 z-[5] border-e border-[color:var(--color-border-subtle)] px-3 py-1.5 " +
+                      (isEditing
+                        ? "bg-[color:var(--color-brand-50)]"
+                        : "bg-[color:var(--color-background)] group-hover:bg-[color:var(--color-brand-50)]")
+                    }
+                  >
                     <div className="font-medium text-[color:var(--color-foreground)]">{r.name}</div>
                     {r.family ? (
                       <div className="text-xs text-[color:var(--color-foreground-subtle)]">{r.family}</div>

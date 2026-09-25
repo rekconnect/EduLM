@@ -407,7 +407,8 @@
     "myRequests": "My requests",
     "teamApprovals": "Team approvals",
     "staffRequests": "Staff requests",
-    "holidays": "Holidays"
+    "holidays": "Holidays",
+    "accounts": "Accounts & access"
   },
   "forgotPassword": {
     "title": "Forgot your password?",
@@ -1718,5 +1719,37 @@
     "backMine": "My pay slips",
     "backStaff": "Staff",
     "notFound": "Pay slip not found."
+  },
+  "accounts": {
+    "title": "Accounts & access",
+    "subtitle": "Manage portal access: teachers, staff and parents — activation and temporary passwords.",
+    "searchPlaceholder": "Search by name or email…",
+    "allRoles": "All",
+    "role_SCHOOL_ADMIN": "Administrator",
+    "role_TEACHER": "Teacher",
+    "role_STAFF": "Staff",
+    "role_PARENT": "Parent",
+    "status_ACTIVE": "Active",
+    "status_INVITED": "Invited",
+    "status_DISABLED": "Disabled",
+    "colName": "Name",
+    "colEmail": "Email",
+    "colRole": "Role",
+    "colStatus": "Status",
+    "colActions": "Actions",
+    "resetAction": "Password",
+    "activateAction": "Activate",
+    "deactivateAction": "Deactivate",
+    "adminRow": "Managed by the owner",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "copyFailed": "Copy failed — select the text.",
+    "resetDone": "Temporary password generated.",
+    "activated": "Account activated.",
+    "deactivated": "Account deactivated.",
+    "actionError": "Action failed.",
+    "empty": "No account matches.",
+    "pageInfo": "{shown} shown of {total}",
+    "resetHint": "The temporary password is shown only once: copy it and pass it on. On first sign-in the person must choose their own password. Staff normally sign in with Microsoft — the password is a fallback."
   }
 }

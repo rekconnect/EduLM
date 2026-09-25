@@ -93,6 +93,7 @@ export default async function AppLayout({
     sectionCommunication: tNav("sectionCommunication"),
     sectionConfig: tNav("sectionConfig"),
     sectionAccount: tNav("sectionAccount"),
+    accounts: tNav("accounts"),
     sectionSuperAdmin: tNav("sectionSuperAdmin"),
   });
 

@@ -407,7 +407,8 @@
     "myRequests": "طلباتي",
     "teamApprovals": "موافقات الفريق",
     "staffRequests": "طلبات الموظفين",
-    "holidays": "العطل"
+    "holidays": "العطل",
+    "accounts": "الحسابات والوصول"
   },
   "forgotPassword": {
     "title": "نسيت كلمة المرور؟",
@@ -1718,5 +1719,37 @@
     "backMine": "قسائمي",
     "backStaff": "الموظفون",
     "notFound": "القسيمة غير موجودة."
+  },
+  "accounts": {
+    "title": "الحسابات والوصول",
+    "subtitle": "إدارة الوصول إلى البوابة: الأساتذة والموظفون والأهل — التفعيل وكلمات المرور المؤقتة.",
+    "searchPlaceholder": "ابحث بالاسم أو البريد الإلكتروني…",
+    "allRoles": "الكل",
+    "role_SCHOOL_ADMIN": "مدير",
+    "role_TEACHER": "أستاذ",
+    "role_STAFF": "موظف",
+    "role_PARENT": "ولي أمر",
+    "status_ACTIVE": "مفعّل",
+    "status_INVITED": "مدعو",
+    "status_DISABLED": "معطّل",
+    "colName": "الاسم",
+    "colEmail": "البريد الإلكتروني",
+    "colRole": "الدور",
+    "colStatus": "الحالة",
+    "colActions": "إجراءات",
+    "resetAction": "كلمة المرور",
+    "activateAction": "تفعيل",
+    "deactivateAction": "تعطيل",
+    "adminRow": "يديره المالك",
+    "copy": "نسخ",
+    "copied": "تم النسخ!",
+    "copyFailed": "تعذّر النسخ — حدّد النص.",
+    "resetDone": "تم إنشاء كلمة مرور مؤقتة.",
+    "activated": "تم تفعيل الحساب.",
+    "deactivated": "تم تعطيل الحساب.",
+    "actionError": "تعذّر تنفيذ الإجراء.",
+    "empty": "لا يوجد حساب مطابق.",
+    "pageInfo": "{shown} معروض من أصل {total}",
+    "resetHint": "تظهر كلمة المرور المؤقتة مرة واحدة فقط: انسخها وسلّمها. عند أول تسجيل دخول يجب اختيار كلمة مرور خاصة. الموظفون يسجّلون الدخول عادةً عبر Microsoft — كلمة المرور بديل احتياطي."
   }
 }

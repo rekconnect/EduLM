@@ -407,7 +407,8 @@
     "myRequests": "Mes demandes",
     "teamApprovals": "Approbations d'équipe",
     "staffRequests": "Demandes du personnel",
-    "holidays": "Jours fériés"
+    "holidays": "Jours fériés",
+    "accounts": "Comptes & accès"
   },
   "forgotPassword": {
     "title": "Mot de passe oublié ?",
@@ -1718,5 +1719,37 @@
     "backMine": "Mes bulletins",
     "backStaff": "Personnel",
     "notFound": "Bulletin introuvable."
+  },
+  "accounts": {
+    "title": "Comptes & accès",
+    "subtitle": "Gérez l'accès au portail : professeurs, personnel et parents — activation et mots de passe temporaires.",
+    "searchPlaceholder": "Rechercher par nom ou e-mail…",
+    "allRoles": "Tous",
+    "role_SCHOOL_ADMIN": "Administrateur",
+    "role_TEACHER": "Professeur",
+    "role_STAFF": "Personnel",
+    "role_PARENT": "Parent",
+    "status_ACTIVE": "Actif",
+    "status_INVITED": "Invité",
+    "status_DISABLED": "Désactivé",
+    "colName": "Nom",
+    "colEmail": "E-mail",
+    "colRole": "Rôle",
+    "colStatus": "Statut",
+    "colActions": "Actions",
+    "resetAction": "Mot de passe",
+    "activateAction": "Activer",
+    "deactivateAction": "Désactiver",
+    "adminRow": "Géré par le propriétaire",
+    "copy": "Copier",
+    "copied": "Copié !",
+    "copyFailed": "Copie impossible — sélectionnez le texte.",
+    "resetDone": "Mot de passe temporaire généré.",
+    "activated": "Compte activé.",
+    "deactivated": "Compte désactivé.",
+    "actionError": "Action impossible.",
+    "empty": "Aucun compte ne correspond.",
+    "pageInfo": "{shown} affichés sur {total}",
+    "resetHint": "Le mot de passe temporaire s'affiche une seule fois : copiez-le et transmettez-le. À la première connexion, la personne devra choisir son propre mot de passe. Le personnel se connecte normalement avec Microsoft — le mot de passe est un accès de secours."
   }
 }

@@ -55,6 +55,7 @@ export async function AppShell({
     sectionCommunication: tNav("sectionCommunication"),
     sectionConfig: tNav("sectionConfig"),
     sectionAccount: tNav("sectionAccount"),
+    accounts: tNav("accounts"),
     sectionSuperAdmin: tNav("sectionSuperAdmin"),
   });
 

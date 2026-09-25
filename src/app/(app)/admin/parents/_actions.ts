@@ -371,7 +371,9 @@ export async function resetParentPassword(parentId: string): Promise<ParentFormS
     const passwordHash = await bcrypt.hash(newPassword, 10);
     await db.user.update({
       where: { id: parentId },
-      data: { passwordHash, status: "ACTIVE" },
+      // Temp password opens the door once — own password required at first
+      // sign-in (same behavior as the /admin/accounts console).
+      data: { passwordHash, status: "ACTIVE", mustChangePassword: true },
     });
     return { newPassword } satisfies ParentFormState;
   });

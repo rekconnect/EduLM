@@ -28,7 +28,8 @@ export type IconName =
   | "payroll"
   | "requests"
   | "approvals"
-  | "holidays";
+  | "holidays"
+  | "accounts";
 
 export type NavItem = {
   label: string;
@@ -80,6 +81,7 @@ type Labels = {
   sectionCommunication: string;
   sectionConfig: string;
   sectionAccount: string;
+  accounts: string;
   sectionSuperAdmin: string;
 };
 
@@ -135,6 +137,7 @@ export function navSectionsForRole(role: Role, l: Labels): NavSection[] {
         {
           title: l.sectionConfig,
           items: [
+            { label: l.accounts, href: "/admin/accounts", icon: "accounts" },
             { label: l.years, href: "/admin/years", icon: "years" },
             { label: l.holidays, href: "/admin/holidays", icon: "holidays" },
             {

@@ -34,6 +34,7 @@ import {
   CalendarClock,
   ClipboardCheck,
   CalendarOff,
+  KeyRound,
   Search,
   PanelLeftClose,
   PanelLeftOpen,
@@ -81,6 +82,7 @@ const ICONS: Record<IconName, LucideIcon> = {
   requests: CalendarClock,
   approvals: ClipboardCheck,
   holidays: CalendarOff,
+  accounts: KeyRound,
 };
 void FileText;
 

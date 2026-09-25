@@ -16,6 +16,13 @@ const nextConfig: NextConfig = {
       dynamic: 30,
       static: 180,
     },
+    // Server actions default to 1 MB bodies, and Vercel hard-rejects ~4.5 MB
+    // before the function runs — 4 MB is the realistic ceiling for the
+    // pass-through file uploads (justificatifs) until they move to
+    // direct-to-Supabase signed-URL uploads.
+    serverActions: {
+      bodySizeLimit: "4mb",
+    },
   },
 };
 

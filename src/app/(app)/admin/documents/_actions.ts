@@ -63,6 +63,10 @@ export async function createDocument(
   if (hasFile && !isStorageConfigured()) {
     return { formError: "no-storage" };
   }
+  // 4 MB: matches serverActions.bodySizeLimit and Vercel's request cap.
+  if (hasFile && (file as File).size > 4 * 1024 * 1024) {
+    return { errors: { file: "too-large" } };
+  }
 
   // Audience-specific validation.
   if (parsed.data.audience === "CLASS" && !parsed.data.classId) {

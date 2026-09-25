@@ -147,7 +147,10 @@ const providers: Provider[] = [
   }),
 ];
 
-if (process.env.RESEND_API_KEY) {
+// Magic-link sign-in is an explicit opt-in (AUTH_EMAIL_SIGNIN=true), separate
+// from transactional mail: RESEND_API_KEY alone must not open a passwordless
+// login path for every known email address.
+if (process.env.RESEND_API_KEY && process.env.AUTH_EMAIL_SIGNIN === "true") {
   providers.push(
     Resend({
       from: process.env.AUTH_EMAIL_FROM ?? "noreply@edulm.app",

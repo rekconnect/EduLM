@@ -1667,7 +1667,7 @@ export async function saveFinanceTab(
 
 /**
  * Upload one dossier file to storage. Returns the storage path + original name
- * to embed in a `file` field's answer. ~10 MB cap.
+ * to embed in a `file` field's answer. ~4 MB cap (Vercel request limit).
  */
 export async function uploadDossierFile(
   formData: FormData,
@@ -1678,7 +1678,7 @@ export async function uploadDossierFile(
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, error: "no-file" };
   }
-  if (file.size > 10 * 1024 * 1024) return { ok: false, error: "too-large" };
+  if (file.size > 4 * 1024 * 1024) return { ok: false, error: "too-large" };
   const { uploadDocument } = await import("@/lib/storage");
   try {
     const res = await uploadDocument(user.tenantId, file);

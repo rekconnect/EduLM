@@ -819,8 +819,9 @@ export async function saveEstablishments(
     }
     for (const e of valid) {
       if (e.id) {
-        await tx.establishment.update({
-          where: { id: e.id },
+        // updateMany so the client-supplied id can't reach another tenant's row.
+        await tx.establishment.updateMany({
+          where: { id: e.id, tenantId },
           data: {
             name: e.name,
             levels: e.levels,

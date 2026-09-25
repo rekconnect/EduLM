@@ -566,7 +566,9 @@ export async function saveAcademicStep(
 
 // ─── Required-document uploads (Round 4) ──────────────────────
 
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
+// 4 MB: matches next.config's serverActions.bodySizeLimit and stays under
+// Vercel's ~4.5 MB request cap — a bigger in-code limit would be unreachable.
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 export type UploadResult =
   | { ok: true; documentId: string; filename: string }

@@ -17,6 +17,8 @@ export type GuardianRow = {
   name: string | null;
   email: string;
   isPrimary: boolean;
+  /** Non-empty parent fiche details (label already localized/config-driven). */
+  details: Array<{ label: string; value: string }>;
 };
 
 export function GuardianManager({
@@ -64,28 +66,42 @@ export function GuardianManager({
             return (
               <li
                 key={g.guardianId}
-                className="flex items-center justify-between border-b border-[color:var(--border)] pb-2 last:border-0"
+                className="border-b border-[color:var(--border)] pb-3 last:border-0"
               >
-                <div className="flex items-center gap-2">
-                  <Link
-                    href={`/admin/parents/${g.parentUserId}`}
-                    className="font-medium hover:underline"
-                  >
-                    {g.name ?? g.email}
-                  </Link>
-                  <span className="text-[color:var(--muted-fg)]">{g.email}</span>
-                  {g.isPrimary ? (
-                    <span className="inline-flex rounded-full bg-[color:var(--primary)]/10 px-2 py-0.5 text-xs text-[color:var(--primary)]">
-                      {t("primaryBadge")}
-                    </span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/admin/parents/${g.parentUserId}`}
+                      className="font-medium hover:underline"
+                    >
+                      {g.name ?? g.email}
+                    </Link>
+                    <span className="text-[color:var(--muted-fg)]">{g.email}</span>
+                    {g.isPrimary ? (
+                      <span className="inline-flex rounded-full bg-[color:var(--primary)]/10 px-2 py-0.5 text-xs text-[color:var(--primary)]">
+                        {t("primaryBadge")}
+                      </span>
+                    ) : null}
+                  </div>
+                  {canEdit ? (
+                    <form action={boundUnlink}>
+                      <Button size="sm" variant="ghost" type="submit">
+                        {t("unlinkAction")}
+                      </Button>
+                    </form>
                   ) : null}
                 </div>
-                {canEdit ? (
-                  <form action={boundUnlink}>
-                    <Button size="sm" variant="ghost" type="submit">
-                      {t("unlinkAction")}
-                    </Button>
-                  </form>
+                {g.details.length > 0 ? (
+                  <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+                    {g.details.map((d) => (
+                      <div key={d.label} className="flex min-w-0 gap-1.5 text-xs">
+                        <dt className="shrink-0 text-[color:var(--muted-fg)]">{d.label} :</dt>
+                        <dd className="truncate text-[color:var(--color-foreground)]" title={d.value}>
+                          {d.value}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
                 ) : null}
               </li>
             );

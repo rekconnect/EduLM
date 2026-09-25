@@ -106,7 +106,7 @@ export default async function StudentDetailPage({
     const t = await getTranslations("students");
     const tCommon = await getTranslations("common");
 
-    const [student, availableParentsRaw, studentFieldsConfig] =
+    const [student, availableParentsRaw, studentFieldsConfig, parentFieldsConfig] =
       await Promise.all([
         db.student.findUnique({
           where: { id },
@@ -119,6 +119,8 @@ export default async function StudentDetailPage({
                     id: true,
                     userId: true,
                     relation: true,
+                    nationality1: true,
+                    nationality2: true,
                     user: {
                       select: { email: true, name: true, customAnswers: true },
                     },
@@ -143,6 +145,7 @@ export default async function StudentDetailPage({
           select: { id: true, name: true, email: true },
         }),
         loadEntityFieldsConfig("student"),
+        loadEntityFieldsConfig("parent"),
       ]);
 
     if (!student) notFound();
@@ -183,6 +186,13 @@ export default async function StudentDetailPage({
       : [null, [], []];
 
     const initialStudentAnswers = toAnswers(student.customAnswers);
+
+    // "Classe" (Scolarité section) always shows the LIVE class of the active
+    // year — the imported flat snapshot goes stale when a pupil changes class.
+    const liveClass = student.enrollments.find(
+      (e) => e.academicYear.isActive,
+    )?.class?.name;
+    if (liveClass) initialStudentAnswers.classe = liveClass;
 
     // Per-year billing services + registration snapshots → year-aware view.
     let servicesByYear: Record<string, string> = {};
@@ -369,13 +379,14 @@ export default async function StudentDetailPage({
       },
       {
         title: "العنوان",
-        // Only the Arabic-sourced address fields. البلدة / القضاء (village /
-        // caza) have no Arabic input — they live as Latin pickers in the
-        // Foyer tab — so they're intentionally not shown here.
+        // Arabic-sourced address fields; البلدة / القضاء come from the Dars
+        // town/qaza tables (adresse_village_ar / adresse_qaza_ar, imported
+        // 2026-09). تفاصيل المكان retired per Raed — القضاء shown instead.
         rows: [
           { label: "المبنى", value: fatherCa.adresse_immeuble_ar ?? "" },
           { label: "الشارع", value: fatherCa.adresse_rue_ar ?? "" },
-          { label: "تفاصيل المكان", value: fatherCa.adresse_place_ar ?? "" },
+          { label: "البلدة", value: fatherCa.adresse_village_ar ?? "" },
+          { label: "القضاء", value: fatherCa.adresse_qaza_ar ?? "" },
           { label: "العنوان البريدي", value: fatherCa.adresse_bp ?? "" },
         ],
       },
@@ -515,6 +526,35 @@ export default async function StudentDetailPage({
         </div>,
       ),
     });
+    // Compact per-parent detail grid on the Parents tab (Raed 2026-09-25):
+    // labels come from the parent fields config so admin overrides follow.
+    const PARENT_DETAIL_KEYS = [
+      "secteur_activite",
+      "profession_detail",
+      "societe",
+      "adresse_travail",
+      "type_famille",
+      "nationalite1",
+      "nationalite2",
+      "caza_registre",
+      "lieu_registre",
+      "communaute",
+    ] as const;
+    const parentLabel = (k: string) =>
+      parentFieldsConfig.fields.find((f) => (f.key ?? f.id) === k)?.label ?? k;
+    const guardianDetails = (l: (typeof student.guardianLinks)[number]) => {
+      const ca = toAnswers(l.guardian.user.customAnswers);
+      const value = (k: string) => {
+        if (k === "nationalite1") return l.guardian.nationality1 ?? ca[k] ?? "";
+        if (k === "nationalite2") return l.guardian.nationality2 ?? ca[k] ?? "";
+        return ca[k] ?? "";
+      };
+      return PARENT_DETAIL_KEYS.map((k) => ({
+        label: parentLabel(k),
+        value: value(k).trim(),
+      })).filter((d) => d.value !== "");
+    };
+
     tabs.push({
       id: "parents",
       label: "Parents",
@@ -529,6 +569,7 @@ export default async function StudentDetailPage({
             name: l.guardian.user.name,
             email: l.guardian.user.email,
             isPrimary: l.isPrimary,
+            details: guardianDetails(l),
           }))}
           availableParents={availableParents}
           canEdit={user.role === "SCHOOL_ADMIN"}

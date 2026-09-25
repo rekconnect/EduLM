@@ -90,7 +90,11 @@ export const PARENT_FIELDS: SeedField[] = [
   // families. Lives on the parent section (shows per père / mère).
   { key: "actuel", label: "Actuel(le)", type: "yes_no", category: "Info générale" },
   { key: "ancien_eleve", label: "Ancien(ne) élève", type: "yes_no", category: "Info générale" },
-  { key: "numero_registre", label: "Registre", type: "short_text", category: "Info générale" },
+  // Civil-registry trio shown together in Info générale (mirrors the Dars
+  // parent screen "Registre No. X · Lieu Y"), bilingual labels.
+  { key: "numero_registre", label: "N° registre (رقم القيد)", type: "short_text", category: "Info générale" },
+  { key: "lieu_registre", label: "Lieu du registre (مكان القيد)", type: "short_text", category: "Info générale" },
+  { key: "caza_registre", label: "Caza du registre (قضاء القيد)", type: "short_text", category: "Info générale" },
   { key: "nationalite1", label: "Nationalité 1", type: "select", category: "Info générale", guardianBoundTo: "nationality1", codeType: "NAT" },
   { key: "nationalite2", label: "Nationalité 2", type: "select", category: "Info générale", guardianBoundTo: "nationality2", codeType: "NAT" },
   { key: "communaute", label: "Communauté", type: "select", category: "Info générale", codeType: "REL" },
@@ -127,8 +131,7 @@ export const PARENT_FIELDS: SeedField[] = [
   { key: "nom_ar", label: "الشهرة (Nom AR)", type: "short_text", category: "Info Arabe" },
   { key: "prenom_ar", label: "الاسم (Prénom AR)", type: "short_text", category: "Info Arabe" },
   { key: "nom_pere_ar", label: "اسم الأب (Nom du père AR)", type: "short_text", category: "Info Arabe" },
-  { key: "lieu_registre", label: "مكان القيد (Lieu du registre)", type: "short_text", category: "Info Arabe" },
-  { key: "caza_registre", label: "قضاء القيد (Caza du registre)", type: "short_text", category: "Info Arabe" },
+  // (lieu_registre / caza_registre moved to Info générale — see above.)
   { key: "adresse_rue_ar", label: "الشارع (Rue AR)", type: "short_text", category: "Info Arabe" },
   { key: "adresse_immeuble_ar", label: "المبنى (Immeuble AR)", type: "short_text", category: "Info Arabe" },
   { key: "adresse_place_ar", label: "تفاصيل (Place AR)", type: "short_text", category: "Info Arabe" },
@@ -167,6 +170,9 @@ export const STUDENT_FIELDS: SeedField[] = [
   //   flow's cascading selection still works.)
   { key: "etablissement", label: "Établissement", type: "establishment_ref", category: "Scolarité", dossierBoundTo: "establishment" },
   { key: "niveau", label: "Niveau", type: "niveau_for_establishment", category: "Scolarité", dossierBoundTo: "niveau", optionsSourceKey: "etablissement" },
+  // Display of the CURRENT class — the fiche overrides the stored value with
+  // the live enrollment's class name at render time (students/[id]/page.tsx).
+  { key: "classe", label: "Classe", type: "short_text", category: "Scolarité" },
   { key: "date_inscription", label: "Date d'inscription", type: "date", category: "Scolarité" },
   { key: "date_entree", label: "Date d'entrée", type: "date", category: "Scolarité" },
   { key: "a_quitte", label: "A quitté", type: "yes_no", category: "Scolarité" },

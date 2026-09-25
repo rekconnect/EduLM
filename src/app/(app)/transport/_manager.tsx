@@ -284,8 +284,9 @@ export function TransportManager({
     0,
   );
   const remises = rows.filter((r) => Number(r.bus_remise) > 0).length;
-  const assigned = rows.filter(
-    (r) => r.bus_car_matin.trim() || r.bus_car_soir.trim(),
+  // Exception counter: inscrits without any bus number yet (0 = all placed).
+  const unassigned = rows.filter(
+    (r) => !(r.bus_car_matin.trim() || r.bus_car_soir.trim()),
   ).length;
   const noZone = rows.filter(
     (r) => !(r.bus_zone_matin.trim() || r.bus_zone_soir.trim()),
@@ -438,7 +439,7 @@ export function TransportManager({
             label: `Net après remises · brut ${fmt(montantTotal)} $ · ${fmt(remises)} remise(s)`,
             value: `${fmt(netTotal)} $`,
           },
-          { icon: <Check className="size-4" aria-hidden />, label: "Avec bus assigné", value: fmt(assigned) },
+          { icon: <Bus className="size-4" aria-hidden />, label: "Sans bus assigné", value: fmt(unassigned) },
           { icon: <MapPin className="size-4" aria-hidden />, label: "Sans quartier", value: fmt(noZone) },
         ].map((s) => (
           <div

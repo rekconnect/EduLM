@@ -54,6 +54,12 @@ export type SeedField = {
     | "childPassportLebanese";
   /** Seed dropdown options from this Dars Isc_Codes CodeType. */
   codeType?: string;
+  /** Student-only: display the père's value for this parent key when the
+   *  student has none of its own (live fallback via applyInheritedValues). */
+  inheritParentKey?: string;
+  /** Keep on the fiche/admin views but hide from the parent inscription and
+   *  réinscription forms (internal/import-only fields). */
+  formHidden?: boolean;
   /** Explicit dropdown options (when not from Isc_Codes). */
   options?: string[];
   /**
@@ -152,7 +158,9 @@ export const STUDENT_FIELDS: SeedField[] = [
   // ── Info générale ──
   { key: "prenom", label: "Prénom", type: "short_text", category: "Info générale", dossierBoundTo: "childFirstName" },
   { key: "nom", label: "Nom", type: "short_text", category: "Info générale", dossierBoundTo: "childLastName" },
-  { key: "dars_student_code", label: "Code", type: "short_text", category: "Info générale" },
+  // "Code élève" — NOT "Code": Raed confused it with the famille code
+  // (élève C00053 vs famille C0005 for the Chaaban case, 2026-09-25).
+  { key: "dars_student_code", label: "Code élève", type: "short_text", category: "Info générale", formHidden: true },
   { key: "date_naissance", label: "Date de naissance", type: "date", category: "Info générale", dossierBoundTo: "childDob" },
   { key: "pays_naissance", label: "Pays de naissance", type: "short_text", category: "Info générale" },
   { key: "lieu_naissance", label: "Lieu de naissance", type: "short_text", category: "Info générale" },
@@ -161,6 +169,9 @@ export const STUDENT_FIELDS: SeedField[] = [
   { key: "communaute_eleve", label: "Communauté", type: "select", category: "Info générale", codeType: "REL" },
   { key: "numero_identite", label: "N° d'identité", type: "short_text", category: "Info générale" },
   { key: "registerNum", label: "Registre", type: "short_text", category: "Info générale" },
+  // Lebanese registry: children are on the father's registre — display the
+  // père's village live when the student has no own value.
+  { key: "lieu_registre", label: "Village du registre", type: "short_text", category: "Info générale", inheritParentKey: "lieu_registre" },
   { key: "email_eleve", label: "Email", type: "email", category: "Info générale" },
   { key: "email_college", label: "Email au collège", type: "email", category: "Info générale" },
   { key: "portable_eleve", label: "Portable", type: "phone", category: "Info générale" },

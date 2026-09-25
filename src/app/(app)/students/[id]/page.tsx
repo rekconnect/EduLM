@@ -111,7 +111,9 @@ export default async function StudentDetailPage({
         db.student.findUnique({
           where: { id },
           include: {
-            family: { select: { code: true } },
+            family: {
+              select: { code: true, addressStreet: true, addressHood: true, addressCity: true },
+            },
             guardianLinks: {
               include: {
                 guardian: {
@@ -352,6 +354,27 @@ export default async function StudentDetailPage({
         ?.guardian.user.customAnswers,
     );
 
+    // "Adresse" block on the Identité tab (Raed 2026-09-25) — household
+    // address as Dars shows it on the student screen, plus both parents'
+    // emails. Père/mère answers can differ (separated parents), so "Ville
+    // (père)" surfaces the père's own town only when he has one of his own.
+    const pereLink = student.guardianLinks.find((l) => l.guardian.relation === "pere");
+    const mereLink = student.guardianLinks.find((l) => l.guardian.relation === "mere");
+    const adresseRows: Array<[string, string]> = (
+      [
+        ["Qaza", fatherCa.adresse_qaza ?? ""],
+        ["Village", student.family?.addressCity || fatherCa.adresse_village || ""],
+        ["Rue", student.family?.addressStreet || fatherCa.adresse_rue || ""],
+        ["Immeuble", fatherCa.adresse_immeuble ?? ""],
+        ["Étage", fatherCa.adresse_etage ?? ""],
+        ["Place détails", student.family?.addressHood || fatherCa.adresse_place || ""],
+        ["Boîte postale", fatherCa.adresse_bp ?? ""],
+        ["E-mail du père", pereLink?.guardian.user.email ?? ""],
+        ["Ville (père)", fatherCa.adresse_village ?? ""],
+        ["E-mail de la mère", mereLink?.guardian.user.email ?? ""],
+      ] as Array<[string, string]>
+    ).filter(([, v]) => v.trim() !== "");
+
     // Live "inherit from the father" fallback: student fields with
     // `inheritParentKey` (e.g. communauté) surface the father's CURRENT value
     // when the student has none of its own — so Dars-imported pupils display it
@@ -435,6 +458,28 @@ export default async function StudentDetailPage({
                   displayValues={effectiveStudentAnswers}
                   onSave={saveFiche}
                 />
+              </div>
+            ) : null}
+            {adresseRows.length > 0 ? (
+              <div className="border-t border-[color:var(--color-border-subtle)] pt-5">
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
+                  Adresse
+                </h3>
+                <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
+                  {adresseRows.map(([label, value]) => (
+                    <div key={label} className="flex min-w-0 gap-1.5 text-sm">
+                      <dt className="shrink-0 text-[color:var(--color-foreground-subtle)]">
+                        {label} :
+                      </dt>
+                      <dd className="truncate text-[color:var(--color-foreground)]" title={value}>
+                        {value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                <p className="mt-2 text-xs text-[color:var(--color-foreground-subtle)]">
+                  Adresse du foyer — se modifie sur la fiche famille / parents.
+                </p>
               </div>
             ) : null}
           </div>,

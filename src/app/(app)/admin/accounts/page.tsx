@@ -21,7 +21,9 @@ export default async function AccountsPage() {
   if (!tenantId) return null;
   const t = await getTranslations("accounts");
 
-  const rows = await runWithTenant({ tenantId, slug: null }, () =>
+  // async callback matters: Prisma promises are lazy, so the query must be
+  // AWAITED inside the AsyncLocalStorage scope or the tenant guard throws.
+  const rows = await runWithTenant({ tenantId, slug: null }, async () =>
     db.user.findMany({
       where: { role: { in: ["SCHOOL_ADMIN", "TEACHER", "STAFF", "PARENT"] } },
       orderBy: [{ role: "asc" }, { name: "asc" }],

@@ -1750,6 +1750,22 @@
     "actionError": "Action failed.",
     "empty": "No account matches.",
     "pageInfo": "{shown} shown of {total}",
-    "resetHint": "The temporary password is shown only once: copy it and pass it on. On first sign-in the person must choose their own password. Staff normally sign in with Microsoft — the password is a fallback."
+    "resetHint": "The temporary password is shown only once: copy it and pass it on. On first sign-in the person must choose their own password. Staff normally sign in with Microsoft — the password is a fallback.",
+    "manageAction": "Manage",
+    "emailLabel": "Sign-in email",
+    "roleLabel": "Account type",
+    "manualPasswordLabel": "Manual password",
+    "tempPasswordLabel": "Temporary password",
+    "passwordPlaceholder": "Minimum 8 characters",
+    "setPasswordAction": "Set this password",
+    "generateAction": "Generate temporary",
+    "saveAction": "Save",
+    "saved": "Account updated.",
+    "emailTaken": "This email is already used by another account.",
+    "badEmail": "Invalid email address.",
+    "passwordTooShort": "Minimum 8 characters.",
+    "manualSet": "Password set.",
+    "manualHint": "You choose the password and pass it on — the person won't be forced to change it.",
+    "syncNote": "The sign-in email is unique: changing it here changes it everywhere (parent fiche, forms, sign-in)."
   }
 }

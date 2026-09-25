@@ -1750,6 +1750,22 @@
     "actionError": "Action impossible.",
     "empty": "Aucun compte ne correspond.",
     "pageInfo": "{shown} affichés sur {total}",
-    "resetHint": "Le mot de passe temporaire s'affiche une seule fois : copiez-le et transmettez-le. À la première connexion, la personne devra choisir son propre mot de passe. Le personnel se connecte normalement avec Microsoft — le mot de passe est un accès de secours."
+    "resetHint": "Le mot de passe temporaire s'affiche une seule fois : copiez-le et transmettez-le. À la première connexion, la personne devra choisir son propre mot de passe. Le personnel se connecte normalement avec Microsoft — le mot de passe est un accès de secours.",
+    "manageAction": "Gérer",
+    "emailLabel": "E-mail de connexion",
+    "roleLabel": "Type de compte",
+    "manualPasswordLabel": "Mot de passe manuel",
+    "tempPasswordLabel": "Mot de passe temporaire",
+    "passwordPlaceholder": "8 caractères minimum",
+    "setPasswordAction": "Définir ce mot de passe",
+    "generateAction": "Générer un temporaire",
+    "saveAction": "Enregistrer",
+    "saved": "Compte mis à jour.",
+    "emailTaken": "Cet e-mail est déjà utilisé par un autre compte.",
+    "badEmail": "Adresse e-mail invalide.",
+    "passwordTooShort": "8 caractères minimum.",
+    "manualSet": "Mot de passe défini.",
+    "manualHint": "Vous choisissez le mot de passe et le transmettez — la personne n'aura pas à le changer.",
+    "syncNote": "L'e-mail de connexion est unique : le changer ici le change partout (fiche parent, formulaires, connexion)."
   }
 }

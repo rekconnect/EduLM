@@ -1,15 +1,30 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import Link from "next/link";
+import { Fragment, useMemo, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Copy, KeyRound, Loader2, Search, UserCheck, UserX } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  KeyRound,
+  Loader2,
+  Search,
+  UserCheck,
+  UserX,
+  Save,
+  Wand2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, Select } from "@/components/ui/input";
 import { Table, THead, TR, TH, TD } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { resetAccountPassword, toggleAccountStatus } from "./_actions";
+import {
+  resetAccountPassword,
+  setAccountPassword,
+  toggleAccountStatus,
+  updateAccount,
+} from "./_actions";
 
 export type AccountRow = {
   id: string;
@@ -28,14 +43,8 @@ const STATUS_TONE: Record<AccountRow["status"], string> = {
     "bg-[color:var(--color-surface-sunken)] text-[color:var(--color-foreground-muted)]",
 };
 
-const ROLE_TONE: Record<AccountRow["role"], string> = {
-  SCHOOL_ADMIN: "bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-700)]",
-  TEACHER: "bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-700)]",
-  STAFF: "bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-700)]",
-  PARENT: "bg-[color:var(--color-surface-sunken)] text-[color:var(--color-foreground-muted)]",
-};
-
 const ROLES: Array<AccountRow["role"]> = ["PARENT", "STAFF", "TEACHER", "SCHOOL_ADMIN"];
+const MANAGED: Array<AccountRow["role"]> = ["TEACHER", "STAFF", "PARENT"];
 const STATUSES: Array<AccountRow["status"]> = ["ACTIVE", "INVITED", "DISABLED"];
 const PAGE_SIZE = 50;
 
@@ -65,14 +74,165 @@ function Pill({
   );
 }
 
+/** Inline account editor: email + role + password (manual or generated). */
+function AccountEditor({ row }: { row: AccountRow }) {
+  const t = useTranslations("accounts");
+  const [email, setEmail] = useState(row.email);
+  const [role, setRole] = useState<AccountRow["role"]>(row.role);
+  const [manualPw, setManualPw] = useState("");
+  const [generated, setGenerated] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const dirty = email.trim().toLowerCase() !== row.email || role !== row.role;
+
+  function onSave() {
+    startTransition(async () => {
+      const res = await updateAccount(row.id, { email: email.trim(), role });
+      if (res.error === "email-taken") toast.error(t("emailTaken"));
+      else if (res.error === "bad-email") toast.error(t("badEmail"));
+      else if (res.error) toast.error(t("actionError"));
+      else toast.success(t("saved"));
+    });
+  }
+
+  function onSetManual() {
+    startTransition(async () => {
+      const res = await setAccountPassword(row.id, manualPw);
+      if (res.error === "password-too-short") toast.error(t("passwordTooShort"));
+      else if (res.error) toast.error(t("actionError"));
+      else {
+        toast.success(t("manualSet"));
+        setManualPw("");
+      }
+    });
+  }
+
+  function onGenerate() {
+    startTransition(async () => {
+      const res = await resetAccountPassword(row.id);
+      if (res.newPassword) {
+        setGenerated(res.newPassword);
+        toast.success(t("resetDone"));
+      } else toast.error(t("actionError"));
+    });
+  }
+
+  async function copyPassword() {
+    try {
+      await navigator.clipboard.writeText(generated);
+      toast.success(t("copied"));
+    } catch {
+      toast.error(t("copyFailed"));
+    }
+  }
+
+  return (
+    <div className="grid gap-4 rounded-md bg-[color:var(--color-surface-sunken)] p-4 lg:grid-cols-3">
+      {/* Identity */}
+      <div className="space-y-3">
+        <label className="block text-xs font-semibold uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
+          {t("emailLabel")}
+          <Input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="mt-1 h-9"
+            type="email"
+          />
+        </label>
+        <label className="block text-xs font-semibold uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
+          {t("roleLabel")}
+          <Select
+            value={role}
+            onChange={(e) => setRole(e.target.value as AccountRow["role"])}
+            className="mt-1 h-9"
+          >
+            {MANAGED.map((r) => (
+              <option key={r} value={r}>
+                {t(`role_${r}`)}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <Button
+          size="sm"
+          type="button"
+          disabled={pending || !dirty}
+          onClick={onSave}
+          className="gap-1.5"
+        >
+          {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Save className="size-3.5" aria-hidden />}
+          {t("saveAction")}
+        </Button>
+        <p className="text-xs text-[color:var(--color-foreground-subtle)]">{t("syncNote")}</p>
+      </div>
+
+      {/* Manual password */}
+      <div className="space-y-3">
+        <label className="block text-xs font-semibold uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
+          {t("manualPasswordLabel")}
+          <Input
+            value={manualPw}
+            onChange={(e) => setManualPw(e.target.value)}
+            placeholder={t("passwordPlaceholder")}
+            className="mt-1 h-9"
+            type="text"
+            autoComplete="off"
+          />
+        </label>
+        <Button
+          size="sm"
+          variant="secondary"
+          type="button"
+          disabled={pending || manualPw.length < 8}
+          onClick={onSetManual}
+          className="gap-1.5"
+        >
+          <KeyRound className="size-3.5" aria-hidden />
+          {t("setPasswordAction")}
+        </Button>
+        <p className="text-xs text-[color:var(--color-foreground-subtle)]">{t("manualHint")}</p>
+      </div>
+
+      {/* Generated temp password */}
+      <div className="space-y-3">
+        <span className="block text-xs font-semibold uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
+          {t("tempPasswordLabel")}
+        </span>
+        {generated ? (
+          <div className="flex items-center gap-2">
+            <code className="rounded bg-[color:var(--color-brand-50)] px-2.5 py-1 text-sm font-semibold tracking-wide text-[color:var(--color-brand-700)]">
+              {generated}
+            </code>
+            <Button size="sm" variant="ghost" type="button" onClick={copyPassword} className="gap-1">
+              <Copy className="size-3.5" aria-hidden /> {t("copy")}
+            </Button>
+          </div>
+        ) : (
+          <Button
+            size="sm"
+            variant="secondary"
+            type="button"
+            disabled={pending}
+            onClick={onGenerate}
+            className="gap-1.5"
+          >
+            <Wand2 className="size-3.5" aria-hidden />
+            {t("generateAction")}
+          </Button>
+        )}
+        <p className="text-xs text-[color:var(--color-foreground-subtle)]">{t("resetHint")}</p>
+      </div>
+    </div>
+  );
+}
+
 export function AccountsTable({ rows }: { rows: AccountRow[] }) {
   const t = useTranslations("accounts");
   const [q, setQ] = useState("");
   const [role, setRole] = useState<AccountRow["role"] | "">("");
   const [status, setStatus] = useState<AccountRow["status"] | "">("");
   const [page, setPage] = useState(1);
-  // userId → generated temp password (shown once, per session)
-  const [generated, setGenerated] = useState<Record<string, string>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
@@ -105,29 +265,6 @@ export function AccountsTable({ rows }: { rows: AccountRow[] }) {
       if (res.error) toast.error(t("actionError"));
       else toast.success(row.status === "DISABLED" ? t("activated") : t("deactivated"));
     });
-  }
-
-  function onReset(row: AccountRow) {
-    setPendingId(row.id);
-    startTransition(async () => {
-      const res = await resetAccountPassword(row.id);
-      setPendingId(null);
-      if (res.newPassword) {
-        setGenerated((g) => ({ ...g, [row.id]: res.newPassword! }));
-        toast.success(t("resetDone"));
-      } else {
-        toast.error(t("actionError"));
-      }
-    });
-  }
-
-  async function copyPassword(pw: string) {
-    try {
-      await navigator.clipboard.writeText(pw);
-      toast.success(t("copied"));
-    } catch {
-      toast.error(t("copyFailed"));
-    }
   }
 
   return (
@@ -187,74 +324,73 @@ export function AccountsTable({ rows }: { rows: AccountRow[] }) {
         <tbody>
           {shown.map((r) => {
             const pending = pendingId === r.id;
-            const pw = generated[r.id];
             const managed = r.role !== "SCHOOL_ADMIN";
+            const expanded = expandedId === r.id;
             return (
-              <TR key={r.id}>
-                <TD>
-                  {r.role === "PARENT" ? (
-                    <Link href={`/admin/parents/${r.id}`} className="font-medium hover:underline">
-                      {r.name ?? r.email}
-                    </Link>
-                  ) : (
+              <Fragment key={r.id}>
+                <TR className={expanded ? "bg-[color:var(--color-brand-50)]" : ""}>
+                  <TD>
                     <span className="font-medium">{r.name ?? r.email}</span>
-                  )}
-                </TD>
-                <TD className="text-[color:var(--color-foreground-muted)]">{r.email}</TD>
-                <TD>
-                  <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-medium", ROLE_TONE[r.role])}>
-                    {t(`role_${r.role}`)}
-                  </span>
-                </TD>
-                <TD>
-                  <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-medium", STATUS_TONE[r.status])}>
-                    {t(`status_${r.status}`)}
-                  </span>
-                </TD>
-                <TD className="text-end">
-                  {!managed ? (
-                    <span className="text-xs text-[color:var(--color-foreground-subtle)]">{t("adminRow")}</span>
-                  ) : pw ? (
-                    <span className="inline-flex items-center gap-2">
-                      <code className="rounded bg-[color:var(--color-brand-50)] px-2 py-0.5 text-xs font-semibold text-[color:var(--color-brand-700)]">
-                        {pw}
-                      </code>
-                      <Button size="sm" variant="ghost" type="button" onClick={() => copyPassword(pw)} className="gap-1">
-                        <Copy className="size-3.5" aria-hidden /> {t("copy")}
-                      </Button>
+                  </TD>
+                  <TD className="text-[color:var(--color-foreground-muted)]">{r.email}</TD>
+                  <TD>
+                    <span className="inline-flex rounded-full bg-[color:var(--color-brand-50)] px-2 py-0.5 text-xs font-medium text-[color:var(--color-brand-700)]">
+                      {t(`role_${r.role}`)}
                     </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        type="button"
-                        disabled={pending}
-                        onClick={() => onReset(r)}
-                        className="gap-1"
-                      >
-                        {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <KeyRound className="size-3.5" aria-hidden />}
-                        {t("resetAction")}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        type="button"
-                        disabled={pending}
-                        onClick={() => onToggle(r)}
-                        className="gap-1"
-                      >
-                        {r.status === "DISABLED" ? (
-                          <UserCheck className="size-3.5" aria-hidden />
-                        ) : (
-                          <UserX className="size-3.5" aria-hidden />
-                        )}
-                        {r.status === "DISABLED" ? t("activateAction") : t("deactivateAction")}
-                      </Button>
+                  </TD>
+                  <TD>
+                    <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-medium", STATUS_TONE[r.status])}>
+                      {t(`status_${r.status}`)}
                     </span>
-                  )}
-                </TD>
-              </TR>
+                  </TD>
+                  <TD className="text-end">
+                    {!managed ? (
+                      <span className="text-xs text-[color:var(--color-foreground-subtle)]">{t("adminRow")}</span>
+                    ) : (
+                      <span className="inline-flex items-center justify-end gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          type="button"
+                          disabled={pending}
+                          onClick={() => onToggle(r)}
+                          className="w-28 justify-center gap-1"
+                        >
+                          {pending ? (
+                            <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                          ) : r.status === "DISABLED" ? (
+                            <UserCheck className="size-3.5" aria-hidden />
+                          ) : (
+                            <UserX className="size-3.5" aria-hidden />
+                          )}
+                          {r.status === "DISABLED" ? t("activateAction") : t("deactivateAction")}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={expanded ? "secondary" : "ghost"}
+                          type="button"
+                          onClick={() => setExpandedId(expanded ? null : r.id)}
+                          className="w-24 justify-center gap-1"
+                        >
+                          {expanded ? (
+                            <ChevronUp className="size-3.5" aria-hidden />
+                          ) : (
+                            <ChevronDown className="size-3.5" aria-hidden />
+                          )}
+                          {t("manageAction")}
+                        </Button>
+                      </span>
+                    )}
+                  </TD>
+                </TR>
+                {expanded && managed ? (
+                  <tr className="border-t border-[color:var(--color-border-subtle)]">
+                    <td colSpan={5} className="px-4 py-3">
+                      <AccountEditor row={r} />
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
             );
           })}
           {shown.length === 0 ? (
@@ -284,8 +420,6 @@ export function AccountsTable({ rows }: { rows: AccountRow[] }) {
           </span>
         </div>
       ) : null}
-
-      <p className="text-xs text-[color:var(--color-foreground-subtle)]">{t("resetHint")}</p>
     </div>
   );
 }

@@ -449,7 +449,8 @@
     "statClasses": "الصفوف النشطة",
     "statTeachers": "المعلمون",
     "statParents": "الأهل",
-    "noActiveYear": "لا توجد سنة دراسية نشطة. فعّل سنة من الإعدادات."
+    "noActiveYear": "لا توجد سنة دراسية نشطة. فعّل سنة من الإعدادات.",
+    "statFamilies": "العائلات"
   },
   "students": {
     "filterAll": "الكل",

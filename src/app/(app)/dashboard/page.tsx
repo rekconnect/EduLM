@@ -12,7 +12,7 @@ export default async function DashboardPage() {
 
     // Everything below uses the auto-scoped `db` — Prisma extension injects
     // the tenant filter from AsyncLocalStorage on every query.
-    const [students, classes, teachers, parents, activeYear] = await Promise.all([
+    const [students, classes, teachers, parents, families, activeYear] = await Promise.all([
       // Students enrolled in the ACTIVE year — not a global status count.
       // `status: "ENROLLED"` over-counts once next year's incoming pupils
       // (already enrolled for the upcoming year) are marked ENROLLED too.
@@ -38,6 +38,13 @@ export default async function DashboardPage() {
           },
         },
       }),
+      // Families with at least one pupil enrolled in the active year — the
+      // same 609 Dars shows (Id_MainParent groups of enrolled students).
+      db.family.count({
+        where: {
+          students: { some: { enrollments: { some: { academicYear: { isActive: true } } } } },
+        },
+      }),
       db.academicYear.findFirst({ where: { isActive: true }, select: { label: true } }),
     ]);
 
@@ -52,6 +59,7 @@ export default async function DashboardPage() {
             classes={classes}
             teachers={teachers}
             parents={parents}
+            families={families}
           />
         </main>
     );

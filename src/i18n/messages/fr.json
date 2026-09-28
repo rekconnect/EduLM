@@ -449,7 +449,8 @@
     "statClasses": "Classes actives",
     "statTeachers": "Enseignants",
     "statParents": "Parents",
-    "noActiveYear": "Aucune année scolaire active. Configurez-en une dans Paramètres."
+    "noActiveYear": "Aucune année scolaire active. Configurez-en une dans Paramètres.",
+    "statFamilies": "Familles"
   },
   "students": {
     "title": "Élèves",

@@ -6,6 +6,7 @@ import {
   LayoutGrid,
   GraduationCap,
   UsersRound,
+  Home,
   type LucideIcon,
 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
@@ -22,6 +23,7 @@ export type DashboardStatsProps = {
   classes: number;
   teachers: number;
   parents: number;
+  families: number;
 };
 
 export function DashboardStats(props: DashboardStatsProps) {
@@ -33,6 +35,7 @@ export function DashboardStats(props: DashboardStatsProps) {
     { key: "classes",  label: t("statClasses"),  value: props.classes,  icon: LayoutGrid },
     { key: "teachers", label: t("statTeachers"), value: props.teachers, icon: GraduationCap },
     { key: "parents",  label: t("statParents"),  value: props.parents,  icon: UsersRound },
+    { key: "families", label: t("statFamilies"), value: props.families, icon: Home },
   ];
 
   return (
@@ -60,7 +63,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Grid({ children }: { children: React.ReactNode }) {
-  return <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{children}</div>;
+  return <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{children}</div>;
 }
 
 function StatCard({

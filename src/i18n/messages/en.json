@@ -449,7 +449,8 @@
     "statClasses": "Active classes",
     "statTeachers": "Teachers",
     "statParents": "Parents",
-    "noActiveYear": "No active academic year. Configure one in Settings."
+    "noActiveYear": "No active academic year. Configure one in Settings.",
+    "statFamilies": "Families"
   },
   "students": {
     "filterAll": "All",

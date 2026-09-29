@@ -52,26 +52,11 @@ async function main() {
     await prisma.student.delete({ where: { id: stray.id } });
     console.log(`  ✓ ${d.label} supprimé`);
   }
-  // ── Known data overrides that a re-import reverts (Dars still wrong) ──
-  // Rizkallah mother (Dars parent #13813 says NADA NEHME; correct per Raed
-  // 2026-09-28 is Daniella MAKDESSI — until the secretariat fixes Dars).
-  const mother = await prisma.user.findFirst({
-    where: { tenantId: tenant.id, darsParentId: 13813 },
-    select: { id: true, name: true, email: true },
-  });
-  if (mother && (mother.name !== "Daniella MAKDESSI" || mother.email !== "daniella.makdessi@gmail.com")) {
-    console.log(`  Mère Rizkallah: '${mother.name}' → 'Daniella MAKDESSI'`);
-    if (CONFIRM) {
-      await prisma.user.update({
-        where: { id: mother.id },
-        data: { name: "Daniella MAKDESSI", email: "daniella.makdessi@gmail.com" },
-      });
-      console.log("  ✓ corrigée");
-    }
-  } else if (mother) {
-    console.log("  Mère Rizkallah: déjà correcte");
-  }
-
+  // (2026-09-29) The former "Rizkallah mother → Daniella Makdessi" override
+  // was REMOVED: Raed established that Dars is the family-data authority
+  // (registration happens there; Pronote is typed by hand) and Dars says
+  // NADA NEHME for both children. The error was on Pronote's side (George's
+  // responsable), not in Dars — nothing to heal here anymore.
   console.log(CONFIRM ? "Terminé." : "Dry-run — relancer avec --confirm.");
   await prisma.$disconnect();
 }

@@ -1383,7 +1383,12 @@
     "classSuggestionHint": "Suggestion automatique : {className} — avancement d'un niveau, première section disponible. Vous pouvez choisir une autre classe.",
     "classSuggestionAllFull": "Toutes les sections de {level} sont complètes — choisissez manuellement (ou dépassez la capacité).",
     "revertDecision": "Annuler la décision",
-    "revertDecisionHint": "Repasse le dossier « En cours d'examen » et retire ce que l'acceptation avait créé (inscription dans l'année cible ; l'élève créé, s'il ne porte rien d'autre)."
+    "revertDecisionHint": "Repasse le dossier « En cours d'examen » et retire ce que l'acceptation avait créé (inscription dans l'année cible ; l'élève créé, s'il ne porte rien d'autre).",
+    "cycleFieldAutoAccept": "Accepter automatiquement les réinscriptions",
+    "cycleFieldAutoAcceptHint": "À la soumission du dossier de réinscription : acceptation immédiate, niveau avancé d'un an, première section disponible (capacité 25). Les nouvelles inscriptions restent toujours à valider manuellement.",
+    "editDossierAsAdmin": "Modifier le dossier (secrétariat)",
+    "editDossierFinalizedHint": "Dossier finalisé — utilisez « Annuler la décision » pour le modifier.",
+    "adminEditedBadge": "Modifié par le secrétariat le {date}"
   },
   "documents": {
     "title": "Documents",

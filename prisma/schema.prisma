@@ -1039,6 +1039,11 @@ model AdmissionCycle {
   schoolStartDate     DateTime?
   inscriptionFeeCents Int?     @default(0)
   currency            String   @default("USD")
+  // Dars-style automatic acceptance of RE-INSCRIPTIONS: when a parent submits
+  // a renewal dossier, it is accepted immediately (advanced one level, first
+  // section under capacity) — no manual accept per student. New inscriptions
+  // always stay manual. Toggleable per campaign.
+  autoAcceptRenewals  Boolean  @default(false)
   isActive            Boolean  @default(true)
   description         String?
   fieldConfig         Json     @default("{}")
@@ -1178,6 +1183,11 @@ model Application {
   submittedAt        DateTime?
   reviewedAt         DateTime?
   reviewedByUserId   String?
+  // Audit trace of admin-on-behalf dossier edits (secretariat typing for a
+  // family). Stamped by the dossier save actions when the actor is a
+  // SCHOOL_ADMIN rather than the owning parent.
+  adminEditedAt        DateTime?
+  adminEditedByUserId  String?
   decisionAt         DateTime?
   decisionNote       String?
   resultingStudentId String?  @unique

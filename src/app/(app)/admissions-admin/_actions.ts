@@ -51,6 +51,7 @@ const cycleSchema = z.object({
   currency: z.string().trim().length(3),
   description: z.string().max(1000).optional(),
   isActive: z.string().optional().transform((v) => v === "on" || v === "true"),
+  autoAcceptRenewals: z.string().optional().transform((v) => v === "on" || v === "true"),
   copyFromCycleId: z.string().trim().min(1).optional(),
 });
 
@@ -78,6 +79,7 @@ export async function createCycle(
     currency: String(formData.get("currency") ?? "USD").toUpperCase(),
     description: String(formData.get("description") ?? "") || undefined,
     isActive: String(formData.get("isActive") ?? ""),
+    autoAcceptRenewals: String(formData.get("autoAcceptRenewals") ?? ""),
     copyFromCycleId: String(formData.get("copyFromCycleId") ?? "") || undefined,
   });
   if (!parsed.success) {
@@ -116,6 +118,7 @@ export async function createCycle(
         currency: parsed.data.currency,
         description: parsed.data.description ?? null,
         isActive: parsed.data.isActive,
+        autoAcceptRenewals: parsed.data.autoAcceptRenewals,
         fieldConfig: initialFieldConfig,
       },
     });
@@ -149,6 +152,7 @@ export async function updateCycle(
     currency: String(formData.get("currency") ?? "USD").toUpperCase(),
     description: String(formData.get("description") ?? "") || undefined,
     isActive: String(formData.get("isActive") ?? ""),
+    autoAcceptRenewals: String(formData.get("autoAcceptRenewals") ?? ""),
   });
   if (!parsed.success) {
     const flat = z.flattenError(parsed.error).fieldErrors as Record<string, string[] | undefined>;
@@ -178,6 +182,7 @@ export async function updateCycle(
         currency: parsed.data.currency,
         description: parsed.data.description ?? null,
         isActive: parsed.data.isActive,
+        autoAcceptRenewals: parsed.data.autoAcceptRenewals,
       },
     });
   });

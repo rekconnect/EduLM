@@ -1383,7 +1383,12 @@
     "classSuggestionHint": "Automatic suggestion: {className} — advanced one level, first available section. You can pick another class.",
     "classSuggestionAllFull": "All {level} sections are full — choose manually (or exceed capacity).",
     "revertDecision": "Undo the decision",
-    "revertDecisionHint": "Returns the dossier to 'Under review' and removes what acceptance created (target-year enrollment; the created student when it carries nothing else)."
+    "revertDecisionHint": "Returns the dossier to 'Under review' and removes what acceptance created (target-year enrollment; the created student when it carries nothing else).",
+    "cycleFieldAutoAccept": "Auto-accept re-enrolments",
+    "cycleFieldAutoAcceptHint": "On submission of a re-enrolment dossier: immediate acceptance, level advanced by one, first available section (capacity 25). New enrolments always remain manual.",
+    "editDossierAsAdmin": "Edit the dossier (secretariat)",
+    "editDossierFinalizedHint": "Dossier finalized — use 'Undo the decision' to modify it.",
+    "adminEditedBadge": "Edited by the secretariat on {date}"
   },
   "documents": {
     "title": "Documents",

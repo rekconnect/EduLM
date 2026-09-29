@@ -24,6 +24,7 @@ export function CycleGeneralInfoForm({
     currency: string;
     description: string;
     isActive: boolean;
+    autoAcceptRenewals: boolean;
   };
 }) {
   const t = useTranslations("admissions");
@@ -157,6 +158,21 @@ export function CycleGeneralInfoForm({
           defaultChecked={initial.isActive}
         />
         <span>{t("cycleFieldActive")}</span>
+      </label>
+
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="autoAcceptRenewals"
+          defaultChecked={initial.autoAcceptRenewals}
+          className="mt-0.5"
+        />
+        <span>
+          {t("cycleFieldAutoAccept")}
+          <span className="block text-xs text-[color:var(--color-foreground-subtle)]">
+            {t("cycleFieldAutoAcceptHint")}
+          </span>
+        </span>
       </label>
 
       {state.formError ? (

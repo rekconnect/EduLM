@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { db, unscopedDb } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireRole, requireUser } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
 import {
   evaluateShowIf,
@@ -130,6 +130,49 @@ export type DossierFormState = {
  * list) so the parent sees the new draft alongside any existing ones,
  * matching the Eduka flow. From there one click opens the dossier shell.
  */
+
+// ── Dossier actor model (Raed 2026-09-29: admin direct dossier editing) ──
+// A dossier is edited by its OWNING PARENT — or by a SCHOOL_ADMIN typing on
+// the family's behalf (secretariat on the phone). Every admin write stamps
+// adminEditedAt/adminEditedByUserId on the application (audit trace).
+async function requireDossierActor() {
+  const user = await requireUser();
+  if (user.role !== "PARENT" && user.role !== "SCHOOL_ADMIN") {
+    redirect("/dashboard");
+  }
+  return user;
+}
+
+function dossierWhereFor(applicationId: string, user: { id: string; role: string }) {
+  // Admin: tenant scoping (ambient) is the only fence. Parent: must own it.
+  return user.role === "SCHOOL_ADMIN"
+    ? { id: applicationId }
+    : { id: applicationId, submittedByUserId: user.id };
+}
+
+function stampAdminEdit(applicationId: string, user: { id: string; role: string }) {
+  if (user.role !== "SCHOOL_ADMIN") return;
+  // Fire-and-forget audit stamp — never blocks the edit.
+  db.application
+    .update({
+      where: { id: applicationId },
+      data: { adminEditedAt: new Date(), adminEditedByUserId: user.id },
+    })
+    .catch(() => {});
+}
+
+async function actorOwnsOrAdmin(
+  app: { id: string; submittedByUserId: string },
+  user: { id: string; role: string },
+): Promise<boolean> {
+  if (app.submittedByUserId === user.id) return true;
+  if (user.role === "SCHOOL_ADMIN") {
+    stampAdminEdit(app.id, user);
+    return true;
+  }
+  return false;
+}
+
 export async function createDossier(
   _prev: DossierFormState,
   formData: FormData,
@@ -335,7 +378,7 @@ export async function saveStudentDossier(
   applicationId: string,
   payload: { answers: Record<string, string> },
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("PARENT");
+  const user = await requireDossierActor();
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -364,7 +407,7 @@ export async function saveStudentDossier(
       select: { id: true, submittedByUserId: true, status: true },
     });
     if (!app) return { ok: false, error: "not-found" };
-    if (app.submittedByUserId !== user.id) return { ok: false, error: "forbidden" };
+    if (!(await actorOwnsOrAdmin(app, user))) return { ok: false, error: "forbidden" };
     if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
       return { ok: false, error: "locked" };
     }
@@ -453,7 +496,7 @@ export async function saveResponsableIdentity(
   applicationId: string,
   payload: unknown,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("PARENT");
+  const user = await requireDossierActor();
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -466,7 +509,7 @@ export async function saveResponsableIdentity(
       select: { id: true, submittedByUserId: true, status: true },
     });
     if (!app) return { ok: false, error: "not-found" };
-    if (app.submittedByUserId !== user.id) return { ok: false, error: "forbidden" };
+    if (!(await actorOwnsOrAdmin(app, user))) return { ok: false, error: "forbidden" };
     if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
       return { ok: false, error: "locked" };
     }
@@ -529,7 +572,7 @@ export async function saveMonoParental(
   applicationId: string,
   monoParental: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("PARENT");
+  const user = await requireDossierActor();
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -539,7 +582,7 @@ export async function saveMonoParental(
       select: { id: true, submittedByUserId: true, status: true },
     });
     if (!app) return { ok: false, error: "not-found" };
-    if (app.submittedByUserId !== user.id) return { ok: false, error: "forbidden" };
+    if (!(await actorOwnsOrAdmin(app, user))) return { ok: false, error: "forbidden" };
     if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
       return { ok: false, error: "locked" };
     }
@@ -567,7 +610,7 @@ export async function saveMonoParental(
 export async function submitDossier(
   applicationId: string,
 ): Promise<{ ok: boolean; error?: string; missing?: string[] }> {
-  const user = await requireRole("PARENT");
+  const user = await requireDossierActor();
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -606,7 +649,7 @@ export async function submitDossier(
       },
     });
     if (!app) return { ok: false, error: "not-found" };
-    if (app.submittedByUserId !== user.id) return { ok: false, error: "forbidden" };
+    if (!(await actorOwnsOrAdmin(app, user))) return { ok: false, error: "forbidden" };
     if (app.status !== "DRAFT") return { ok: false, error: "already-submitted" };
 
     const tenant = await unscopedDb().tenant.findUnique({
@@ -707,6 +750,23 @@ export async function submitDossier(
       where: { id: applicationId },
       data: { status: "SUBMITTED", submittedAt: new Date() },
     });
+
+    // Dars-style auto-accept for RE-INSCRIPTIONS (campaign toggle). Never
+    // blocks the submit: on any failure the dossier simply stays SUBMITTED
+    // for manual review.
+    try {
+      const { autoAcceptRenewalIfEnabled } = await import("@/lib/auto-accept");
+      const auto = await autoAcceptRenewalIfEnabled(applicationId, tenantId);
+      if (auto.accepted) {
+        revalidatePath("/parent/dashboard");
+        revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+        revalidatePath("/admissions-admin");
+        return { ok: true };
+      }
+    } catch (e) {
+      console.error("[submit:auto-accept] failed, dossier left SUBMITTED:", e);
+    }
+
     revalidatePath("/parent/dashboard");
     revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
     return { ok: true };
@@ -741,10 +801,11 @@ type DossierTabName = (typeof DOSSIER_TABS_LIST)[number];
 
 async function loadApplicationOwnedBy(
   applicationId: string,
-  parentUserId: string,
+  actor: { id: string; role: string },
 ) {
+  stampAdminEdit(applicationId, actor);
   return db.application.findFirst({
-    where: { id: applicationId, submittedByUserId: parentUserId },
+    where: dossierWhereFor(applicationId, actor),
     select: {
       id: true,
       submittedByUserId: true,
@@ -792,7 +853,7 @@ export async function saveFoyerTab(
   applicationId: string,
   payload: unknown,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("PARENT");
+  const user = await requireDossierActor();
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -802,7 +863,7 @@ export async function saveFoyerTab(
   // callers.
 
   return runWithTenant({ tenantId, slug: null }, async () => {
-    const app = await loadApplicationOwnedBy(applicationId, user.id);
+    const app = await loadApplicationOwnedBy(applicationId, user);
     if (!app) return { ok: false, error: "not-found" };
 
     // Config-native (Dars entity-fields) answers, keyed by field key.
@@ -922,12 +983,12 @@ export async function saveAutorisationsTab(
     quitterSeul: boolean | null;
   },
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("PARENT");
+  const user = await requireDossierActor();
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
   return runWithTenant({ tenantId, slug: null }, async () => {
-    const app = await loadApplicationOwnedBy(applicationId, user.id);
+    const app = await loadApplicationOwnedBy(applicationId, user);
     if (!app) return { ok: false, error: "not-found" };
 
     // Image rights are household-level → saved on the Family so siblings
@@ -979,7 +1040,7 @@ export async function saveScolariteTab(
   applicationId: string,
   payload: unknown,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("PARENT");
+  const user = await requireDossierActor();
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -994,10 +1055,11 @@ export async function saveScolariteTab(
 
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await db.application.findUnique({
-      where: { id: applicationId, submittedByUserId: user.id },
+      where: dossierWhereFor(applicationId, user),
       select: { id: true, dossierAnswers: true, tabsCompleted: true },
     });
     if (!app) return { ok: false, error: "not-found" };
+    stampAdminEdit(applicationId, user);
 
     const raw =
       payload && typeof payload === "object"
@@ -1108,7 +1170,7 @@ export async function saveTransportTab(
   applicationId: string,
   payload: unknown,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("PARENT");
+  const user = await requireDossierActor();
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -1116,7 +1178,7 @@ export async function saveTransportTab(
   const { isMaternelleNiveau } = await import("@/lib/pedagogique");
 
   return runWithTenant({ tenantId, slug: null }, async () => {
-    const app = await loadApplicationOwnedBy(applicationId, user.id);
+    const app = await loadApplicationOwnedBy(applicationId, user);
     if (!app) return { ok: false, error: "not-found" };
 
     // Config-native Services answers (Dars vocabulary, keyed by field key) sent
@@ -1187,7 +1249,7 @@ export async function setDossierTabCompleted(
   tab: string,
   completed: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("PARENT");
+  const user = await requireDossierActor();
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
   if (!(DOSSIER_TABS_LIST as readonly string[]).includes(tab)) {
@@ -1199,7 +1261,7 @@ export async function setDossierTabCompleted(
       where: { id: applicationId },
       select: { id: true, submittedByUserId: true, tabsCompleted: true },
     });
-    if (!app || app.submittedByUserId !== user.id) {
+    if (!app || !(await actorOwnsOrAdmin(app, user))) {
       return { ok: false, error: "not-found" };
     }
     const current =
@@ -1235,12 +1297,12 @@ export async function saveContactsTab(
   applicationId: string,
   payload: unknown,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("PARENT");
+  const user = await requireDossierActor();
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
   return runWithTenant({ tenantId, slug: null }, async () => {
-    const app = await loadApplicationOwnedBy(applicationId, user.id);
+    const app = await loadApplicationOwnedBy(applicationId, user);
     if (!app) return { ok: false, error: "not-found" };
 
     const ans =
@@ -1375,7 +1437,7 @@ export async function saveResponsableAnswers(
   responsableId: string | null,
   payload: { kind: string; answers: Record<string, string> },
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("PARENT");
+  const user = await requireDossierActor();
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
   const kind = (["PERE", "MERE", "TUTEUR", "AUTRE"] as const).includes(
@@ -1394,10 +1456,11 @@ export async function saveResponsableAnswers(
 
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await db.application.findUnique({
-      where: { id: applicationId, submittedByUserId: user.id },
+      where: dossierWhereFor(applicationId, user),
       select: { id: true, status: true, tabsCompleted: true },
     });
     if (!app) return { ok: false, error: "not-found" };
+    stampAdminEdit(applicationId, user);
     if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
       return { ok: false, error: "locked" };
     }
@@ -1435,16 +1498,17 @@ export async function deleteResponsable(
   applicationId: string,
   responsableId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("PARENT");
+  const user = await requireDossierActor();
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await db.application.findUnique({
-      where: { id: applicationId, submittedByUserId: user.id },
+      where: dossierWhereFor(applicationId, user),
       select: { id: true, status: true, tabsCompleted: true },
     });
     if (!app) return { ok: false, error: "not-found" };
+    stampAdminEdit(applicationId, user);
     if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
       return { ok: false, error: "locked" };
     }
@@ -1468,12 +1532,12 @@ export async function saveSanteTab(
   applicationId: string,
   payload: unknown,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("PARENT");
+  const user = await requireDossierActor();
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
   return runWithTenant({ tenantId, slug: null }, async () => {
-    const app = await loadApplicationOwnedBy(applicationId, user.id);
+    const app = await loadApplicationOwnedBy(applicationId, user);
     if (!app) return { ok: false, error: "not-found" };
 
     // Config-native answers (yes_no fields = "yes"/"no" strings); stored as-is
@@ -1527,12 +1591,12 @@ export async function saveFinanceTab(
   applicationId: string,
   payload: unknown,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("PARENT");
+  const user = await requireDossierActor();
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
   return runWithTenant({ tenantId, slug: null }, async () => {
-    const app = await loadApplicationOwnedBy(applicationId, user.id);
+    const app = await loadApplicationOwnedBy(applicationId, user);
     if (!app) return { ok: false, error: "not-found" };
 
     // Config-native answers: acks + comité as "yes"/"no", caisse* as value
@@ -1600,7 +1664,7 @@ export async function saveFinanceTab(
 export async function uploadDossierFile(
   formData: FormData,
 ): Promise<{ ok: boolean; path?: string; name?: string; error?: string }> {
-  const user = await requireRole("PARENT");
+  const user = await requireDossierActor();
   if (!user.tenantId) return { ok: false, error: "no-tenant" };
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
@@ -1626,12 +1690,12 @@ export async function saveJustificatifsTab(
   applicationId: string,
   payload: unknown,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("PARENT");
+  const user = await requireDossierActor();
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
   return runWithTenant({ tenantId, slug: null }, async () => {
-    const app = await loadApplicationOwnedBy(applicationId, user.id);
+    const app = await loadApplicationOwnedBy(applicationId, user);
     if (!app) return { ok: false, error: "not-found" };
 
     const ans =
@@ -1665,12 +1729,12 @@ export async function saveValidationAck(
   applicationId: string,
   acknowledged: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("PARENT");
+  const user = await requireDossierActor();
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
   return runWithTenant({ tenantId, slug: null }, async () => {
-    const app = await loadApplicationOwnedBy(applicationId, user.id);
+    const app = await loadApplicationOwnedBy(applicationId, user);
     if (!app) return { ok: false, error: "not-found" };
 
     const dossier =

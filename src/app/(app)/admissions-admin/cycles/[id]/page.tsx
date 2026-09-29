@@ -58,6 +58,7 @@ export default async function CycleEditPage({
         currency: true,
         description: true,
         isActive: true,
+        autoAcceptRenewals: true,
         fieldConfig: true,
         _count: { select: { applications: true } },
       },
@@ -103,6 +104,7 @@ export default async function CycleEditPage({
                 action={boundUpdate}
                 initial={{
                   label: cycle.label,
+                  autoAcceptRenewals: cycle.autoAcceptRenewals,
                   targetYearLabel: cycle.targetYearLabel,
                   openAt: cycle.openAt.toISOString().slice(0, 10),
                   closeAt: cycle.closeAt

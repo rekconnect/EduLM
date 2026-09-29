@@ -84,6 +84,16 @@ export function CycleForm({
         <span>{t("cycleFieldActive")}</span>
       </label>
 
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" name="autoAcceptRenewals" className="mt-0.5" />
+        <span>
+          {t("cycleFieldAutoAccept")}
+          <span className="block text-xs text-[color:var(--color-foreground-subtle)]">
+            {t("cycleFieldAutoAcceptHint")}
+          </span>
+        </span>
+      </label>
+
       {copyableCycles.length > 0 ? (
         <div className="rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-sunken)] p-4">
           <label className="inline-flex cursor-pointer items-start gap-2 text-sm">

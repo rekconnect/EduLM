@@ -5,11 +5,8 @@ import { ArrowLeft, CalendarClock, Lock, Plus, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
 import { db } from "@/lib/db";
 import { withParentSession } from "@/lib/session";
-import { formatMoney } from "@/lib/money";
-import { cn } from "@/lib/utils";
 import { loadEntityFieldsConfig } from "@/app/(app)/settings/_actions";
 import { startRenewal } from "@/app/(app)/parent/applications/_actions";
 import { ChildInfoView } from "./_info";
@@ -24,30 +21,6 @@ const PARENT_VIEW_CATEGORIES = [
   "Info Arabe",
 ];
 
-const STATUS_TONE: Record<string, string> = {
-  DRAFT:
-    "bg-[color:var(--color-surface-sunken)] text-[color:var(--color-foreground-muted)]",
-  ISSUED:
-    "bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-700)]",
-  PARTIALLY_PAID:
-    "bg-[color:var(--color-warning-soft)] text-[color:var(--color-warning-soft-fg)]",
-  PAID:
-    "bg-[color:var(--color-success-soft)] text-[color:var(--color-success-soft-fg)]",
-  CANCELLED:
-    "bg-[color:var(--color-surface-sunken)] text-[color:var(--color-foreground-subtle)]",
-  OVERDUE:
-    "bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger-soft-fg)]",
-};
-
-const STATUS_KEY: Record<string, string> = {
-  DRAFT: "statusDraft",
-  ISSUED: "statusIssued",
-  PARTIALLY_PAID: "statusPartial",
-  PAID: "statusPaid",
-  CANCELLED: "statusCancelled",
-  OVERDUE: "statusOverdue",
-};
-
 export default async function ParentChildPage({
   params,
 }: {
@@ -59,10 +32,9 @@ export default async function ParentChildPage({
     if (!childIds.includes(id)) notFound();
 
     const tParent = await getTranslations("parent");
-    const tBill = await getTranslations("billing");
 
     const now = new Date();
-    const [child, invoices, studentConfig, openCycles] = await Promise.all([
+    const [child, studentConfig, openCycles] = await Promise.all([
       db.student.findUnique({
         where: { id },
         select: {
@@ -86,11 +58,6 @@ export default async function ParentChildPage({
             take: 3,
           },
         },
-      }),
-      db.invoice.findMany({
-        where: { studentId: id },
-        orderBy: { issuedAt: "desc" },
-        include: { payments: { select: { amountCents: true } } },
       }),
       loadEntityFieldsConfig("student"),
       db.admissionCycle.findMany({
@@ -250,67 +217,6 @@ export default async function ParentChildPage({
             </CardBody>
           </Card>
 
-          <Card>
-            <CardHeader title={tParent("tabInvoices")} />
-            <Table>
-              <THead>
-                <tr>
-                  <TH>{tBill("colNumber")}</TH>
-                  <TH>{tBill("colIssued")}</TH>
-                  <TH className="text-end">{tBill("colTotal")}</TH>
-                  <TH className="text-end">{tBill("colBalance")}</TH>
-                  <TH>{tBill("colStatus")}</TH>
-                </tr>
-              </THead>
-              <tbody>
-                {invoices.length === 0 ? (
-                  <EmptyRow colSpan={5}>{tBill("empty")}</EmptyRow>
-                ) : (
-                  invoices.map((inv) => {
-                    const paid = inv.payments.reduce(
-                      (a, p) => a + Number(p.amountCents),
-                      0,
-                    );
-                    const balance = Number(inv.totalCents) - paid;
-                    return (
-                      <TR key={inv.id}>
-                        <TD className="font-mono text-xs text-[color:var(--color-foreground)]">
-                          {inv.number}
-                        </TD>
-                        <TD className="tabular-nums text-[color:var(--color-foreground-muted)]">
-                          {inv.issuedAt.toISOString().slice(0, 10)}
-                        </TD>
-                        <TD className="text-end tabular-nums text-[color:var(--color-foreground)]">
-                          {formatMoney(inv.totalCents, inv.currency)}
-                        </TD>
-                        <TD className="text-end tabular-nums">
-                          {balance > 0 ? (
-                            <span className="font-medium text-[color:var(--color-foreground)]">
-                              {formatMoney(balance, inv.currency)}
-                            </span>
-                          ) : (
-                            <span className="text-[color:var(--color-success)]">
-                              ✓
-                            </span>
-                          )}
-                        </TD>
-                        <TD>
-                          <span
-                            className={cn(
-                              "inline-flex rounded-full px-2 py-0.5 text-xs font-medium",
-                              STATUS_TONE[inv.status],
-                            )}
-                          >
-                            {tBill(STATUS_KEY[inv.status] ?? "statusDraft")}
-                          </span>
-                        </TD>
-                      </TR>
-                    );
-                  })
-                )}
-              </tbody>
-            </Table>
-          </Card>
         </main>
     );
   });

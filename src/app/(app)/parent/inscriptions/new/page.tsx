@@ -1,15 +1,16 @@
-import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { db } from "@/lib/db";
-import { withTenantSession } from "@/lib/session";
+import { withParentSession } from "@/lib/session";
 import { DossierForm, type EstablishmentOption } from "./_form";
 
 export default async function NewDossierPage() {
-  return withTenantSession(async (user) => {
-    if (user.role !== "PARENT") redirect("/dashboard");
+  // withParentSession: PARENT-only + tenant context. (withTenantSession
+  // bounces parents to their portal since the 2026-07 role hardening —
+  // this page silently redirected until the 2027-2028 campaign test.)
+  return withParentSession(async (user) => {
     const t = await getTranslations("admissions");
     const tCommon = await getTranslations("common");
 

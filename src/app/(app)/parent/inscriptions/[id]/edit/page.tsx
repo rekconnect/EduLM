@@ -4,7 +4,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { db, unscopedDb } from "@/lib/db";
-import { withTenantSession } from "@/lib/session";
+import { withParentSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import {
   DOSSIER_TABS,
@@ -103,8 +103,9 @@ export default async function DossierEditPage({
   const { tab } = await searchParams;
   const currentTab = parseTab(tab);
 
-  return withTenantSession(async (user) => {
-    if (user.role !== "PARENT") notFound();
+  // withParentSession: PARENT-only + tenant context (withTenantSession
+  // bounces parents to their portal — see new/page.tsx note).
+  return withParentSession(async (user) => {
     const t = await getTranslations("admissions");
     const tDossier = await getTranslations("dossier");
 

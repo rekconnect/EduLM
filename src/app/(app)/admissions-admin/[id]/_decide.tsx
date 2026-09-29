@@ -10,6 +10,7 @@ import { Field, FormRow } from "@/components/ui/field";
 import { decideApplication } from "../_actions";
 
 type Decision =
+  | "SUBMITTED"
   | "ACCEPTED"
   | "DECLINED"
   | "WAITLISTED"
@@ -66,6 +67,7 @@ export function DecideForm({
             onChange={(e) => setDecision(e.target.value as Decision)}
           >
             <option value="UNDER_REVIEW">{t("statusUnderReview")}</option>
+            <option value="SUBMITTED">{t("returnToParent")}</option>
             <option value="INTERVIEW_SCHEDULED">{t("statusInterview")}</option>
             <option value="ACCEPTED">{t("adminAccept")}</option>
             <option value="WAITLISTED">{t("adminWaitlist")}</option>

@@ -1389,7 +1389,8 @@
     "editDossierAsAdmin": "Modifier le dossier (secrétariat)",
     "editDossierFinalizedHint": "Dossier finalisé — utilisez « Annuler la décision » pour le modifier.",
     "adminEditedBadge": "Modifié par le secrétariat le {date}",
-    "cycleSaved": "Modifications enregistrées."
+    "cycleSaved": "Modifications enregistrées.",
+    "returnToParent": "Renvoyer au parent (Soumis)"
   },
   "documents": {
     "title": "Documents",

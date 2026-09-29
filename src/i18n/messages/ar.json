@@ -1389,7 +1389,8 @@
     "editDossierAsAdmin": "تعديل الملف (الأمانة)",
     "editDossierFinalizedHint": "الملف نهائي — استخدم «التراجع عن القرار» لتعديله.",
     "adminEditedBadge": "عدّلته الأمانة بتاريخ {date}",
-    "cycleSaved": "تم حفظ التعديلات."
+    "cycleSaved": "تم حفظ التعديلات.",
+    "returnToParent": "إعادة إلى ولي الأمر (مُقدَّم)"
   },
   "documents": {
     "title": "الوثائق",

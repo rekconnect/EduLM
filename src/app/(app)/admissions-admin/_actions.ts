@@ -568,7 +568,9 @@ export async function copyCycleConfig(
 // ── Application decisions ────────────────────────────────────
 
 const decisionSchema = z.object({
-  decision: z.enum(["ACCEPTED", "DECLINED", "WAITLISTED", "UNDER_REVIEW", "INTERVIEW_SCHEDULED"]),
+  // SUBMITTED = "renvoyer au parent": hands a dossier under review back to
+  // the family for corrections (parents can only edit DRAFT/SUBMITTED).
+  decision: z.enum(["ACCEPTED", "DECLINED", "WAITLISTED", "UNDER_REVIEW", "INTERVIEW_SCHEDULED", "SUBMITTED"]),
   decisionNote: z.string().max(2000).optional(),
   classId: z.string().optional(), // required only when decision = ACCEPTED
 });

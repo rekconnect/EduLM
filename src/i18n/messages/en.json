@@ -1389,7 +1389,8 @@
     "editDossierAsAdmin": "Edit the dossier (secretariat)",
     "editDossierFinalizedHint": "Dossier finalized — use 'Undo the decision' to modify it.",
     "adminEditedBadge": "Edited by the secretariat on {date}",
-    "cycleSaved": "Changes saved."
+    "cycleSaved": "Changes saved.",
+    "returnToParent": "Return to the parent (Submitted)"
   },
   "documents": {
     "title": "Documents",

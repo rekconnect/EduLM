@@ -1388,7 +1388,8 @@
     "cycleFieldAutoAcceptHint": "عند تقديم ملف إعادة التسجيل: قبول فوري، ترفيع مستوى واحد، أول شعبة متاحة (سعة ٢٥). التسجيلات الجديدة تبقى دائمًا يدوية.",
     "editDossierAsAdmin": "تعديل الملف (الأمانة)",
     "editDossierFinalizedHint": "الملف نهائي — استخدم «التراجع عن القرار» لتعديله.",
-    "adminEditedBadge": "عدّلته الأمانة بتاريخ {date}"
+    "adminEditedBadge": "عدّلته الأمانة بتاريخ {date}",
+    "cycleSaved": "تم حفظ التعديلات."
   },
   "documents": {
     "title": "الوثائق",

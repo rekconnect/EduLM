@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
+import { useEffect } from "react";
+import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/input";
@@ -33,6 +35,11 @@ export function CycleGeneralInfoForm({
     action,
     {},
   );
+  // Confirm the save — the silent form left admins unsure whether the
+  // auto-accept toggle (or anything else) actually persisted.
+  useEffect(() => {
+    if (state.saved) toast.success(t("cycleSaved"));
+  }, [state, t]);
 
   return (
     <form action={formAction} className="space-y-5">

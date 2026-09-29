@@ -1,14 +1,28 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { ArrowLeft, CalendarClock } from "lucide-react";
+import { ArrowLeft, CalendarClock, Lock, Plus, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
-import { Card, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
 import { db } from "@/lib/db";
 import { withParentSession } from "@/lib/session";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { loadEntityFieldsConfig } from "@/app/(app)/settings/_actions";
+import { startRenewal } from "@/app/(app)/parent/applications/_actions";
+import { ChildInfoView } from "./_info";
+
+/** Fiche categories a parent may see (read-only). Admin-only categories
+ *  (Finance, Justificatifs, …) stay hidden; `formHidden` fields too. */
+const PARENT_VIEW_CATEGORIES = [
+  "Info générale",
+  "Scolarité",
+  "Services",
+  "Autorisations",
+  "Info Arabe",
+];
 
 const STATUS_TONE: Record<string, string> = {
   DRAFT:
@@ -47,7 +61,8 @@ export default async function ParentChildPage({
     const tParent = await getTranslations("parent");
     const tBill = await getTranslations("billing");
 
-    const [child, invoices] = await Promise.all([
+    const now = new Date();
+    const [child, invoices, studentConfig, openCycles] = await Promise.all([
       db.student.findUnique({
         where: { id },
         select: {
@@ -55,6 +70,8 @@ export default async function ParentChildPage({
           firstName: true,
           lastName: true,
           status: true,
+          dob: true,
+          customAnswers: true,
           // Pull both the active-year enrollment AND the upcoming one so a
           // newly-accepted student (enrolled in next year but no current year)
           // still shows their class on the dashboard.
@@ -75,9 +92,51 @@ export default async function ParentChildPage({
         orderBy: { issuedAt: "desc" },
         include: { payments: { select: { amountCents: true } } },
       }),
+      loadEntityFieldsConfig("student"),
+      db.admissionCycle.findMany({
+        where: {
+          isActive: true,
+          openAt: { lte: now },
+          OR: [{ closeAt: null }, { closeAt: { gte: now } }],
+        },
+        orderBy: { openAt: "desc" },
+        select: { id: true, targetYearLabel: true },
+      }),
     ]);
 
     if (!child) notFound();
+
+    // Renewal dossiers of THIS child in the open campaigns.
+    const renewals = openCycles.length
+      ? await db.application.findMany({
+          where: { existingStudentId: id, cycleId: { in: openCycles.map((c) => c.id) } },
+          select: { id: true, cycleId: true, status: true },
+        })
+      : [];
+    const renewalByCycle = new Map(renewals.map((r) => [r.cycleId, r]));
+
+    // Read-only fiche: parent-visible categories, minus dossier-bound
+    // structural fields (name/level pickers — identity is in the header).
+    const viewCatIds = new Set(
+      studentConfig.categories
+        .filter((c) => PARENT_VIEW_CATEGORIES.includes(c.name))
+        .map((c) => c.id),
+    );
+    const viewConfig = {
+      categories: studentConfig.categories.filter((c) => viewCatIds.has(c.id)),
+      fields: studentConfig.fields.filter(
+        (f) => viewCatIds.has(f.categoryId) && !f.dossierBoundTo,
+      ),
+    };
+    const rawAnswers =
+      child.customAnswers && typeof child.customAnswers === "object"
+        ? (child.customAnswers as Record<string, unknown>)
+        : {};
+    const answers: Record<string, string> = {};
+    for (const [k, v] of Object.entries(rawAnswers)) {
+      if (typeof v === "string") answers[k] = v;
+    }
+    if (child.dob) answers.date_naissance = child.dob.toISOString().slice(0, 10);
 
     // Prefer the active year, fall back to the most recent upcoming year.
     const activeEnrollment = child.enrollments.find(
@@ -92,6 +151,8 @@ export default async function ParentChildPage({
     const description = enrollment
       ? `${enrollment.class.name} · ${enrollment.academicYear.label}`
       : "—";
+    if (enrollment) answers.classe = enrollment.class.name;
+    const tAdm = await getTranslations("admissions");
 
     return (
         <main className="mx-auto max-w-5xl space-y-6 px-6 py-10">
@@ -128,6 +189,66 @@ export default async function ParentChildPage({
               </p>
             </div>
           ) : null}
+
+          {/* Réinscription state: CTA per open campaign, or the read-only hint. */}
+          {openCycles.length > 0 ? (
+            <div className="space-y-2">
+              {openCycles.map((cycle) => {
+                const existing = renewalByCycle.get(cycle.id);
+                return existing ? (
+                  <Link
+                    key={cycle.id}
+                    href={`/parent/inscriptions/${existing.id}/edit`}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--color-success)]/30 bg-[color:var(--color-success-soft)] px-4 py-3 text-sm text-[color:var(--color-success-soft-fg)] transition-colors duration-150 ease-out hover:bg-[color:var(--color-success-soft)]/80"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <RefreshCw className="size-4" aria-hidden />
+                      <span className="font-medium">
+                        {tAdm("renewalBadge")} {cycle.targetYearLabel}
+                      </span>
+                      <span className="opacity-80">— {tParent("renewContinue")}</span>
+                    </span>
+                    <span className="text-xs font-medium uppercase tracking-wider">
+                      {existing.status}
+                    </span>
+                  </Link>
+                ) : (
+                  <form
+                    key={cycle.id}
+                    action={startRenewal}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--color-brand-200)] bg-[color:var(--color-brand-50)] px-4 py-3"
+                  >
+                    <input type="hidden" name="studentId" value={child.id} />
+                    <input type="hidden" name="cycleId" value={cycle.id} />
+                    <span className="text-sm text-[color:var(--color-brand-700)]">
+                      {tAdm("renewCta", { year: cycle.targetYearLabel })}
+                    </span>
+                    <Button type="submit" size="sm" className="shrink-0 gap-1">
+                      <Plus className="size-3.5" aria-hidden />
+                      {tAdm("renewalBadge")}
+                    </Button>
+                  </form>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex items-start gap-3 rounded-lg border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-sunken)] px-4 py-3 text-sm text-[color:var(--color-foreground-muted)]">
+              <Lock className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <p>{tParent("renewClosedHint")}</p>
+            </div>
+          )}
+
+          {/* Read-only fiche (greyed) — editing happens in the réinscription
+              dossier while a campaign is open. */}
+          <Card>
+            <CardHeader
+              title={tParent("childInfoTitle")}
+              description={tParent("childInfoHint")}
+            />
+            <CardBody>
+              <ChildInfoView config={viewConfig} answers={answers} />
+            </CardBody>
+          </Card>
 
           <Card>
             <CardHeader title={tParent("tabInvoices")} />

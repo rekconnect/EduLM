@@ -666,7 +666,11 @@
     "currentClass": "Class",
     "lastAttendance": "Last record",
     "outstanding": "Outstanding balance",
-    "viewInvoices": "View invoices"
+    "viewInvoices": "View invoices",
+    "childInfoTitle": "Student information",
+    "childInfoHint": "Read-only — changes are made through re-enrolment while a campaign is open.",
+    "renewContinue": "Continue the dossier",
+    "renewClosedHint": "Re-enrolment is not open at the moment. The information below is read-only; it becomes editable through the re-enrolment dossier as soon as the campaign opens."
   },
   "inscriptionConfig": {
     "title": "Inscription form customization",
@@ -1363,7 +1367,13 @@
     "dossierSubmitCta": "Submit file",
     "dossierMissingRequired": "Required fields missing",
     "dossierAlreadySubmittedHint": "File already submitted. You can still edit the fields above until the school starts the review.",
-    "backToDashboard": "Back to dashboard"
+    "backToDashboard": "Back to dashboard",
+    "noOpenCycleTitle": "No enrolment campaign open",
+    "noOpenCycleBody": "Enrolments are currently closed. Come back when the next campaign opens, or contact the school for more information.",
+    "cycleActiveOn": "Active",
+    "cycleActiveOff": "Inactive",
+    "cycleActivate": "Click to activate the campaign",
+    "cycleDeactivate": "Click to deactivate the campaign"
   },
   "documents": {
     "title": "Documents",

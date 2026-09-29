@@ -666,7 +666,11 @@
     "currentClass": "Classe",
     "lastAttendance": "Dernière saisie",
     "outstanding": "Solde à régler",
-    "viewInvoices": "Voir les factures"
+    "viewInvoices": "Voir les factures",
+    "childInfoTitle": "Informations de l'élève",
+    "childInfoHint": "Lecture seule — les modifications se font via la réinscription lorsque la campagne est ouverte.",
+    "renewContinue": "Continuer le dossier",
+    "renewClosedHint": "La réinscription n'est pas ouverte pour le moment. Les informations ci-dessous sont en lecture seule ; elles deviendront modifiables via le dossier de réinscription dès l'ouverture de la campagne."
   },
   "inscriptionConfig": {
     "title": "Personnalisation du formulaire d'inscription",
@@ -1363,7 +1367,13 @@
     "dossierSubmitCta": "Envoyer le dossier",
     "dossierMissingRequired": "Champs obligatoires manquants",
     "dossierAlreadySubmittedHint": "Dossier déjà envoyé. Vous pouvez encore modifier les champs ci-dessus tant que l'école n'a pas commencé l'examen.",
-    "backToDashboard": "Retour au tableau de bord"
+    "backToDashboard": "Retour au tableau de bord",
+    "noOpenCycleTitle": "Aucune campagne d'inscription ouverte",
+    "noOpenCycleBody": "Les inscriptions sont actuellement fermées. Revenez dès l'ouverture de la prochaine campagne, ou contactez l'école pour plus d'informations.",
+    "cycleActiveOn": "Active",
+    "cycleActiveOff": "Inactive",
+    "cycleActivate": "Cliquez pour activer la campagne",
+    "cycleDeactivate": "Cliquez pour désactiver la campagne"
   },
   "documents": {
     "title": "Documents",

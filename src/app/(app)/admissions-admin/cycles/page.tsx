@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
 import { formatMoney } from "@/lib/money";
+import { toggleCycleActive } from "../_actions";
 
 export default async function AdmissionCyclesPage() {
   const user = await requireRole("SCHOOL_ADMIN");
@@ -100,15 +101,21 @@ export default async function AdmissionCyclesPage() {
                       )}
                     </TD>
                     <TD>
-                      {c.isActive ? (
-                        <span className="inline-flex rounded-full bg-[color:var(--color-success-soft)] px-2 py-0.5 text-xs font-medium text-[color:var(--color-success-soft-fg)]">
-                          ✓
-                        </span>
-                      ) : (
-                        <span className="inline-flex rounded-full bg-[color:var(--color-surface-sunken)] px-2 py-0.5 text-xs text-[color:var(--color-foreground-muted)]">
-                          —
-                        </span>
-                      )}
+                      {/* One-click activate/deactivate — saves immediately,
+                          no Enregistrer needed (the checkbox-in-form trap). */}
+                      <form action={toggleCycleActive.bind(null, c.id)}>
+                        <button
+                          type="submit"
+                          title={c.isActive ? t("cycleDeactivate") : t("cycleActivate")}
+                          className={
+                            c.isActive
+                              ? "inline-flex cursor-pointer rounded-full bg-[color:var(--color-success-soft)] px-2.5 py-0.5 text-xs font-medium text-[color:var(--color-success-soft-fg)] transition-colors duration-150 ease-out hover:opacity-80"
+                              : "inline-flex cursor-pointer rounded-full bg-[color:var(--color-surface-sunken)] px-2.5 py-0.5 text-xs text-[color:var(--color-foreground-muted)] transition-colors duration-150 ease-out hover:bg-[color:var(--color-brand-50)] hover:text-[color:var(--color-brand-700)]"
+                          }
+                        >
+                          {c.isActive ? t("cycleActiveOn") : t("cycleActiveOff")}
+                        </button>
+                      </form>
                     </TD>
                     <TD className="text-end">
                       <Link

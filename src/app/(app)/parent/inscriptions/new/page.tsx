@@ -41,7 +41,28 @@ export default async function NewDossierPage() {
         : Promise.resolve(null),
     ]);
 
-    if (activeCycles.length === 0) notFound();
+    if (activeCycles.length === 0) {
+      // Friendly closed-state instead of a 404 — parents land here from the
+      // "add a child" button even between campaigns.
+      return (
+        <main className="mx-auto max-w-2xl space-y-6 px-6 py-10">
+          <PageHeader title={t("createDossierTitle")} />
+          <div className="rounded-lg border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] p-6 text-sm text-[color:var(--color-foreground-muted)] shadow-card">
+            <p className="font-medium text-[color:var(--color-foreground)]">
+              {t("noOpenCycleTitle")}
+            </p>
+            <p className="mt-2">{t("noOpenCycleBody")}</p>
+            <Link
+              href="/parent/dashboard"
+              className="mt-4 inline-flex items-center gap-1.5 text-[color:var(--color-brand-600)] hover:underline"
+            >
+              <ArrowLeft className="size-3.5" aria-hidden />
+              {tCommon("back")}
+            </Link>
+          </div>
+        </main>
+      );
+    }
 
     // Coerce Establishment.levels (Json) into a flat string[].
     const establishmentOptions: EstablishmentOption[] = establishments.map(

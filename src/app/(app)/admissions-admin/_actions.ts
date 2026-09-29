@@ -1048,3 +1048,27 @@ export async function bulkPermanentlyDeleteApplications(
     return { ok: true, processed: r.count, skipped: ids.length - r.count };
   }) as Promise<BulkResult>;
 }
+
+/**
+ * One-click campaign activation from the cycles list. Added after the "Actif"
+ * checkbox trap (2026-09-29): ticking it without hitting Enregistrer — or a
+ * failed validation on the same form — silently left the campaign inactive,
+ * so parents saw no réinscription at all.
+ */
+export async function toggleCycleActive(cycleId: string): Promise<void> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return;
+  await runWithTenant({ tenantId, slug: null }, async () => {
+    const cur = await db.admissionCycle.findFirst({
+      where: { id: cycleId },
+      select: { isActive: true },
+    });
+    if (!cur) return;
+    await db.admissionCycle.update({
+      where: { id: cycleId },
+      data: { isActive: !cur.isActive },
+    });
+  });
+  revalidatePath("/admissions-admin/cycles");
+}

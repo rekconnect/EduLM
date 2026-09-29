@@ -666,7 +666,11 @@
     "currentClass": "الصف",
     "lastAttendance": "آخر سجل",
     "outstanding": "رصيد مستحق",
-    "viewInvoices": "عرض الفواتير"
+    "viewInvoices": "عرض الفواتير",
+    "childInfoTitle": "معلومات التلميذ",
+    "childInfoHint": "للقراءة فقط — تتم التعديلات عبر إعادة التسجيل عندما تكون الحملة مفتوحة.",
+    "renewContinue": "متابعة الملف",
+    "renewClosedHint": "إعادة التسجيل غير مفتوحة حاليًا. المعلومات أدناه للقراءة فقط؛ وستصبح قابلة للتعديل عبر ملف إعادة التسجيل فور فتح الحملة."
   },
   "inscriptionConfig": {
     "title": "تخصيص نموذج التسجيل",
@@ -1363,7 +1367,13 @@
     "dossierSubmitCta": "إرسال الملف",
     "dossierMissingRequired": "حقول إلزامية مفقودة",
     "dossierAlreadySubmittedHint": "تم إرسال الملف بالفعل. لا يزال بإمكانك تعديل الحقول أعلاه إلى أن تبدأ المدرسة المراجعة.",
-    "backToDashboard": "العودة إلى لوحة المعلومات"
+    "backToDashboard": "العودة إلى لوحة المعلومات",
+    "noOpenCycleTitle": "لا توجد حملة تسجيل مفتوحة",
+    "noOpenCycleBody": "التسجيل مغلق حاليًا. عد عند فتح الحملة المقبلة أو تواصل مع المدرسة لمزيد من المعلومات.",
+    "cycleActiveOn": "مفعّلة",
+    "cycleActiveOff": "غير مفعّلة",
+    "cycleActivate": "انقر لتفعيل الحملة",
+    "cycleDeactivate": "انقر لإلغاء تفعيل الحملة"
   },
   "documents": {
     "title": "الوثائق",

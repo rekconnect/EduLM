@@ -454,11 +454,13 @@ export default async function DossierEditPage({
       isRenewal ? tenant?.dossierStateRenewal : tenant?.dossierStateInscription,
     );
     const servicesHidden = servicesHiddenInState(dossierState);
-    const otherEditable = fieldEditableInState(dossierState, {
+    // Status gate first (parents: Brouillon/Soumis; admin also en examen),
+    // THEN the état-du-dossier field gating.
+    const otherEditable = editable && fieldEditableInState(dossierState, {
       isService: false,
       baseEditable: editable,
     });
-    const servicesEditable = fieldEditableInState(dossierState, {
+    const servicesEditable = editable && fieldEditableInState(dossierState, {
       isService: true,
       baseEditable: editable,
     });

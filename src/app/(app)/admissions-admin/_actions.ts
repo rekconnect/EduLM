@@ -1131,9 +1131,12 @@ export async function revertDecision(applicationId: string): Promise<void> {
       }
     }
 
+    // Back to SUBMITTED — the one reopened state where BOTH sides can act:
+    // the parent's dossier becomes editable again (parents may only edit in
+    // DRAFT/SUBMITTED) and the admin decision form reappears.
     await db.application.update({
       where: { id: applicationId },
-      data: { status: "UNDER_REVIEW" },
+      data: { status: "SUBMITTED" },
     });
   });
   revalidatePath(`/admissions-admin/${applicationId}`);

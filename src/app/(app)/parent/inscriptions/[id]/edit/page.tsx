@@ -10,6 +10,7 @@ import {
   DOSSIER_TABS,
   parseTabsCompleted,
   parseTabsConfig,
+  tabsConfigForDossier,
   type DossierTab,
 } from "@/lib/dossier-tabs";
 import {
@@ -397,10 +398,10 @@ export default async function DossierEditPage({
       }));
     }
 
-    const baseTabsConfig = parseTabsConfig(tenant?.inscriptionTabsConfig);
-    const tabsConfig = isRenewal
-      ? { ...baseTabsConfig, scolarite: false }
-      : baseTabsConfig;
+    const tabsConfig = tabsConfigForDossier(
+      parseTabsConfig(tenant?.inscriptionTabsConfig),
+      { renewal: isRenewal },
+    );
     const tabsCompleted = parseTabsCompleted(app.tabsCompleted);
 
     // WYSIWYG editor (Phase 2) — parse the tenant's per-field overrides

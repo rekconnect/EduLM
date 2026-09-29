@@ -35,6 +35,7 @@ import {
   DOSSIER_TABS,
   parseTabsCompleted,
   parseTabsConfig,
+  tabsConfigForDossier,
   type DossierTab,
 } from "@/lib/dossier-tabs";
 import { DossierTabStrip } from "@/components/dossier/tab-strip";
@@ -255,7 +256,12 @@ export default async function AdmissionsAdminDetailPage({
         dossierStateRenewal: true,
       },
     });
-    const tabsConfig = parseTabsConfig(tenant?.inscriptionTabsConfig);
+    // Same visibility rules as the parent's dossier (renewal hides
+    // Scolarité) — the admin reviews exactly what the parent was shown.
+    const tabsConfig = tabsConfigForDossier(
+      parseTabsConfig(tenant?.inscriptionTabsConfig),
+      { renewal: app.existingStudentId != null },
+    );
     const tabsCompleted = parseTabsCompleted(app.tabsCompleted);
     const parentFieldsConfig = parseEntityFieldsConfig(
       tenant?.parentFieldsConfig,

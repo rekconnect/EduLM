@@ -91,3 +91,17 @@ export function tabsRemainingCount(
 ): number {
   return visibleTabs(visibility).filter((t) => !completed[t]).length;
 }
+
+/**
+ * Effective tab visibility for a dossier. Single source of truth for BOTH
+ * the parent edit page and the admin mirror — a renewal hides Scolarité
+ * (the school already holds the child's schooling history; the parent is
+ * never asked), so the admin must not see a permanently-red tab the parent
+ * could not fill.
+ */
+export function tabsConfigForDossier(
+  base: TabsConfig,
+  opts: { renewal: boolean },
+): TabsConfig {
+  return opts.renewal ? { ...base, scolarite: false } : base;
+}

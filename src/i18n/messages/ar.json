@@ -1378,7 +1378,10 @@
     "yearFieldGenerateClasses": "إنشاء الصفوف تلقائيًا",
     "yearFieldGenerateClassesHint": "صف لكل مستوى ولكل شعبة (من A إلى D) — يمكن حذف الشعب الفارغة لاحقًا.",
     "yearGenerateClasses": "إنشاء الصفوف (A–D)",
-    "yearDeleteEmptySections": "حذف الشعب الفارغة"
+    "yearDeleteEmptySections": "حذف الشعب الفارغة",
+    "classFull": "مكتمل",
+    "classSuggestionHint": "اقتراح تلقائي: {className} — ترفيع مستوى واحد، أول شعبة متاحة. يمكنك اختيار صف آخر.",
+    "classSuggestionAllFull": "جميع شعب {level} مكتملة — اختر يدويًا (أو تجاوز السعة)."
   },
   "documents": {
     "title": "الوثائق",

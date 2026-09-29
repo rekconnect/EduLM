@@ -19,9 +19,16 @@ type Decision =
 export function DecideForm({
   applicationId,
   classes,
+  suggestedClassId = null,
+  suggestedLevel = null,
+  capacity = 25,
 }: {
   applicationId: string;
-  classes: { id: string; name: string; level: string; section: string }[];
+  classes: { id: string; name: string; level: string; section: string; enrolled?: number }[];
+  /** Auto-advance suggestion: first non-full section of the target level. */
+  suggestedClassId?: string | null;
+  suggestedLevel?: string | null;
+  capacity?: number;
 }) {
   const t = useTranslations("admissions");
   const tCommon = useTranslations("common");
@@ -67,16 +74,33 @@ export function DecideForm({
         </Field>
         {decision === "ACCEPTED" ? (
           <Field label={t("adminAssignClass")} htmlFor="classId" required>
-            <Select id="classId" name="classId" required defaultValue="">
+            {/* Pre-selected with the auto-advance suggestion (next level,
+                first section under capacity) — stays a plain select, so the
+                admin overrides freely. */}
+            <Select id="classId" name="classId" required defaultValue={suggestedClassId ?? ""}>
               <option value="" disabled>
                 —
               </option>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
+                  {typeof c.enrolled === "number"
+                    ? ` (${c.enrolled}/${capacity}${c.enrolled >= capacity ? " — " + t("classFull") : ""})`
+                    : ""}
                 </option>
               ))}
             </Select>
+            {suggestedClassId ? (
+              <p className="mt-1 text-xs text-[color:var(--color-foreground-subtle)]">
+                {t("classSuggestionHint", {
+                  className: classes.find((c) => c.id === suggestedClassId)?.name ?? "",
+                })}
+              </p>
+            ) : suggestedLevel ? (
+              <p className="mt-1 text-xs text-[color:var(--color-warning-soft-fg)]">
+                {t("classSuggestionAllFull", { level: suggestedLevel })}
+              </p>
+            ) : null}
           </Field>
         ) : (
           <span />

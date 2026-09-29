@@ -415,7 +415,22 @@
     "subtitle": "{tenantName} account recovery.",
     "description": "To reset your password, please contact your school administration. We'll issue you a new temporary password that you can change after signing in.",
     "contactHint": "School email or phone — see the school handbook.",
-    "backToSignIn": "Back to sign in"
+    "backToSignIn": "Back to sign in",
+    "emailIntro": "Enter your account's email address: we'll send you a reset code.",
+    "emailLabel": "Email address",
+    "sendCta": "Send the code",
+    "privacyHint": "If an account exists for this address, an email will arrive within minutes (check spam).",
+    "codeSentHint": "A code was sent to {email} if it matches an account. It is valid for 15 minutes.",
+    "codeLabel": "Code received by email",
+    "newPasswordLabel": "New password (min. 8 characters)",
+    "confirmPasswordLabel": "Confirm the password",
+    "resetCta": "Set the new password",
+    "resendLink": "Wrong address or no email received? Start over",
+    "errorPasswordShort": "Minimum 8 characters.",
+    "errorPasswordMismatch": "The two passwords don't match.",
+    "errorInvalidCode": "Invalid or expired code. Check the code, or start over to receive a new one.",
+    "doneMessage": "Your password has been changed. You can now sign in.",
+    "doneCta": "Sign in"
   },
   "signIn": {
     "title": "Sign in",

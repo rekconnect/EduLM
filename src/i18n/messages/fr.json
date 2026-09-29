@@ -415,7 +415,22 @@
     "subtitle": "Récupération du compte {tenantName}.",
     "description": "Pour réinitialiser votre mot de passe, contactez l'administration de l'établissement. Nous vous enverrons un nouveau mot de passe temporaire que vous pourrez changer après connexion.",
     "contactHint": "Email ou téléphone de l'école — depuis le règlement intérieur.",
-    "backToSignIn": "Retour à la connexion"
+    "backToSignIn": "Retour à la connexion",
+    "emailIntro": "Saisissez l'adresse e-mail de votre compte : nous vous enverrons un code de réinitialisation.",
+    "emailLabel": "Adresse e-mail",
+    "sendCta": "Envoyer le code",
+    "privacyHint": "Si un compte existe pour cette adresse, un e-mail arrivera dans les minutes qui suivent (vérifiez les indésirables).",
+    "codeSentHint": "Un code a été envoyé à {email} s'il correspond à un compte. Il est valable 15 minutes.",
+    "codeLabel": "Code reçu par e-mail",
+    "newPasswordLabel": "Nouveau mot de passe (8 caractères min.)",
+    "confirmPasswordLabel": "Confirmez le mot de passe",
+    "resetCta": "Définir le nouveau mot de passe",
+    "resendLink": "Adresse erronée ou pas d'e-mail reçu ? Recommencer",
+    "errorPasswordShort": "8 caractères minimum.",
+    "errorPasswordMismatch": "Les deux mots de passe ne correspondent pas.",
+    "errorInvalidCode": "Code invalide ou expiré. Vérifiez le code, ou recommencez pour en recevoir un nouveau.",
+    "doneMessage": "Votre mot de passe a été changé. Vous pouvez maintenant vous connecter.",
+    "doneCta": "Se connecter"
   },
   "signIn": {
     "title": "Connexion",

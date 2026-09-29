@@ -1,10 +1,23 @@
 import Link from "next/link";
 import { ArrowLeft, KeyRound, Mail } from "lucide-react";
 import { getTranslations } from "next-intl/server";
+import { isMailerConfigured } from "@/lib/mailer";
+import { ForgotPasswordForm } from "./_form";
 
-export default async function ForgotPasswordPage() {
+/**
+ * Self-service reset when transactional email is configured (production);
+ * otherwise the "contact the school" card (pilot / no RESEND_API_KEY).
+ * The email's CTA links back here with ?email=&code= to prefill the form.
+ */
+export default async function ForgotPasswordPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ email?: string; code?: string }>;
+}) {
   const t = await getTranslations("forgotPassword");
   const tApp = await getTranslations("app");
+  const params = await searchParams;
+  const selfService = isMailerConfigured();
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[color:var(--color-background)] px-6 py-16">
@@ -21,20 +34,24 @@ export default async function ForgotPasswordPage() {
           </p>
         </div>
 
-        <div className="rounded-[0.75rem] border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] p-6 shadow-card">
-          <div className="flex items-start gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-600)]">
-              <KeyRound className="size-5" aria-hidden />
-            </div>
-            <div className="text-sm text-[color:var(--color-foreground)]">
-              <p>{t("description")}</p>
-              <p className="mt-3 inline-flex items-center gap-1.5 text-[color:var(--color-foreground-muted)]">
-                <Mail className="size-3.5" aria-hidden />
-                {t("contactHint")}
-              </p>
+        {selfService ? (
+          <ForgotPasswordForm initialEmail={params.email} initialCode={params.code} />
+        ) : (
+          <div className="rounded-[0.75rem] border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] p-6 shadow-card">
+            <div className="flex items-start gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-[color:var(--color-brand-50)] text-[color:var(--color-brand-600)]">
+                <KeyRound className="size-5" aria-hidden />
+              </div>
+              <div className="text-sm text-[color:var(--color-foreground)]">
+                <p>{t("description")}</p>
+                <p className="mt-3 inline-flex items-center gap-1.5 text-[color:var(--color-foreground-muted)]">
+                  <Mail className="size-3.5" aria-hidden />
+                  {t("contactHint")}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <p className="mt-4 text-center text-sm">
           <Link

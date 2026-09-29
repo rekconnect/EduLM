@@ -816,6 +816,7 @@ async function loadApplicationOwnedBy(
     where: dossierWhereFor(applicationId, actor),
     select: {
       id: true,
+      status: true,
       submittedByUserId: true,
       dossierAnswers: true,
       tabsCompleted: true,
@@ -873,6 +874,7 @@ export async function saveFoyerTab(
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await loadApplicationOwnedBy(applicationId, user);
     if (!app) return { ok: false, error: "not-found" };
+    if (!statusEditableFor(app.status, user)) return { ok: false, error: "locked" };
 
     // Config-native (Dars entity-fields) answers, keyed by field key.
     const ans =
@@ -998,6 +1000,7 @@ export async function saveAutorisationsTab(
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await loadApplicationOwnedBy(applicationId, user);
     if (!app) return { ok: false, error: "not-found" };
+    if (!statusEditableFor(app.status, user)) return { ok: false, error: "locked" };
 
     // Image rights are household-level → saved on the Family so siblings
     // registered later inherit the same consents.
@@ -1188,6 +1191,7 @@ export async function saveTransportTab(
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await loadApplicationOwnedBy(applicationId, user);
     if (!app) return { ok: false, error: "not-found" };
+    if (!statusEditableFor(app.status, user)) return { ok: false, error: "locked" };
 
     // Config-native Services answers (Dars vocabulary, keyed by field key) sent
     // by the entity-fields Transport tab. Coerce to strings; store as-is so the
@@ -1267,11 +1271,12 @@ export async function setDossierTabCompleted(
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await db.application.findUnique({
       where: { id: applicationId },
-      select: { id: true, submittedByUserId: true, tabsCompleted: true },
+      select: { id: true, status: true, submittedByUserId: true, tabsCompleted: true },
     });
     if (!app || !(await actorOwnsOrAdmin(app, user))) {
       return { ok: false, error: "not-found" };
     }
+    if (!statusEditableFor(app.status, user)) return { ok: false, error: "locked" };
     const current =
       app.tabsCompleted && typeof app.tabsCompleted === "object"
         ? (app.tabsCompleted as Record<string, unknown>)
@@ -1312,6 +1317,7 @@ export async function saveContactsTab(
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await loadApplicationOwnedBy(applicationId, user);
     if (!app) return { ok: false, error: "not-found" };
+    if (!statusEditableFor(app.status, user)) return { ok: false, error: "locked" };
 
     const ans =
       payload && typeof payload === "object"
@@ -1547,6 +1553,7 @@ export async function saveSanteTab(
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await loadApplicationOwnedBy(applicationId, user);
     if (!app) return { ok: false, error: "not-found" };
+    if (!statusEditableFor(app.status, user)) return { ok: false, error: "locked" };
 
     // Config-native answers (yes_no fields = "yes"/"no" strings); stored as-is
     // into dossierAnswers.sante — parseSante reads both shapes.
@@ -1606,6 +1613,7 @@ export async function saveFinanceTab(
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await loadApplicationOwnedBy(applicationId, user);
     if (!app) return { ok: false, error: "not-found" };
+    if (!statusEditableFor(app.status, user)) return { ok: false, error: "locked" };
 
     // Config-native answers: acks + comité as "yes"/"no", caisse* as value
     // strings. Stored as-is into dossierAnswers.finance — parseFinance reads
@@ -1705,6 +1713,7 @@ export async function saveJustificatifsTab(
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await loadApplicationOwnedBy(applicationId, user);
     if (!app) return { ok: false, error: "not-found" };
+    if (!statusEditableFor(app.status, user)) return { ok: false, error: "locked" };
 
     const ans =
       payload && typeof payload === "object"
@@ -1744,6 +1753,7 @@ export async function saveValidationAck(
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await loadApplicationOwnedBy(applicationId, user);
     if (!app) return { ok: false, error: "not-found" };
+    if (!statusEditableFor(app.status, user)) return { ok: false, error: "locked" };
 
     const dossier =
       app.dossierAnswers && typeof app.dossierAnswers === "object"

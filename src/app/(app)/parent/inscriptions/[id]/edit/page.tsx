@@ -4,7 +4,9 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { db, unscopedDb } from "@/lib/db";
-import { withParentSession } from "@/lib/session";
+import { requireUser } from "@/lib/session";
+import { runWithTenant } from "@/lib/tenant-context";
+import { redirect } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   DOSSIER_TABS,
@@ -105,9 +107,13 @@ export default async function DossierEditPage({
   const { tab } = await searchParams;
   const currentTab = parseTab(tab);
 
-  // withParentSession: PARENT-only + tenant context (withTenantSession
-  // bounces parents to their portal — see new/page.tsx note).
-  return withParentSession(async (user) => {
+  // Actors: the OWNING PARENT — or a SCHOOL_ADMIN editing on the family's
+  // behalf (secretariat). Other roles bounce to their portal.
+  const user = await requireUser();
+  if (user.role !== "PARENT" && user.role !== "SCHOOL_ADMIN") redirect("/dashboard");
+  const tenantId = user.tenantId;
+  if (!tenantId) redirect("/sign-in");
+  return runWithTenant({ tenantId, slug: null }, async () => {
     const t = await getTranslations("admissions");
     const tDossier = await getTranslations("dossier");
 
@@ -223,7 +229,7 @@ export default async function DossierEditPage({
     ]);
 
     if (!app) notFound();
-    if (app.submittedByUserId !== user.id) notFound();
+    if (app.submittedByUserId !== user.id && user.role !== "SCHOOL_ADMIN") notFound();
 
     // Coerce JSON answers to flat string maps for the renderer.
     const coerceAnswers = (raw: unknown): Record<string, string> => {

@@ -41,7 +41,7 @@ import {
 import { DossierTabStrip } from "@/components/dossier/tab-strip";
 import { getSignedDownloadUrl } from "@/lib/storage";
 import { AppStatusBadge } from "@/app/(app)/parent/applications/_status-badge";
-import { Button } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
 import { DecideForm } from "./_decide";
 import { revertDecision } from "../_actions";
 
@@ -618,6 +618,31 @@ export default async function AdmissionsAdminDetailPage({
             </CardBody>
           </Card>
         )}
+
+        {/* Secretariat mode: type into the dossier on the family's behalf.
+            Finalized dossiers stay archived — Annuler first. */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {app.adminEditedAt ? (
+            <p className="text-xs text-[color:var(--color-foreground-subtle)]">
+              {t("adminEditedBadge", { date: app.adminEditedAt.toISOString().slice(0, 10) })}
+            </p>
+          ) : (
+            <span />
+          )}
+          {!finalized ? (
+            <LinkButton
+              href={`/parent/inscriptions/${app.id}/edit`}
+              size="sm"
+              variant="secondary"
+            >
+              {t("editDossierAsAdmin")}
+            </LinkButton>
+          ) : (
+            <p className="text-xs text-[color:var(--color-foreground-subtle)]">
+              {t("editDossierFinalizedHint")}
+            </p>
+          )}
+        </div>
 
         {/* ── Tab strip — mirrors the parent's 10-tab dossier so admin
             navigates the same shape they're reviewing. baseHref points

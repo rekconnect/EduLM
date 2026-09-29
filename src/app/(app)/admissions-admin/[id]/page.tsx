@@ -35,12 +35,15 @@ import {
   DOSSIER_TABS,
   parseTabsCompleted,
   parseTabsConfig,
+  tabsConfigForDossier,
   type DossierTab,
 } from "@/lib/dossier-tabs";
 import { DossierTabStrip } from "@/components/dossier/tab-strip";
 import { getSignedDownloadUrl } from "@/lib/storage";
 import { AppStatusBadge } from "@/app/(app)/parent/applications/_status-badge";
+import { Button } from "@/components/ui/button";
 import { DecideForm } from "./_decide";
+import { revertDecision } from "../_actions";
 
 /** Resolve the active tab from a ?tab= query param. Falls back to Élève. */
 function parseTab(raw: string | undefined): DossierTab {
@@ -255,7 +258,12 @@ export default async function AdmissionsAdminDetailPage({
         dossierStateRenewal: true,
       },
     });
-    const tabsConfig = parseTabsConfig(tenant?.inscriptionTabsConfig);
+    // Same visibility rules as the parent's dossier (renewal hides
+    // Scolarité) — the admin reviews exactly what the parent was shown.
+    const tabsConfig = tabsConfigForDossier(
+      parseTabsConfig(tenant?.inscriptionTabsConfig),
+      { renewal: app.existingStudentId != null },
+    );
     const tabsCompleted = parseTabsCompleted(app.tabsCompleted);
     const parentFieldsConfig = parseEntityFieldsConfig(
       tenant?.parentFieldsConfig,
@@ -593,6 +601,20 @@ export default async function AdmissionsAdminDetailPage({
                   </>
                 ) : null}
               </p>
+              {/* Undo a finalized decision — reopens review and unwinds the
+                  acceptance side-effects (target-year enrollment, created
+                  student when it carries nothing else). */}
+              <form
+                action={revertDecision.bind(null, app.id)}
+                className="mt-3 border-t border-[color:var(--color-border-subtle)] pt-3"
+              >
+                <Button type="submit" variant="secondary" size="sm">
+                  {t("revertDecision")}
+                </Button>
+                <p className="mt-1.5 text-xs text-[color:var(--color-foreground-subtle)]">
+                  {t("revertDecisionHint")}
+                </p>
+              </form>
             </CardBody>
           </Card>
         )}

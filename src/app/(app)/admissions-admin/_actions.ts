@@ -1072,3 +1072,71 @@ export async function toggleCycleActive(cycleId: string): Promise<void> {
   });
   revalidatePath("/admissions-admin/cycles");
 }
+
+/**
+ * Undo a finalized decision (Raed 2026-09-29: an accidental "Accepter" was
+ * unrecoverable from the UI). Puts the dossier back to UNDER_REVIEW and
+ * unwinds what acceptance created:
+ *  - the target-year enrollment (renewal AND new-student accepts);
+ *  - a student record CREATED by this accept (resultingStudentId), but only
+ *    when it carries nothing else (no other enrollments, no invoices) —
+ *    otherwise it is kept and only the link is cleared.
+ * Fiche fields already propagated by the accept are NOT rolled back (they
+ * came from the dossier the parent filled — re-accepting rewrites them).
+ */
+export async function revertDecision(applicationId: string): Promise<void> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return;
+  await runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: { id: applicationId },
+      select: {
+        id: true,
+        status: true,
+        existingStudentId: true,
+        resultingStudentId: true,
+        cycle: { select: { targetYearLabel: true } },
+      },
+    });
+    if (!app) return;
+    if (!["ACCEPTED", "DECLINED", "WAITLISTED"].includes(app.status)) return;
+
+    if (app.status === "ACCEPTED") {
+      const sid = app.existingStudentId ?? app.resultingStudentId;
+      if (sid) {
+        await db.enrollment.deleteMany({
+          where: {
+            studentId: sid,
+            academicYear: { label: app.cycle.targetYearLabel },
+          },
+        });
+      }
+      if (app.resultingStudentId) {
+        const created = await db.student.findFirst({
+          where: { id: app.resultingStudentId },
+          select: {
+            id: true,
+            _count: { select: { enrollments: true, invoices: true } },
+          },
+        });
+        await db.application.update({
+          where: { id: applicationId },
+          data: { resultingStudentId: null },
+        });
+        if (created && created._count.enrollments === 0 && created._count.invoices === 0) {
+          await db.studentGuardian.deleteMany({ where: { studentId: created.id } });
+          await db.student.delete({ where: { id: created.id } });
+        }
+      }
+    }
+
+    await db.application.update({
+      where: { id: applicationId },
+      data: { status: "UNDER_REVIEW" },
+    });
+  });
+  revalidatePath(`/admissions-admin/${applicationId}`);
+  revalidatePath("/admissions-admin");
+  revalidatePath("/students");
+}

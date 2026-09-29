@@ -1381,7 +1381,9 @@
     "yearDeleteEmptySections": "حذف الشعب الفارغة",
     "classFull": "مكتمل",
     "classSuggestionHint": "اقتراح تلقائي: {className} — ترفيع مستوى واحد، أول شعبة متاحة. يمكنك اختيار صف آخر.",
-    "classSuggestionAllFull": "جميع شعب {level} مكتملة — اختر يدويًا (أو تجاوز السعة)."
+    "classSuggestionAllFull": "جميع شعب {level} مكتملة — اختر يدويًا (أو تجاوز السعة).",
+    "revertDecision": "التراجع عن القرار",
+    "revertDecisionHint": "يعيد الملف إلى «قيد المراجعة» ويزيل ما أنشأه القبول (التسجيل في السنة المستهدفة؛ والتلميذ المُنشأ إذا لم يكن يحمل شيئًا آخر)."
   },
   "documents": {
     "title": "الوثائق",

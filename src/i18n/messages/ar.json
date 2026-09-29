@@ -1374,7 +1374,11 @@
     "cycleActiveOn": "مفعّلة",
     "cycleActiveOff": "غير مفعّلة",
     "cycleActivate": "انقر لتفعيل الحملة",
-    "cycleDeactivate": "انقر لإلغاء تفعيل الحملة"
+    "cycleDeactivate": "انقر لإلغاء تفعيل الحملة",
+    "yearFieldGenerateClasses": "إنشاء الصفوف تلقائيًا",
+    "yearFieldGenerateClassesHint": "صف لكل مستوى ولكل شعبة (من A إلى D) — يمكن حذف الشعب الفارغة لاحقًا.",
+    "yearGenerateClasses": "إنشاء الصفوف (A–D)",
+    "yearDeleteEmptySections": "حذف الشعب الفارغة"
   },
   "documents": {
     "title": "الوثائق",

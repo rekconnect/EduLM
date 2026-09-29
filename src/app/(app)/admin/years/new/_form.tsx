@@ -38,6 +38,15 @@ export function YearForm() {
         <input type="checkbox" name="isActive" />
         <span>{t("yearFieldActive")}</span>
       </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" name="generateClasses" defaultChecked className="mt-0.5" />
+        <span>
+          {t("yearFieldGenerateClasses")}
+          <span className="block text-xs text-[color:var(--color-foreground-subtle)]">
+            {t("yearFieldGenerateClassesHint")}
+          </span>
+        </span>
+      </label>
 
       <div className="flex items-center justify-end gap-2 pt-2">
         <a

@@ -5,7 +5,7 @@ import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
-import { setActiveYear } from "./_actions";
+import { deleteEmptyClasses, generateClassesForYear, setActiveYear } from "./_actions";
 import { DeleteYearButton } from "./_delete-year";
 
 export default async function YearsPage() {
@@ -77,6 +77,19 @@ export default async function YearsPage() {
                       </TD>
                       <TD className="text-end">
                         <div className="inline-flex items-center gap-1">
+                          {y._count.classes === 0 ? (
+                            <form action={generateClassesForYear.bind(null, y.id)}>
+                              <Button type="submit" variant="ghost" size="sm">
+                                {t("yearGenerateClasses")}
+                              </Button>
+                            </form>
+                          ) : (
+                            <form action={deleteEmptyClasses.bind(null, y.id)}>
+                              <Button type="submit" variant="ghost" size="sm">
+                                {t("yearDeleteEmptySections")}
+                              </Button>
+                            </form>
+                          )}
                           <LinkButton
                             href={`/admin/years/${y.id}/promote`}
                             variant="ghost"

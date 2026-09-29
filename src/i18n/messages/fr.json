@@ -1374,7 +1374,11 @@
     "cycleActiveOn": "Active",
     "cycleActiveOff": "Inactive",
     "cycleActivate": "Cliquez pour activer la campagne",
-    "cycleDeactivate": "Cliquez pour désactiver la campagne"
+    "cycleDeactivate": "Cliquez pour désactiver la campagne",
+    "yearFieldGenerateClasses": "Créer automatiquement les classes",
+    "yearFieldGenerateClassesHint": "Une classe par niveau et par section (A à D) — les sections vides pourront être supprimées plus tard.",
+    "yearGenerateClasses": "Générer les classes (A–D)",
+    "yearDeleteEmptySections": "Supprimer sections vides"
   },
   "documents": {
     "title": "Documents",

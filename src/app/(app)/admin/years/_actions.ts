@@ -41,6 +41,7 @@ export async function createYear(
     return { errors };
   }
 
+  const generateClasses = String(formData.get("generateClasses") ?? "") === "on";
   let didCreate = false;
   await runWithTenant({ tenantId, slug: null }, async () => {
     const existing = await db.academicYear.findUnique({
@@ -55,7 +56,7 @@ export async function createYear(
         data: { isActive: false },
       });
     }
-    await db.academicYear.create({
+    const created = await db.academicYear.create({
       data: {
         tenantId,
         label: parsed.data.label,
@@ -65,6 +66,9 @@ export async function createYear(
       },
     });
     didCreate = true;
+    // Classes per niveau, sections A–D — so admissions can accept dossiers
+    // into this year right away.
+    if (generateClasses) await generateClassesInternal(tenantId, created.id);
   });
 
   if (!didCreate) return { errors: { label: "yearAlreadyExists" } };
@@ -253,4 +257,88 @@ export async function deleteYear(
     revalidatePath("/classes");
     return { ok: true };
   });
+}
+
+// ── Class generation (Raed 2026-09-29) ──────────────────────────
+// A new year needs its classes BEFORE admissions can accept dossiers
+// (acceptance requires picking a class in the cycle's target year).
+// Sections are generated A→D for every niveau — the school can't know in
+// advance which sections will fill; unused empty sections get deleted later.
+
+const GENERATED_SECTIONS = ["A", "B", "C", "D"] as const;
+
+/** Niveaux from the tenant's ACTIVE establishments config (config-driven). */
+async function tenantLevels(): Promise<string[]> {
+  const { sortLevels } = await import("@/lib/levels");
+  const establishments = await db.establishment.findMany({
+    where: { isActive: true },
+    select: { levels: true },
+  });
+  const set = new Set<string>();
+  for (const e of establishments) {
+    if (Array.isArray(e.levels)) {
+      for (const l of e.levels) if (typeof l === "string" && l.trim()) set.add(l.trim());
+    }
+  }
+  return sortLevels([...set]);
+}
+
+/** Idempotent: creates only the missing (niveau, section) pairs. */
+async function generateClassesInternal(
+  tenantId: string,
+  yearId: string,
+): Promise<{ created: number } | { error: string }> {
+  const levels = await tenantLevels();
+  if (levels.length === 0) return { error: "no-levels" };
+  const existing = await db.class.findMany({
+    where: { academicYearId: yearId },
+    select: { level: true, section: true },
+  });
+  const have = new Set(existing.map((c) => `${c.level}|${c.section}`));
+  const data: Array<{ tenantId: string; academicYearId: string; level: string; section: string; name: string }> = [];
+  for (const level of levels) {
+    for (const section of GENERATED_SECTIONS) {
+      if (have.has(`${level}|${section}`)) continue;
+      data.push({ tenantId, academicYearId: yearId, level, section, name: `${level} ${section}` });
+    }
+  }
+  if (data.length > 0) await db.class.createMany({ data });
+  return { created: data.length };
+}
+
+export async function generateClassesForYear(yearId: string): Promise<void> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return;
+  await runWithTenant({ tenantId, slug: null }, async () => {
+    const year = await db.academicYear.findUnique({ where: { id: yearId }, select: { id: true } });
+    if (!year) return;
+    await generateClassesInternal(tenantId, yearId);
+  });
+  revalidatePath("/admin/years");
+  revalidatePath("/classes");
+}
+
+/**
+ * Rentrée cleanup (Raed 2026-09-29): once the real section lists are in,
+ * remove the generated sections that stayed empty. Only classes with NO
+ * enrollments, documents or announcements are touched — re-runnable, and
+ * "Générer les classes" can always recreate a section later if needed.
+ */
+export async function deleteEmptyClasses(yearId: string): Promise<void> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const tenantId = user.tenantId;
+  if (!tenantId) return;
+  await runWithTenant({ tenantId, slug: null }, async () => {
+    await db.class.deleteMany({
+      where: {
+        academicYearId: yearId,
+        enrollments: { none: {} },
+        documents: { none: {} },
+        announcements: { none: {} },
+      },
+    });
+  });
+  revalidatePath("/admin/years");
+  revalidatePath("/classes");
 }

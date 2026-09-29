@@ -784,7 +784,8 @@
     "responsablesEmpty": "No parent listed yet. Click \"Add a parent\" to start.",
     "addResponsable": "Add a parent",
     "responsableTitle": "Parent {n}: {name}",
-    "monoParental": "Single-parent family"
+    "monoParental": "Single-parent family",
+    "missingRequiredIntro": "Required fields still to complete:"
   },
   "dossierForms": {
     "saveError": "Could not save this section.",

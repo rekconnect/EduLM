@@ -9,6 +9,7 @@ import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
 import {
   evaluateShowIf,
+  missingRequiredOnForm,
   parseEntityFieldsConfig,
   type EntityFieldsConfig,
 } from "@/lib/entity-fields";
@@ -296,98 +297,6 @@ export async function createDossier(
 // Both tabs have data spread across multiple save actions, so the
 // completion flag is derived in one place and called from every save.
 
-type EleveCompletionInput = {
-  childFirstName: string | null;
-  childLastName: string | null;
-  childDob: Date | null;
-  childGender: unknown;
-  childPlaceOfBirth: string | null;
-  childBirthCountry: string | null;
-  childFirstNameAr: string | null;
-  childLastNameAr: string | null;
-  childIsLebanese: boolean | null;
-  childPassportLebanese: string | null;
-  childNationality: string | null;
-};
-
-function evaluateEleveComplete(
-  a: EleveCompletionInput,
-  tenantConfig: TenantInscriptionFormConfig | null,
-): boolean {
-  // Helper closure so each line below reads cleanly. Returns true when
-  // the field is required after applying the tenant override AND the
-  // application's stored value is blank → completion fails.
-  const missing = (key: string, value: unknown): boolean => {
-    if (!isFieldRequiredEffective(key, tenantConfig)) return false;
-    if (typeof value === "string") return !value.trim();
-    if (value === null || value === undefined || value === "") return true;
-    return false;
-  };
-
-  // État civil
-  if (missing("eleve.etatCivil.firstName", a.childFirstName)) return false;
-  if (missing("eleve.etatCivil.lastName", a.childLastName)) return false;
-  if (missing("eleve.etatCivil.dob", a.childDob)) return false;
-  if (missing("eleve.etatCivil.gender", a.childGender)) return false;
-  if (missing("eleve.etatCivil.placeOfBirth", a.childPlaceOfBirth))
-    return false;
-  if (missing("eleve.etatCivil.birthCountry", a.childBirthCountry))
-    return false;
-  if (missing("eleve.etatCivil.firstNameAr", a.childFirstNameAr)) return false;
-  if (missing("eleve.etatCivil.lastNameAr", a.childLastNameAr)) return false;
-
-  // Passport — the Yes/No radio
-  if (
-    isFieldRequiredEffective("eleve.passport.isLebanese", tenantConfig) &&
-    a.childIsLebanese === null
-  ) {
-    return false;
-  }
-
-  // Conditional: if Lebanese=true, the passport-number field comes into
-  // play. Respect the override (if set) or fall back to the registry
-  // default (required=true).
-  if (a.childIsLebanese === true) {
-    if (missing("eleve.passport.passportLebanese", a.childPassportLebanese)) {
-      return false;
-    }
-  }
-
-  // Conditional: if Lebanese=false, the parent must enter Nationalité 1.
-  // The registry default for that field is required=false (so the row
-  // doesn't paint a red bar in the Lebanese=Yes case), and the form
-  // upgrades it to required=true when isLebanese=false. We mirror that
-  // upgrade here — UNLESS admin has set an explicit override, in which
-  // case we trust their choice.
-  if (a.childIsLebanese === false) {
-    const nat1 = resolveField(
-      "eleve.passport.nationality1",
-      tenantConfig,
-      "fr",
-    );
-    const nat1NeedsValue = nat1?.hasOverride
-      ? nat1.required && !nat1.hidden
-      : true;
-    if (nat1NeedsValue && !a.childNationality?.trim()) return false;
-  }
-
-  return true;
-}
-
-const ELEVE_COMPLETION_SELECT = {
-  childFirstName: true,
-  childLastName: true,
-  childDob: true,
-  childGender: true,
-  childPlaceOfBirth: true,
-  childBirthCountry: true,
-  childFirstNameAr: true,
-  childLastNameAr: true,
-  childIsLebanese: true,
-  childPassportLebanese: true,
-  childNationality: true,
-} as const;
-
 // ── Student "État civil" card (Élève tab) ─────────────────────
 // Captures the built-in identity fields beyond the file-identity
 // (gender, place + country of birth, 3 nationalities, Arabic names).
@@ -481,21 +390,40 @@ export async function saveStudentDossier(
       },
     });
 
-    const [fresh, tenantFormConfig] = await Promise.all([
+    // Completeness is 100% CONFIG-DRIVEN (Raed's unification rule): the same
+    // /settings entity-field config that renders the tab decides "rempli" —
+    // no legacy hardcoded field list, no pre-Dars columns.
+    const [fresh, tenantRow] = await Promise.all([
       db.application.findUnique({
         where: { id: applicationId },
-        select: { ...ELEVE_COMPLETION_SELECT, tabsCompleted: true },
+        select: { studentAnswers: true, existingStudentId: true, tabsCompleted: true },
       }),
-      loadInscriptionFormConfig(tenantId),
+      unscopedDb().tenant.findUnique({
+        where: { id: tenantId },
+        select: { studentFieldsConfig: true },
+      }),
     ]);
     if (fresh) {
+      const entityCfg = parseEntityFieldsConfig(tenantRow?.studentFieldsConfig);
+      const answers: Record<string, string> = {};
+      if (fresh.studentAnswers && typeof fresh.studentAnswers === "object") {
+        for (const [k, v] of Object.entries(fresh.studentAnswers as Record<string, unknown>)) {
+          if (typeof v === "string") answers[k] = v;
+        }
+      }
+      const missingLabels = missingRequiredOnForm(
+        entityCfg,
+        ["Info générale", "Info Arabe"],
+        answers,
+        { renewal: fresh.existingStudentId != null },
+      );
       await db.application.update({
         where: { id: applicationId },
         data: {
           tabsCompleted: mergeTabsCompleted(
             fresh.tabsCompleted,
             "eleve",
-            evaluateEleveComplete(fresh, tenantFormConfig),
+            missingLabels.length === 0,
           ),
         },
       });

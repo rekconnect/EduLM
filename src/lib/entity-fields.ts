@@ -620,3 +620,34 @@ export function applyInheritedValues(
   }
   return out;
 }
+
+/**
+ * Labels of required-on-form fields (within the given categories) that are
+ * still blank — THE completeness authority for config-driven form tabs, and
+ * the "which fields are missing" list shown to the parent. Mirrors exactly
+ * what the renderer displays: visibility (formHidden / renewal-inscription
+ * windows), live showIf conditions, and the renewal required-override.
+ */
+export function missingRequiredOnForm(
+  config: EntityFieldsConfig,
+  categoryNames: string[],
+  answers: Record<string, string>,
+  opts: { renewal: boolean },
+): string[] {
+  const catIds = new Set(
+    config.categories
+      .filter((c) => c.active !== false && categoryNames.includes(c.name))
+      .map((c) => c.id),
+  );
+  const out: string[] = [];
+  for (const f of config.fields) {
+    if (!catIds.has(f.categoryId)) continue;
+    if (f.active === false) continue;
+    if (!fieldVisibleOnForm(f, opts)) continue;
+    if (!evaluateShowIf(f, answers)) continue;
+    if (!fieldRequiredOnForm(f, opts)) continue;
+    const v = answers[f.key] ?? "";
+    if (!v.trim()) out.push(f.label);
+  }
+  return out;
+}

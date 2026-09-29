@@ -784,7 +784,8 @@
     "responsablesEmpty": "لا يوجد ولي أمر مسجل بعد. اضغط « إضافة ولي أمر » للبدء.",
     "addResponsable": "إضافة ولي أمر",
     "responsableTitle": "ولي الأمر {n}: {name}",
-    "monoParental": "عائلة وحيدة الوالد"
+    "monoParental": "عائلة وحيدة الوالد",
+    "missingRequiredIntro": "حقول إلزامية يجب إكمالها:"
   },
   "dossierForms": {
     "saveError": "تعذر حفظ هذا القسم.",

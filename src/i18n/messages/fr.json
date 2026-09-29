@@ -784,7 +784,8 @@
     "responsablesEmpty": "Aucun responsable. Cliquez sur « Ajouter un responsable » pour commencer.",
     "addResponsable": "Ajouter un responsable",
     "responsableTitle": "Responsable {n}: {name}",
-    "monoParental": "Famille monoparentale"
+    "monoParental": "Famille monoparentale",
+    "missingRequiredIntro": "Champs obligatoires à compléter :"
   },
   "dossierForms": {
     "saveError": "Impossible d'enregistrer cette section.",

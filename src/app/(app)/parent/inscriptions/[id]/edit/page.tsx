@@ -60,6 +60,7 @@ import {
 import {
   fieldVisibleOnForm,
   fieldRequiredOnForm,
+  missingRequiredOnForm,
 } from "@/lib/entity-fields";
 import {
   resolveDossierState,
@@ -522,14 +523,31 @@ export default async function DossierEditPage({
         >
         <div className="space-y-6">
           {currentTab === "eleve" ? (
-            <DossierTabEleve
-              applicationId={app.id}
-              disabled={!otherEditable}
-              config={eleveConfig}
-              initial={eleveInitial}
-              establishments={establishmentsForRenderer}
-              renewal={isRenewal}
-            />
+            <>
+              {(() => {
+                // Same authority as the saved badge: the entity-field config.
+                const missing = missingRequiredOnForm(
+                  studentFieldsConfig,
+                  ELEVE_CATEGORY_NAMES,
+                  eleveInitial,
+                  { renewal: isRenewal },
+                );
+                return missing.length > 0 ? (
+                  <div className="mb-4 rounded-lg border border-[color:var(--color-warning)]/40 bg-[color:var(--color-warning-soft)] px-4 py-3 text-sm text-[color:var(--color-warning-soft-fg)]">
+                    <p className="font-medium">{tDossier("missingRequiredIntro")}</p>
+                    <p className="mt-1">{missing.join(" · ")}</p>
+                  </div>
+                ) : null;
+              })()}
+              <DossierTabEleve
+                applicationId={app.id}
+                disabled={!otherEditable}
+                config={eleveConfig}
+                initial={eleveInitial}
+                establishments={establishmentsForRenderer}
+                renewal={isRenewal}
+              />
+            </>
           ) : null}
 
           {currentTab === "responsables" ? (

@@ -438,7 +438,14 @@ export default async function DossierEditPage({
     const statusKey = STATUS_KEY_MAP[app.status] ?? "statusSubmitted";
 
     const baseHref = `/parent/inscriptions/${app.id}/edit`;
-    const editable = app.status === "DRAFT" || app.status === "SUBMITTED";
+    // Parents edit DRAFT/SUBMITTED; the secretariat (SCHOOL_ADMIN) can also
+    // work a file that sits UNDER_REVIEW / INTERVIEW_SCHEDULED — mirrors
+    // statusEditableFor in the save actions.
+    const editable =
+      app.status === "DRAFT" ||
+      app.status === "SUBMITTED" ||
+      (user.role === "SCHOOL_ADMIN" &&
+        (app.status === "UNDER_REVIEW" || app.status === "INTERVIEW_SCHEDULED"));
 
     // Dossier "state" gates the Services (Transport & restauration) tab + the
     // editability of the rest. Per-dossier override → tenant default per context.

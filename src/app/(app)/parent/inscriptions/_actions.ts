@@ -135,6 +135,14 @@ export type DossierFormState = {
 // A dossier is edited by its OWNING PARENT — or by a SCHOOL_ADMIN typing on
 // the family's behalf (secretariat on the phone). Every admin write stamps
 // adminEditedAt/adminEditedByUserId on the application (audit trace).
+function statusEditableFor(status: string, user: { role: string }): boolean {
+  if (status === "DRAFT" || status === "SUBMITTED") return true;
+  if (user.role === "SCHOOL_ADMIN") {
+    return status === "UNDER_REVIEW" || status === "INTERVIEW_SCHEDULED";
+  }
+  return false;
+}
+
 async function requireDossierActor() {
   const user = await requireUser();
   if (user.role !== "PARENT" && user.role !== "SCHOOL_ADMIN") {
@@ -408,7 +416,7 @@ export async function saveStudentDossier(
     });
     if (!app) return { ok: false, error: "not-found" };
     if (!(await actorOwnsOrAdmin(app, user))) return { ok: false, error: "forbidden" };
-    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
+    if (!statusEditableFor(app.status, user)) {
       return { ok: false, error: "locked" };
     }
 
@@ -510,7 +518,7 @@ export async function saveResponsableIdentity(
     });
     if (!app) return { ok: false, error: "not-found" };
     if (!(await actorOwnsOrAdmin(app, user))) return { ok: false, error: "forbidden" };
-    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
+    if (!statusEditableFor(app.status, user)) {
       return { ok: false, error: "locked" };
     }
     // Same Lebanese-passport rule as the student: only persist when
@@ -583,7 +591,7 @@ export async function saveMonoParental(
     });
     if (!app) return { ok: false, error: "not-found" };
     if (!(await actorOwnsOrAdmin(app, user))) return { ok: false, error: "forbidden" };
-    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
+    if (!statusEditableFor(app.status, user)) {
       return { ok: false, error: "locked" };
     }
     await db.application.update({
@@ -1461,7 +1469,7 @@ export async function saveResponsableAnswers(
     });
     if (!app) return { ok: false, error: "not-found" };
     stampAdminEdit(applicationId, user);
-    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
+    if (!statusEditableFor(app.status, user)) {
       return { ok: false, error: "locked" };
     }
     const data = {
@@ -1509,7 +1517,7 @@ export async function deleteResponsable(
     });
     if (!app) return { ok: false, error: "not-found" };
     stampAdminEdit(applicationId, user);
-    if (app.status !== "DRAFT" && app.status !== "SUBMITTED") {
+    if (!statusEditableFor(app.status, user)) {
       return { ok: false, error: "locked" };
     }
     const existing = await db.applicationResponsable.findUnique({

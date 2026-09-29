@@ -1388,7 +1388,8 @@
     "cycleFieldAutoAcceptHint": "On submission of a re-enrolment dossier: immediate acceptance, level advanced by one, first available section (capacity 25). New enrolments always remain manual.",
     "editDossierAsAdmin": "Edit the dossier (secretariat)",
     "editDossierFinalizedHint": "Dossier finalized — use 'Undo the decision' to modify it.",
-    "adminEditedBadge": "Edited by the secretariat on {date}"
+    "adminEditedBadge": "Edited by the secretariat on {date}",
+    "cycleSaved": "Changes saved."
   },
   "documents": {
     "title": "Documents",

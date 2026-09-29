@@ -1388,7 +1388,8 @@
     "cycleFieldAutoAcceptHint": "À la soumission du dossier de réinscription : acceptation immédiate, niveau avancé d'un an, première section disponible (capacité 25). Les nouvelles inscriptions restent toujours à valider manuellement.",
     "editDossierAsAdmin": "Modifier le dossier (secrétariat)",
     "editDossierFinalizedHint": "Dossier finalisé — utilisez « Annuler la décision » pour le modifier.",
-    "adminEditedBadge": "Modifié par le secrétariat le {date}"
+    "adminEditedBadge": "Modifié par le secrétariat le {date}",
+    "cycleSaved": "Modifications enregistrées."
   },
   "documents": {
     "title": "Documents",

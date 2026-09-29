@@ -58,6 +58,8 @@ const cycleSchema = z.object({
 export type CycleFormState = {
   errors?: Record<string, string>;
   formError?: string;
+  /** Set by updateCycle on success so the form can confirm the save. */
+  saved?: boolean;
 };
 
 export async function createCycle(
@@ -188,7 +190,7 @@ export async function updateCycle(
   });
   revalidatePath("/admissions-admin/cycles");
   revalidatePath(`/admissions-admin/cycles/${cycleId}`);
-  return {};
+  return { saved: true };
 }
 
 /**

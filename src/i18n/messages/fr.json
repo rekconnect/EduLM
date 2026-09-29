@@ -1378,7 +1378,10 @@
     "yearFieldGenerateClasses": "Créer automatiquement les classes",
     "yearFieldGenerateClassesHint": "Une classe par niveau et par section (A à D) — les sections vides pourront être supprimées plus tard.",
     "yearGenerateClasses": "Générer les classes (A–D)",
-    "yearDeleteEmptySections": "Supprimer sections vides"
+    "yearDeleteEmptySections": "Supprimer sections vides",
+    "classFull": "complet",
+    "classSuggestionHint": "Suggestion automatique : {className} — avancement d'un niveau, première section disponible. Vous pouvez choisir une autre classe.",
+    "classSuggestionAllFull": "Toutes les sections de {level} sont complètes — choisissez manuellement (ou dépassez la capacité)."
   },
   "documents": {
     "title": "Documents",

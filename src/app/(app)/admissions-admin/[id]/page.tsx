@@ -270,13 +270,52 @@ export default async function AdmissionsAdminDetailPage({
       select: { id: true, label: true },
     });
 
-    const classes = targetYear
+    const classesRaw = targetYear
       ? await db.class.findMany({
           where: { academicYearId: targetYear.id },
           orderBy: [{ level: "asc" }, { section: "asc" }],
-          select: { id: true, name: true, level: true, section: true },
+          select: {
+            id: true,
+            name: true,
+            level: true,
+            section: true,
+            _count: { select: { enrollments: true } },
+          },
         })
       : [];
+    const classes = classesRaw.map((c) => ({
+      id: c.id,
+      name: c.name,
+      level: c.level,
+      section: c.section,
+      enrolled: c._count.enrollments,
+    }));
+
+    // ── Auto-suggested class (Raed 2026-09-29) ──
+    // Renewal: advance one level from the CURRENT active enrollment
+    // (CE1 → CE2); new inscription: the requested niveau. Fill sections in
+    // order (A, B, C, …), moving to the next once one reaches capacity.
+    // The admin keeps full manual override in the dropdown.
+    const CLASS_CAPACITY = 25; // future tenant setting
+    let suggestedLevel: string | null = null;
+    if (app.existingStudentId) {
+      const activeEnr = await db.enrollment.findFirst({
+        where: {
+          studentId: app.existingStudentId,
+          academicYear: { isActive: true },
+        },
+        select: { class: { select: { level: true } } },
+      });
+      const { nextLevel } = await import("@/lib/levels");
+      suggestedLevel = activeEnr ? nextLevel(activeEnr.class.level) : null;
+    } else {
+      suggestedLevel = app.niveau ?? app.requestedLevel ?? null;
+    }
+    const suggestedClass = suggestedLevel
+      ? classes.find(
+          (c) => c.level === suggestedLevel && c.enrolled < CLASS_CAPACITY,
+        ) ?? null
+      : null;
 
     const finalized = ["ACCEPTED", "DECLINED", "WAITLISTED"].includes(
       app.status,
@@ -522,7 +561,13 @@ export default async function AdmissionsAdminDetailPage({
                   pour pouvoir affecter cet élève.
                 </WarningBanner>
               ) : null}
-              <DecideForm applicationId={app.id} classes={classes} />
+              <DecideForm
+                applicationId={app.id}
+                classes={classes}
+                suggestedClassId={suggestedClass?.id ?? null}
+                suggestedLevel={suggestedLevel}
+                capacity={CLASS_CAPACITY}
+              />
               <div className="mt-4 border-t border-[color:var(--color-border-subtle)] pt-4">
                 <DossierStateSelect
                   applicationId={app.id}

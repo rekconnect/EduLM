@@ -1378,7 +1378,10 @@
     "yearFieldGenerateClasses": "Create the classes automatically",
     "yearFieldGenerateClassesHint": "One class per level and per section (A to D) — empty sections can be deleted later.",
     "yearGenerateClasses": "Generate classes (A–D)",
-    "yearDeleteEmptySections": "Delete empty sections"
+    "yearDeleteEmptySections": "Delete empty sections",
+    "classFull": "full",
+    "classSuggestionHint": "Automatic suggestion: {className} — advanced one level, first available section. You can pick another class.",
+    "classSuggestionAllFull": "All {level} sections are full — choose manually (or exceed capacity)."
   },
   "documents": {
     "title": "Documents",

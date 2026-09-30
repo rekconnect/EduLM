@@ -19,10 +19,9 @@ import { cn } from "@/lib/utils";
 import {
   ADMIN_MODULES,
   ACCESS_LEVELS,
-  type AdminModule,
   type AccessLevel,
   type ModuleGrants,
-} from "@/lib/permissions";
+} from "@/lib/permissions-shared";
 import { deleteAdminGrant, saveAdminGrant } from "./_actions";
 
 export type GrantRow = {

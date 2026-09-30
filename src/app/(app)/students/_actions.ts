@@ -384,7 +384,7 @@ export async function saveBusAssignments(
     bus_remarques: string;
   }>,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await requireModuleAccess("eleves", "write");
+  const { user } = await requireModuleAccess("services", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
   if (updates.length === 0) return { ok: true };
@@ -474,7 +474,7 @@ export async function registerBusStudent(
   period: string, // "<yearLabel>|T1/T2/T3"
   input: { studentId: string; as: boolean; rs: boolean },
 ): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await requireModuleAccess("eleves", "write");
+  const { user } = await requireModuleAccess("services", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
   if (!/^.+\|T[123]$/.test(period)) return { ok: false, error: "bad-period" };
@@ -550,7 +550,7 @@ export async function registerCantineStudent(input: {
   cantine: boolean;
   collation: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await requireModuleAccess("eleves", "write");
+  const { user } = await requireModuleAccess("services", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
   if (!input.cantine && !input.collation) {
@@ -608,7 +608,7 @@ export async function setCantineServices(input: {
   cantine: boolean;
   collation: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await requireModuleAccess("eleves", "write");
+  const { user } = await requireModuleAccess("services", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -676,7 +676,7 @@ export async function deleteBusAssignment(
   period: string,
   studentId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await requireModuleAccess("eleves", "full");
+  const { user } = await requireModuleAccess("services", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
   if (!/^.+\|T[123]$/.test(period)) return { ok: false, error: "bad-period" };

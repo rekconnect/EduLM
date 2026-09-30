@@ -1,5 +1,5 @@
 import type { Role } from "@prisma/client";
-import type { AdminModule, ModuleGrants } from "@/lib/permissions";
+import type { AdminModule, ModuleGrants } from "@/lib/permissions-shared";
 
 // Icon name keys — resolved to lucide components inside the client Sidebar.
 // (React components have non-serializable internals and can't cross the

@@ -14,6 +14,7 @@ export const ADMIN_MODULES = [
   "rapports",
   "formulaires",
   "admissions",
+  "communication",
 ] as const;
 
 export type AdminModule = (typeof ADMIN_MODULES)[number];
@@ -61,6 +62,11 @@ export const MODULE_META: Record<
     label: "Admissions, campagnes & années",
     description:
       "Dossiers d'admission, création de campagnes et d'années scolaires, classes par niveau.",
+  },
+  communication: {
+    label: "Communication",
+    description:
+      "Documents, annonces aux parents et messages reçus des familles.",
   },
 };
 

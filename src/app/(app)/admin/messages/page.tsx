@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Table, THead, TR, TH, TD } from "@/components/ui/table";
 import { FilterPill } from "@/components/ui/filter-pill";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +33,7 @@ export default async function AdminMessagesPage({
   searchParams: Promise<{ status?: string }>;
 }) {
   const { status } = await searchParams;
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("communication", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

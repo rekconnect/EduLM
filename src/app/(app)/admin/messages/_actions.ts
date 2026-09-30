@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db, unscopedDb } from "@/lib/db";
 import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { sendContactMessageEmail } from "@/lib/emails/notifications";
 
@@ -97,7 +98,7 @@ async function notifyAdminsOfContactMessage(
 }
 
 export async function markMessageRead(messageId: string) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("communication", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
@@ -111,7 +112,7 @@ export async function markMessageRead(messageId: string) {
 }
 
 export async function closeMessage(messageId: string) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("communication", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
@@ -126,7 +127,7 @@ export async function closeMessage(messageId: string) {
 }
 
 export async function reopenMessage(messageId: string) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("communication", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {

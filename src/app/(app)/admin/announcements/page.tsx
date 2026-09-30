@@ -4,11 +4,11 @@ import { PageHeader } from "@/components/shell/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { Table, THead, TR, TH, TD } from "@/components/ui/table";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 
 export default async function AnnouncementsAdminPage() {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("communication", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

@@ -1862,6 +1862,8 @@
     "moduleDesc_admissions": "Dossiers, campagnes, années scolaires",
     "levelHint_read": "consulter uniquement",
     "levelHint_write": "consulter + créer / modifier",
-    "levelHint_full": "tout, y compris supprimer et configurer"
+    "levelHint_full": "tout, y compris supprimer et configurer",
+    "module_communication": "Communication",
+    "moduleDesc_communication": "Documents, annonces, messages des familles"
   }
 }

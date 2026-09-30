@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { closeMessage, markMessageRead, reopenMessage } from "../_actions";
 
@@ -27,7 +27,7 @@ export default async function AdminMessageDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("communication", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

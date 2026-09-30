@@ -134,6 +134,11 @@ export function grantedNavSections(
       { label: l.admissions, href: "/admissions-admin", icon: "admissions" },
       { label: l.years, href: "/admin/years", icon: "years" },
     ],
+    communication: [
+      { label: l.documents, href: "/admin/documents", icon: "documents" },
+      { label: l.announcements, href: "/admin/announcements", icon: "announcements" },
+      { label: l.messages, href: "/admin/messages", icon: "messages" },
+    ],
   };
   const items: NavItem[] = [];
   for (const m of Object.keys(byModule) as AdminModule[]) {

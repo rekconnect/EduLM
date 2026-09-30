@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { uploadDocument, deleteFromStorage, isStorageConfigured } from "@/lib/storage";
 
@@ -31,7 +32,7 @@ export async function createDocument(
   _prev: DocumentFormState,
   formData: FormData,
 ): Promise<DocumentFormState> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("communication", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { formError: "no-tenant" };
 
@@ -121,7 +122,7 @@ export async function createDocument(
 }
 
 export async function deleteDocument(id: string) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("communication", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return;
 

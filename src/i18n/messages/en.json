@@ -1862,6 +1862,8 @@
     "moduleDesc_admissions": "Applications, campaigns, school years",
     "levelHint_read": "view only",
     "levelHint_write": "view + create / edit",
-    "levelHint_full": "everything, incl. delete and configure"
+    "levelHint_full": "everything, incl. delete and configure",
+    "module_communication": "Communication",
+    "moduleDesc_communication": "Documents, announcements, family messages"
   }
 }

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db, unscopedDb } from "@/lib/db";
 import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { sendAnnouncementEmail } from "@/lib/emails/notifications";
 
@@ -27,7 +28,7 @@ export async function createAnnouncement(
   _prev: AnnouncementFormState,
   formData: FormData,
 ): Promise<AnnouncementFormState> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("communication", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { formError: "no-tenant" };
 

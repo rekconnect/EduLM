@@ -1390,7 +1390,12 @@
     "editDossierFinalizedHint": "الملف نهائي — استخدم «التراجع عن القرار» لتعديله.",
     "adminEditedBadge": "عدّلته الأمانة بتاريخ {date}",
     "cycleSaved": "تم حفظ التعديلات.",
-    "returnToParent": "إعادة إلى ولي الأمر (مُقدَّم)"
+    "returnToParent": "إعادة إلى ولي الأمر (مُقدَّم)",
+    "typeAll": "كل الأنواع",
+    "typeRenewal": "إعادة التسجيل",
+    "typeFratrie": "إخوة (طفل جديد)",
+    "typeNewFamily": "عائلات جديدة",
+    "fratrieBadge": "إخوة"
   },
   "documents": {
     "title": "الوثائق",

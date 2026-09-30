@@ -90,6 +90,16 @@ function parseView(raw: string | undefined): View {
     : "active";
 }
 
+// Dossier kind — réinscription, fratrie (new child of a family already at
+// school: the submitting parent has linked students) or brand-new family.
+const APP_TYPES = ["renewal", "fratrie", "newFamily"] as const;
+type AppType = (typeof APP_TYPES)[number];
+
+function appTypeOf(a: { isRenewal: boolean; existingChildren: number }): AppType {
+  if (a.isRenewal) return "renewal";
+  return a.existingChildren > 0 ? "fratrie" : "newFamily";
+}
+
 export default async function AdmissionsAdminListPage({
   searchParams,
 }: {
@@ -99,9 +109,10 @@ export default async function AdmissionsAdminListPage({
     sort?: string;
     dir?: string;
     view?: string;
+    type?: string;
   }>;
 }) {
-  const { status, cycleId, sort, dir, view } = await searchParams;
+  const { status, cycleId, sort, dir, view, type } = await searchParams;
   const currentView: View = parseView(view);
   const user = await requireRole("SCHOOL_ADMIN");
   const tenantId = user.tenantId;
@@ -116,6 +127,11 @@ export default async function AdmissionsAdminListPage({
       ? (status as ApplicationStatus)
       : undefined;
     const cycleFilter = cycleId || undefined;
+    const typeFilter: AppType | undefined = (
+      APP_TYPES as readonly string[]
+    ).includes(type ?? "")
+      ? (type as AppType)
+      : undefined;
 
     const sortKey: SortKey = (SORTABLE_COLUMNS as readonly string[]).includes(
       sort ?? "",
@@ -197,6 +213,11 @@ export default async function AdmissionsAdminListPage({
 
     const newFamilyApps: AdminApp[] = [];
     const existingFamilyApps: AdminApp[] = [];
+    const typeCounts: Record<AppType, number> = {
+      renewal: 0,
+      fratrie: 0,
+      newFamily: 0,
+    };
 
     for (const a of apps) {
       const childCount = a.submittedBy.guardianProfile?.childLinks.length ?? 0;
@@ -218,6 +239,9 @@ export default async function AdmissionsAdminListPage({
         },
         existingChildren: childCount,
       };
+      const rowType = appTypeOf(row);
+      typeCounts[rowType]++;
+      if (typeFilter && rowType !== typeFilter) continue;
       if (childCount > 0) existingFamilyApps.push(row);
       else newFamilyApps.push(row);
     }
@@ -229,8 +253,18 @@ export default async function AdmissionsAdminListPage({
       sort: sortKey,
       dir: sortDir,
       view: viewParam,
+      type: typeFilter,
     };
     const filterPreserve: Record<string, string | undefined> = {
+      cycleId: preserve.cycleId,
+      sort: preserve.sort,
+      dir: preserve.dir,
+      view: preserve.view,
+      type: preserve.type,
+    };
+    // For the type pills: preserve everything except type itself.
+    const typePreserve: Record<string, string | undefined> = {
+      status: statusFilter,
       cycleId: preserve.cycleId,
       sort: preserve.sort,
       dir: preserve.dir,
@@ -242,10 +276,14 @@ export default async function AdmissionsAdminListPage({
       cycleId: cycleFilter,
       sort: sortKey,
       dir: sortDir,
+      type: typeFilter,
     };
 
-    // IDs the bulk toolbar / "select all" header treats as selectable.
-    const allVisibleIds = apps.map((a) => a.id);
+    // IDs the bulk toolbar / "select all" header treats as selectable —
+    // only the rows the current type filter leaves visible.
+    const allVisibleIds = [...newFamilyApps, ...existingFamilyApps].map(
+      (a) => a.id,
+    );
 
     return (
         <main className="mx-auto max-w-6xl space-y-6 px-6 py-10">
@@ -310,6 +348,32 @@ export default async function AdmissionsAdminListPage({
                 active={statusFilter === s}
               />
             ))}
+          </div>
+
+          {/* Type pills — réinscription / fratrie (nouvel enfant, famille
+              existante) / nouvelle famille. Counts follow the current
+              view + cycle + status filters. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <FilterPill
+              href={hrefWith(BASE, { ...typePreserve, type: undefined })}
+              label={t("typeAll")}
+              active={!typeFilter}
+            />
+            <FilterPill
+              href={hrefWith(BASE, { ...typePreserve, type: "renewal" })}
+              label={`${t("typeRenewal")} (${typeCounts.renewal})`}
+              active={typeFilter === "renewal"}
+            />
+            <FilterPill
+              href={hrefWith(BASE, { ...typePreserve, type: "fratrie" })}
+              label={`${t("typeFratrie")} (${typeCounts.fratrie})`}
+              active={typeFilter === "fratrie"}
+            />
+            <FilterPill
+              href={hrefWith(BASE, { ...typePreserve, type: "newFamily" })}
+              label={`${t("typeNewFamily")} (${typeCounts.newFamily})`}
+              active={typeFilter === "newFamily"}
+            />
           </div>
 
           {/* Bulk selection context wraps both groups, so the toolbar can
@@ -479,6 +543,11 @@ function ApplicationGroup({
                       <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--color-brand-50)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[color:var(--color-brand-700)]">
                         <RefreshCw className="size-2.5" aria-hidden />
                         {t("renewalBadge")}
+                      </span>
+                    ) : a.existingChildren > 0 ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--color-success-soft)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[color:var(--color-success-soft-fg)]">
+                        <Users className="size-2.5" aria-hidden />
+                        {t("fratrieBadge")}
                       </span>
                     ) : null}
                   </Link>

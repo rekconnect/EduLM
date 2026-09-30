@@ -11,7 +11,7 @@ import { SortableTH, type SortDir } from "@/components/ui/sortable-th";
 import { FilterPill } from "@/components/ui/filter-pill";
 import { UrlSelect } from "@/components/shell/year-picker";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { AppStatusBadge } from "@/app/(app)/parent/applications/_status-badge";
 import {
@@ -114,7 +114,7 @@ export default async function AdmissionsAdminListPage({
 }) {
   const { status, cycleId, sort, dir, view, type } = await searchParams;
   const currentView: View = parseView(view);
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

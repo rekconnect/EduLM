@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { getReport } from "@/lib/reports/registry";
 import { buildWorkbook } from "@/lib/reports/xlsx";

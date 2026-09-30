@@ -125,6 +125,7 @@ model Tenant {
   financeSummaries FinanceSummary[]
   payrollEmployees PayrollEmployee[]
   payslips         Payslip[]
+  adminGrants      AdminGrant[]
   attendanceRequests AttendanceRequest[]
   staffNotifications StaffNotification[]
   holidays           TenantHoliday[]
@@ -202,6 +203,29 @@ model User {
   inscriptionFormAuditEntries TenantConfigAuditLog[]
   payrollEmployee    PayrollEmployee?
   staffNotifications StaffNotification[]
+  issuedAdminGrants  AdminGrant[]      @relation("AdminGrantGranter")
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+// Fine-grained admin permissions for school personnel. A grant is keyed by
+// the school EMAIL — it can be created before the person's first Microsoft
+// (Entra) sign-in and resolves by email match at session time. It maps
+// module → access level ({ [module]: "read" | "write" | "full" }); the
+// module list lives in src/lib/permissions.ts. SCHOOL_ADMIN / SUPER_ADMIN
+// always have full access everywhere — grants never apply to them.
+model AdminGrant {
+  id              String   @id @default(cuid())
+  tenantId        String
+  email           String
+  modules         Json     @default("{}")
+  grantedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  grantedBy User?  @relation("AdminGrantGranter", fields: [grantedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, email])
   @@index([tenantId])

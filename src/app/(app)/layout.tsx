@@ -1,10 +1,14 @@
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Sidebar } from "@/components/shell/sidebar";
-import { navSectionsForRole } from "@/components/shell/nav-sections";
+import {
+  grantedNavSections,
+  navSectionsForRole,
+} from "@/components/shell/nav-sections";
 import { requireUser } from "@/lib/session";
 import { unscopedDb } from "@/lib/db";
 import { getStaffShellData } from "@/lib/staff-portal";
+import { getAdminAccess, type AdminAccess } from "@/lib/permissions";
 
 /**
  * Layout for every authenticated page. Persistent across navigations within
@@ -26,7 +30,7 @@ export default async function AppLayout({
   // The three per-navigation reads are independent — run them together
   // instead of serially (this layout renders on every authenticated page):
   // the mustChangePassword flag, the tenant brand/shell data, and nav labels.
-  const [acct, tenant, tNav, years, staffShell] = await Promise.all([
+  const [acct, tenant, tNav, years, staffShell, adminAccess] = await Promise.all([
     unscopedDb().user.findUnique({
       where: { id: user.id },
       select: { mustChangePassword: true },
@@ -48,6 +52,11 @@ export default async function AppLayout({
         })
       : Promise.resolve([] as { id: string; label: string; isActive: boolean }[]),
     getStaffShellData(user),
+    // Module grants (permissions console): only TEACHER/STAFF can carry
+    // them — admins see everything via their role branch already.
+    user.role === "TEACHER" || user.role === "STAFF"
+      ? getAdminAccess(user)
+      : Promise.resolve(null as AdminAccess | null),
   ]);
 
   // Force users flagged for a password reset (e.g. bulk-onboarded parents
@@ -56,7 +65,7 @@ export default async function AppLayout({
   // (app) group, so redirecting there does not loop.
   if (acct?.mustChangePassword) redirect("/change-password");
 
-  const sections = navSectionsForRole(user.role, {
+  const navLabels = {
     dashboard: tNav("dashboard"),
     admissions: tNav("admissions"),
     students: tNav("students"),
@@ -94,8 +103,22 @@ export default async function AppLayout({
     sectionConfig: tNav("sectionConfig"),
     sectionAccount: tNav("sectionAccount"),
     accounts: tNav("accounts"),
+    permissions: tNav("permissions"),
+    sectionGranted: tNav("sectionGranted"),
     sectionSuperAdmin: tNav("sectionSuperAdmin"),
-  });
+  };
+  let sections = navSectionsForRole(user.role, navLabels);
+  // Append the modules this TEACHER/STAFF was granted from the permissions
+  // console (dedup against the role's own links, e.g. /students for profs).
+  if (adminAccess && !adminAccess.all) {
+    const existing = new Set(
+      sections.flatMap((s) => s.items.map((i) => i.href)),
+    );
+    sections = [
+      ...sections,
+      ...grantedNavSections(adminAccess.grants, navLabels, existing),
+    ];
+  }
 
   // Decorate the nav with attendance-request state: hide "Team approvals" for
   // staff who supervise nobody, and badge the pending queues.

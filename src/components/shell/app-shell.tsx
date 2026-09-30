@@ -56,6 +56,8 @@ export async function AppShell({
     sectionConfig: tNav("sectionConfig"),
     sectionAccount: tNav("sectionAccount"),
     accounts: tNav("accounts"),
+    permissions: tNav("permissions"),
+    sectionGranted: tNav("sectionGranted"),
     sectionSuperAdmin: tNav("sectionSuperAdmin"),
   });
 

@@ -6,7 +6,7 @@ import { Card, CardBody } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -19,7 +19,7 @@ export default async function PayrollPage({
   searchParams: Promise<{ view?: string; q?: string; scope?: string }>;
 }) {
   const { view, q, scope } = await searchParams;
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

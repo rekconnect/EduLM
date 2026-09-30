@@ -10,7 +10,7 @@ import { InfirmerieList, type InfirmerieRow } from "./_list";
  * pass; others need an AdminGrant). Links to each fiche's Santé tab.
  */
 export default async function InfirmeriePage() {
-  return withModuleSession("infirmerie", "read", async (user) => {
+  return withModuleSession("infirmerie", "read", async () => {
     const students = await db.student.findMany({
       where: { enrollments: { some: { academicYear: { isActive: true } } } },
       select: {

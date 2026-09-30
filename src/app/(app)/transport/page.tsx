@@ -1,6 +1,6 @@
 import { ClipboardList, Bus, Users, List, Route } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
-import { withTenantSession } from "@/lib/session";
+import { withModuleSession } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import {
   saveBusAssignments,
@@ -35,17 +35,7 @@ export default async function TransportPage({
 }) {
   const { yearId, trim } = await searchParams;
 
-  return withTenantSession(async (user) => {
-    if (user.role !== "SCHOOL_ADMIN") {
-      return (
-        <main className="mx-auto max-w-3xl px-6 py-10">
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            Accès réservé aux administrateurs.
-          </p>
-        </main>
-      );
-    }
-
+  return withModuleSession("services", "read", async () => {
     const data = await loadBusRows({ yearId, trim });
     const saveForPeriod = saveBusAssignments.bind(null, data.period);
     const deleteForPeriod = deleteBusAssignment.bind(null, data.period);

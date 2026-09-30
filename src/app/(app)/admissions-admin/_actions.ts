@@ -486,7 +486,7 @@ export async function updateCycleFieldOrder(
   cycleId: string,
   order: Partial<Record<WizardStep, string[]>>,
 ): Promise<{ error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { error: "no-tenant" };
 
@@ -535,7 +535,7 @@ export async function copyCycleConfig(
   fromCycleId: string,
   toCycleId: string,
 ): Promise<{ error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { error: "no-tenant" };
   if (fromCycleId === toCycleId) return { error: "same-cycle" };
@@ -862,7 +862,7 @@ export async function setApplicationArchived(
   applicationId: string,
   archived: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 

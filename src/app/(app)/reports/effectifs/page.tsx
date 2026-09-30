@@ -6,7 +6,7 @@ import { ReportHeader, StatTiles, BarList, toRows } from "../_ui";
 import { ExportCsvButton } from "../_export";
 
 export default async function EffectifsReport() {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("rapports", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

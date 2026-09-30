@@ -12,7 +12,7 @@ const pct = (n: number, total: number) =>
   total > 0 ? `${Math.round((n / total) * 100)}%` : "—";
 
 export default async function ServicesReport() {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("rapports", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

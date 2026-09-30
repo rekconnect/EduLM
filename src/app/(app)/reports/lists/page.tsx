@@ -5,7 +5,7 @@ import { reportGroups } from "@/lib/reports/registry";
 import { ReportHeader } from "../_ui";
 
 export default async function ReportListsPage() {
-  await requireRole("SCHOOL_ADMIN");
+  await requireModuleAccess("rapports", "read");
   const groups = reportGroups();
 
   return (

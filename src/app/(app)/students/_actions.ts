@@ -202,7 +202,7 @@ export async function saveStudentFicheFields(
   studentId: string,
   values: Record<string, string>,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -240,7 +240,7 @@ export async function saveStudentRegistrationYear(
   year: string,
   fields: Record<string, string>,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -324,7 +324,7 @@ export async function saveAuthorizedPersons(
   userId: string,
   persons: Array<{ relation: string; name: string; phone: string; emergency: boolean }>,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -384,7 +384,7 @@ export async function saveBusAssignments(
     bus_remarques: string;
   }>,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
   if (updates.length === 0) return { ok: true };
@@ -474,7 +474,7 @@ export async function registerBusStudent(
   period: string, // "<yearLabel>|T1/T2/T3"
   input: { studentId: string; as: boolean; rs: boolean },
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
   if (!/^.+\|T[123]$/.test(period)) return { ok: false, error: "bad-period" };
@@ -550,7 +550,7 @@ export async function registerCantineStudent(input: {
   cantine: boolean;
   collation: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
   if (!input.cantine && !input.collation) {
@@ -608,7 +608,7 @@ export async function setCantineServices(input: {
   cantine: boolean;
   collation: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -721,7 +721,7 @@ export async function saveStudentMedicalRecord(
   studentId: string,
   values: Record<string, string>,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -786,7 +786,7 @@ export async function updateStudentCustomAnswers(
   studentId: string,
   formData: FormData,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 

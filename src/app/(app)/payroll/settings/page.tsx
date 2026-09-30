@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody } from "@/components/ui/card";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { SettingsForm, type CategoryRow } from "./_settings-form";
 
@@ -10,7 +10,7 @@ const numStr = (v: number | null | undefined) => (v == null ? "" : String(v));
 const centsStr = (v: bigint) => (v === 0n ? "" : String(Number(v) / 100));
 
 export default async function PayrollSettingsPage() {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

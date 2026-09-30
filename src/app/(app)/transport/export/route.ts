@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { buildWorkbook } from "@/lib/reports/xlsx";
 import {
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 /** Styled .xlsx of the full bus-assignment table (sorted bus matin → quartier). */
 export async function GET(request: Request) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("services", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return new NextResponse("No tenant", { status: 400 });
 

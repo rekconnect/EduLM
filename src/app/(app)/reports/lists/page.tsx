@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { FileSpreadsheet, ArrowRight } from "lucide-react";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { reportGroups } from "@/lib/reports/registry";
 import { ReportHeader } from "../_ui";
 

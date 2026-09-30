@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody } from "@/components/ui/card";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { InvoiceForm } from "./_form";
 
@@ -15,7 +15,7 @@ function defaultInvoiceNumber(): string {
 }
 
 export default async function NewInvoicePage() {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("facturation", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
   const t = await getTranslations("billing");

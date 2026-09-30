@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { InscriptionTabsForm } from "./_tabs-form";
 import { loadInscriptionTabsConfig } from "./_actions";
 
@@ -25,7 +25,7 @@ import { loadInscriptionTabsConfig } from "./_actions";
  *      fields and add show-if rules directly on the form.
  */
 export default async function InscriptionConfigPage() {
-  await requireRole("SCHOOL_ADMIN");
+  await requireModuleAccess("formulaires", "read");
   const [t, tabsConfig] = await Promise.all([
     getTranslations("inscriptionConfig"),
     loadInscriptionTabsConfig(),

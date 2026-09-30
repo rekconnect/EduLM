@@ -35,6 +35,7 @@ import {
   ClipboardCheck,
   CalendarOff,
   KeyRound,
+  ShieldCheck,
   Search,
   PanelLeftClose,
   PanelLeftOpen,
@@ -83,6 +84,7 @@ const ICONS: Record<IconName, LucideIcon> = {
   approvals: ClipboardCheck,
   holidays: CalendarOff,
   accounts: KeyRound,
+  permissions: ShieldCheck,
 };
 void FileText;
 

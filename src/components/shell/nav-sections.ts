@@ -1,4 +1,5 @@
 import type { Role } from "@prisma/client";
+import type { AdminModule, ModuleGrants } from "@/lib/permissions";
 
 // Icon name keys — resolved to lucide components inside the client Sidebar.
 // (React components have non-serializable internals and can't cross the
@@ -29,7 +30,8 @@ export type IconName =
   | "requests"
   | "approvals"
   | "holidays"
-  | "accounts";
+  | "accounts"
+  | "permissions";
 
 export type NavItem = {
   label: string;
@@ -82,8 +84,66 @@ type Labels = {
   sectionConfig: string;
   sectionAccount: string;
   accounts: string;
+  permissions: string;
+  sectionGranted: string;
   sectionSuperAdmin: string;
 };
+
+/**
+ * Nav entries each permission module unlocks. Appended (as an
+ * "Administration" section) to a TEACHER/STAFF nav when the person holds
+ * AdminGrant modules — SCHOOL_ADMIN never needs it (their switch branch
+ * already shows everything). `existingHrefs` deduplicates links the role's
+ * base nav already carries (e.g. /students for teachers).
+ */
+export function grantedNavSections(
+  grants: ModuleGrants,
+  l: Labels,
+  existingHrefs: Set<string>,
+): NavSection[] {
+  const byModule: Record<AdminModule, NavItem[]> = {
+    eleves: [
+      { label: l.students, href: "/students", icon: "students" },
+      { label: l.parents, href: "/admin/parents", icon: "parents" },
+      { label: l.classes, href: "/classes", icon: "classes" },
+    ],
+    facturation: [
+      { label: l.billing, href: "/billing", icon: "billing" },
+      { label: l.finance, href: "/finance", icon: "finance" },
+    ],
+    paie: [
+      { label: l.payroll, href: "/payroll", icon: "payroll" },
+      { label: l.staffRequests, href: "/payroll/requests", icon: "requests" },
+    ],
+    services: [
+      { label: l.transport, href: "/transport", icon: "transport" },
+      { label: l.cantine, href: "/cantine", icon: "cantine" },
+    ],
+    infirmerie: [
+      { label: l.infirmerie, href: "/infirmerie", icon: "infirmerie" },
+    ],
+    rapports: [{ label: l.reports, href: "/reports", icon: "reports" }],
+    formulaires: [
+      {
+        label: l.inscriptionForm,
+        href: "/admin/inscription-config",
+        icon: "inscriptionForm",
+      },
+    ],
+    admissions: [
+      { label: l.admissions, href: "/admissions-admin", icon: "admissions" },
+      { label: l.years, href: "/admin/years", icon: "years" },
+    ],
+  };
+  const items: NavItem[] = [];
+  for (const m of Object.keys(byModule) as AdminModule[]) {
+    if (!grants[m]) continue;
+    for (const it of byModule[m]) {
+      if (!existingHrefs.has(it.href)) items.push(it);
+    }
+  }
+  return items.length ? [{ title: l.sectionGranted, items }] : [];
+}
 
 export function navSectionsForRole(role: Role, l: Labels): NavSection[] {
   switch (role) {
@@ -138,6 +198,7 @@ export function navSectionsForRole(role: Role, l: Labels): NavSection[] {
           title: l.sectionConfig,
           items: [
             { label: l.accounts, href: "/admin/accounts", icon: "accounts" },
+            { label: l.permissions, href: "/admin/permissions", icon: "permissions" },
             { label: l.years, href: "/admin/years", icon: "years" },
             { label: l.holidays, href: "/admin/holidays", icon: "holidays" },
             {

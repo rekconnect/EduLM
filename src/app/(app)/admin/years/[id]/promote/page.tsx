@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/shell/page-header";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { nextLevel } from "@/lib/levels";
 import { PromoteClient } from "./_client";
@@ -12,7 +12,7 @@ export default async function PromotePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

@@ -184,7 +184,7 @@ export async function updateBusCircuit(
 
 /** Remove a circuit row. */
 export async function deleteBusCircuit(id: string): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("services", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
   return runWithTenant({ tenantId, slug: null }, async () => {

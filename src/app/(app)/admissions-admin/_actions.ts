@@ -1000,7 +1000,7 @@ export async function bulkSetApplicationsArchived(
   ids: string[],
   archived: boolean,
 ): Promise<BulkResult> {
-  return withParents(ids, async () => {
+  return withParents(ids, "write", async () => {
     const r = await db.application.updateMany({
       where: { id: { in: ids } },
       data: {
@@ -1018,7 +1018,7 @@ export async function bulkSetApplicationsArchived(
 export async function bulkSoftDeleteApplications(
   ids: string[],
 ): Promise<BulkResult> {
-  return withParents(ids, async () => {
+  return withParents(ids, "write", async () => {
     const r = await db.application.updateMany({
       where: { id: { in: ids }, resultingStudentId: null },
       data: { deletedAt: new Date() },

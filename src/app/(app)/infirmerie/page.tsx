@@ -1,25 +1,16 @@
 import { PageHeader } from "@/components/shell/page-header";
 import { db } from "@/lib/db";
-import { withTenantSession } from "@/lib/session";
+import { withModuleSession } from "@/lib/permissions";
 import { InfirmerieList, type InfirmerieRow } from "./_list";
 
 /**
  * Infirmary dashboard: every active-year student with their medical alerts
  * (allergies, chronic conditions, sport exemptions) at a glance, plus visit
- * counts. Sensitive — SCHOOL_ADMIN only. Links to each fiche's Santé tab.
+ * counts. Sensitive — guarded by the "infirmerie" module (admins always
+ * pass; others need an AdminGrant). Links to each fiche's Santé tab.
  */
 export default async function InfirmeriePage() {
-  return withTenantSession(async (user) => {
-    if (user.role !== "SCHOOL_ADMIN") {
-      return (
-        <main className="mx-auto max-w-3xl px-6 py-10">
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            Accès réservé aux administrateurs.
-          </p>
-        </main>
-      );
-    }
-
+  return withModuleSession("infirmerie", "read", async (user) => {
     const students = await db.student.findMany({
       where: { enrollments: { some: { academicYear: { isActive: true } } } },
       select: {

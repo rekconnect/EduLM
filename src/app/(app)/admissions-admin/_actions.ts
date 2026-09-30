@@ -896,7 +896,7 @@ export async function setApplicationArchived(
 export async function softDeleteApplication(
   applicationId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -926,7 +926,7 @@ export async function softDeleteApplication(
 export async function restoreApplication(
   applicationId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -958,7 +958,7 @@ export async function restoreApplication(
 export async function permanentlyDeleteApplication(
   applicationId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -983,11 +983,11 @@ export async function permanentlyDeleteApplication(
 
 type BulkResult = { ok: boolean; processed: number; skipped: number };
 
-async function withParents<T>(ids: string[], fn: (tenantId: string) => Promise<T>): Promise<T | { ok: false; processed: 0; skipped: 0 }> {
+async function withParents<T>(ids: string[], min: AccessLevel, fn: (tenantId: string) => Promise<T>): Promise<T | { ok: false; processed: 0; skipped: 0 }> {
   if (ids.length === 0) {
     return { ok: false, processed: 0, skipped: 0 } as unknown as T;
   }
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", min);
   const tenantId = user.tenantId;
   if (!tenantId) {
     return { ok: false, processed: 0, skipped: 0 } as unknown as T;

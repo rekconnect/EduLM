@@ -14,7 +14,7 @@ import { runWithTenant } from "@/lib/tenant-context";
 export type CycleOption = { id: string; label: string; targetYearLabel: string };
 
 export async function listCyclesForReports(): Promise<CycleOption[]> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("rapports", "read");
   if (!user.tenantId) return [];
   return runWithTenant({ tenantId: user.tenantId, slug: null }, () =>
     db.admissionCycle.findMany({
@@ -41,7 +41,7 @@ export type TransportRow = {
 export async function transportReport(
   cycleId: string | null,
 ): Promise<TransportRow[]> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("rapports", "read");
   if (!user.tenantId) return [];
   return runWithTenant({ tenantId: user.tenantId, slug: null }, async () => {
     const apps = await db.application.findMany({
@@ -102,7 +102,7 @@ export type FinanceRow = {
 export async function financeReport(
   cycleId: string | null,
 ): Promise<FinanceRow[]> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("rapports", "read");
   if (!user.tenantId) return [];
   return runWithTenant({ tenantId: user.tenantId, slug: null }, async () => {
     const apps = await db.application.findMany({
@@ -168,7 +168,7 @@ export type PedagogiqueRow = {
 export async function pedagogiqueReport(
   cycleId: string | null,
 ): Promise<PedagogiqueRow[]> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("rapports", "read");
   if (!user.tenantId) return [];
   return runWithTenant({ tenantId: user.tenantId, slug: null }, async () => {
     const apps = await db.application.findMany({
@@ -242,7 +242,7 @@ export type NationaliteRow = {
 export async function nationalitesReport(
   cycleId: string | null,
 ): Promise<NationaliteRow[]> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("rapports", "read");
   if (!user.tenantId) return [];
   return runWithTenant({ tenantId: user.tenantId, slug: null }, async () => {
     const apps = await db.application.findMany({

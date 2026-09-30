@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 
 const BUS_ATT_STATUSES = [
@@ -23,7 +23,7 @@ export async function setBusAttendance(input: {
   date: string; // "YYYY-MM-DD"
   status: string; // one of BUS_ATT_STATUSES or "" to clear
 }): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("services", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 

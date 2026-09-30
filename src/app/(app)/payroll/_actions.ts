@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { decimalStringToCents } from "@/lib/money";
 
@@ -156,7 +156,7 @@ async function validSupervisorId(supervisorId: string | null, selfId: string | n
 }
 
 export async function createEmployee(_prev: FormState, formData: FormData): Promise<FormState> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { formError: "Aucun établissement" };
   const parsed = employeeSchema.safeParse(empDataFrom(formData));
@@ -191,7 +191,7 @@ export async function updateEmployee(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { formError: "Aucun établissement" };
   const parsed = employeeSchema.safeParse(empDataFrom(formData));
@@ -213,7 +213,7 @@ export async function updateEmployee(
 }
 
 export async function deleteEmployee(id: string) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
@@ -260,7 +260,7 @@ function componentWriteData(formData: FormData) {
 }
 
 export async function createComponent(employeeId: string, formData: FormData) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   const data = componentWriteData(formData);
@@ -280,7 +280,7 @@ export async function createComponent(employeeId: string, formData: FormData) {
 }
 
 export async function updateComponent(id: string, employeeId: string, formData: FormData) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   const data = componentWriteData(formData);
@@ -292,7 +292,7 @@ export async function updateComponent(id: string, employeeId: string, formData: 
 }
 
 export async function deleteComponent(id: string, employeeId: string) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
@@ -338,7 +338,7 @@ function payslipWriteData(formData: FormData) {
 }
 
 export async function createPayslip(employeeId: string, formData: FormData) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   const data = payslipWriteData(formData);
@@ -352,7 +352,7 @@ export async function createPayslip(employeeId: string, formData: FormData) {
 }
 
 export async function updatePayslip(id: string, employeeId: string, formData: FormData) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   const data = payslipWriteData(formData);
@@ -364,7 +364,7 @@ export async function updatePayslip(id: string, employeeId: string, formData: Fo
 }
 
 export async function deletePayslip(id: string, employeeId: string) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {

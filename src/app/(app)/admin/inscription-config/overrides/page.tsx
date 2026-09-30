@@ -3,7 +3,7 @@ import { ArrowLeft, History, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { unscopedDb } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import {
   parseTenantInscriptionFormConfig,
   type FieldOverride,
@@ -30,7 +30,7 @@ import { ResetOverrideButton } from "./_reset-button";
  * direct children when fetched outside runWithTenant.
  */
 export default async function InscriptionConfigOverridesPage() {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("formulaires", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

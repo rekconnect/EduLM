@@ -1185,7 +1185,6 @@ export async function saveTransportTab(
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
-  const { parseTransport } = await import("@/lib/dossier-content");
   const { isMaternelleNiveau } = await import("@/lib/pedagogique");
 
   return runWithTenant({ tenantId, slug: null }, async () => {
@@ -1208,33 +1207,25 @@ export async function saveTransportTab(
 
     // Maternelle (PS/MS/GS) → collation obligatoire: force Oui so it neither
     // blocks completion nor can be saved as Non.
-    const appNiveau = await db.application.findUnique({
+    const appRow = await db.application.findUnique({
       where: { id: applicationId },
-      select: { niveau: true },
+      select: { niveau: true, existingStudentId: true },
     });
-    if (isMaternelleNiveau(appNiveau?.niveau)) out.collations = "yes";
+    if (isMaternelleNiveau(appRow?.niveau)) out.collations = "yes";
 
-    const data = parseTransport(out);
-
-    // Phase 4: completion respects tenant per-field overrides.
-    const tenantFormConfig = await loadInscriptionFormConfig(tenantId);
-    const need = (key: string) =>
-      isFieldRequiredEffective(key, tenantFormConfig);
-    let complete = true;
-    if (need("transport.mode.aller") && !data.modeAller) complete = false;
-    if (complete && need("transport.mode.retour") && !data.modeRetour)
-      complete = false;
-    if (complete && data.hasAlternateAddress) {
-      if (need("transport.altAddress.caza") && !data.altCaza) complete = false;
-      if (complete && need("transport.altAddress.village") && !data.altVillage)
-        complete = false;
-      if (complete && need("transport.altAddress.street") && !data.altStreet)
-        complete = false;
-    }
-    if (complete && need("transport.restauration.collation") &&
-        data.collation === null) complete = false;
-    if (complete && need("transport.restauration.cantine") &&
-        data.cantine === null) complete = false;
+    // Completeness is 100% CONFIG-DRIVEN (unification rule): the same
+    // /settings "Services" config that renders this tab decides "rempli".
+    // showIf-hidden fields (Aller/Retour when autocar = Non, the transport
+    // address when adresse_diff = Non) are never counted as missing.
+    const tenantRow = await unscopedDb().tenant.findUnique({
+      where: { id: tenantId },
+      select: { studentFieldsConfig: true },
+    });
+    const entityCfg = parseEntityFieldsConfig(tenantRow?.studentFieldsConfig);
+    const complete =
+      missingRequiredOnForm(entityCfg, ["Services"], out, {
+        renewal: appRow?.existingStudentId != null,
+      }).length === 0;
 
     await db.application.update({
       where: { id: applicationId },

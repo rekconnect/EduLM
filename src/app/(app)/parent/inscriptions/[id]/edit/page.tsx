@@ -710,15 +710,31 @@ export default async function DossierEditPage({
               const v = svc[f.key];
               if (typeof v === "string") transportInitial[f.id] = v;
             }
+            // Same authority as the saved badge: the Services entity-field
+            // config (key-keyed answers — showIf-hidden fields never count).
+            const missing = missingRequiredOnForm(
+              transportConfig,
+              ["Services"],
+              svc,
+              { renewal: isRenewal },
+            );
             return (
-              <DossierTabTransport
-                applicationId={app.id}
-                config={transportConfig}
-                initial={transportInitial}
-                establishments={establishmentsForRenderer}
-                disabled={!servicesEditable}
-                renewal={isRenewal}
-              />
+              <>
+                {missing.length > 0 ? (
+                  <div className="mb-4 rounded-lg border border-[color:var(--color-warning)]/40 bg-[color:var(--color-warning-soft)] px-4 py-3 text-sm text-[color:var(--color-warning-soft-fg)]">
+                    <p className="font-medium">{tDossier("missingRequiredIntro")}</p>
+                    <p className="mt-1">{missing.join(" · ")}</p>
+                  </div>
+                ) : null}
+                <DossierTabTransport
+                  applicationId={app.id}
+                  config={transportConfig}
+                  initial={transportInitial}
+                  establishments={establishmentsForRenderer}
+                  disabled={!servicesEditable}
+                  renewal={isRenewal}
+                />
+              </>
             );
           })() : null}
 

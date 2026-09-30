@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 
 const REPORTS = [
   { key: "transport", icon: Bus, href: "/admin/reports/transport" },

@@ -11,7 +11,7 @@ import { FilterPill } from "@/components/ui/filter-pill";
 import { Pagination } from "@/components/ui/pagination";
 import { YearPicker, UrlSelect } from "@/components/shell/year-picker";
 import { db } from "@/lib/db";
-import { withTenantSession } from "@/lib/session";
+import { withModuleSession } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 const BASE = "/students";
@@ -84,7 +84,7 @@ export default async function StudentsPage({
     page: pageParam,
   } = await searchParams;
 
-  return withTenantSession(async (user) => {
+  return withModuleSession("eleves", "read", async (user) => {
     const t = await getTranslations("students");
     const query = q.trim();
 

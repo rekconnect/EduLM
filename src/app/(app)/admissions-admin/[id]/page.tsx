@@ -15,7 +15,7 @@ import {
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { db, unscopedDb } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { cn } from "@/lib/utils";
 import { parseFieldConfig } from "@/lib/admission-fields";
@@ -159,7 +159,7 @@ export default async function AdmissionsAdminDetailPage({
   const { id } = await params;
   const { tab } = await searchParams;
   const currentTab = parseTab(tab);
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

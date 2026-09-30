@@ -313,14 +313,10 @@ export function serviceAnswersFromTransport(
   };
 }
 
-export function isTransportComplete(d: TransportData): boolean {
-  if (!d.modeAller || !d.modeRetour) return false;
-  if (d.hasAlternateAddress) {
-    if (!d.altCaza || !d.altVillage || !d.altStreet) return false;
-  }
-  if (d.collation === null || d.cantine === null) return false;
-  return true;
-}
+// Transport completeness is CONFIG-DRIVEN: saveTransportTab judges the tab
+// with missingRequiredOnForm over the "Services" entity-field category (the
+// same config that renders it), so showIf-hidden fields never block. The old
+// hardcoded isTransportComplete rule was removed with the unification pass.
 
 // ── Santé ──────────────────────────────────────────────
 // Stored under Application.dossierAnswers.sante. Hidden by default for

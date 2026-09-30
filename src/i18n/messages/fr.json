@@ -1390,7 +1390,12 @@
     "editDossierFinalizedHint": "Dossier finalisé — utilisez « Annuler la décision » pour le modifier.",
     "adminEditedBadge": "Modifié par le secrétariat le {date}",
     "cycleSaved": "Modifications enregistrées.",
-    "returnToParent": "Renvoyer au parent (Soumis)"
+    "returnToParent": "Renvoyer au parent (Soumis)",
+    "typeAll": "Tous les types",
+    "typeRenewal": "Réinscriptions",
+    "typeFratrie": "Fratrie (nouvel enfant)",
+    "typeNewFamily": "Nouvelles familles",
+    "fratrieBadge": "Fratrie"
   },
   "documents": {
     "title": "Documents",

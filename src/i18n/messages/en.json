@@ -1390,7 +1390,12 @@
     "editDossierFinalizedHint": "Dossier finalized — use 'Undo the decision' to modify it.",
     "adminEditedBadge": "Edited by the secretariat on {date}",
     "cycleSaved": "Changes saved.",
-    "returnToParent": "Return to the parent (Submitted)"
+    "returnToParent": "Return to the parent (Submitted)",
+    "typeAll": "All types",
+    "typeRenewal": "Re-enrolments",
+    "typeFratrie": "Sibling (new child)",
+    "typeNewFamily": "New families",
+    "fratrieBadge": "Sibling"
   },
   "documents": {
     "title": "Documents",

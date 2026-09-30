@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { decimalStringToCents } from "@/lib/money";
 
@@ -14,7 +14,7 @@ const num = (v: FormDataEntryValue | null | undefined): number | null => {
 };
 
 export async function saveSettings(_prev: FormState, formData: FormData): Promise<FormState> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { error: "Aucun établissement" };
 

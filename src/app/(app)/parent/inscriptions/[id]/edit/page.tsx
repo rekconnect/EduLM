@@ -42,7 +42,9 @@ import { ResponsableFooter } from "./_section-responsable-footer";
 import {
   parseScolarite,
   parseTransport,
+  serviceAnswersFromRecord,
   serviceAnswersFromTransport,
+  SERVICE_ANSWER_KEYS,
 } from "@/lib/dossier-content";
 import { parsePedagogique } from "@/lib/pedagogique";
 import {
@@ -469,6 +471,28 @@ export default async function DossierEditPage({
       ? { ...tabsConfig, transport: false }
       : tabsConfig;
 
+    // Transport prefill fallback (renewals): a draft created before transport
+    // seeding has no dossierAnswers.transport although the student's stored
+    // registration knows last year's answers — surface those so the parent
+    // reviews and saves instead of re-typing what the school already knows.
+    let studentServiceAnswers: Record<string, string> | null = null;
+    if (isRenewal && app.existingStudentId) {
+      const blob =
+        app.dossierAnswers && typeof app.dossierAnswers === "object"
+          ? (app.dossierAnswers as Record<string, unknown>)
+          : {};
+      if (!blob.transport) {
+        const st = await db.student.findUnique({
+          where: { id: app.existingStudentId },
+          select: { customAnswers: true },
+        });
+        const fromStudent = serviceAnswersFromRecord(
+          (st?.customAnswers ?? {}) as Record<string, unknown>,
+        );
+        if (Object.keys(fromStudent).length) studentServiceAnswers = fromStudent;
+      }
+    }
+
     // Dars-style child code = family code + next sibling index (shown so the
     // parent sees the same reference the school uses).
     const inscFamily = guardian?.family ?? null;
@@ -698,13 +722,13 @@ export default async function DossierEditPage({
             const isServiceShape =
               !!stored &&
               typeof stored === "object" &&
-              ("transport_aller" in stored ||
-                "transport_retour" in stored ||
-                "collations" in stored ||
-                "autocar" in stored);
+              SERVICE_ANSWER_KEYS.some((k) => k in stored);
             const svc = isServiceShape
               ? (stored as Record<string, string>)
-              : serviceAnswersFromTransport(parseTransport(stored));
+              : stored
+                ? serviceAnswersFromTransport(parseTransport(stored))
+                : (studentServiceAnswers ??
+                  serviceAnswersFromTransport(parseTransport(stored)));
             const transportInitial: Record<string, string> = {};
             for (const f of transportConfig.fields) {
               const v = svc[f.key];

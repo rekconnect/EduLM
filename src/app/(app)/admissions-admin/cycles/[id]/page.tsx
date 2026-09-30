@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { ArrowLeft, FileText, HelpCircle, Info } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { parseFieldConfig } from "@/lib/admission-fields";
 import { centsToDecimalString } from "@/lib/money";
@@ -38,7 +38,7 @@ export default async function CycleEditPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

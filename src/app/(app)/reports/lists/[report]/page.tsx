@@ -38,7 +38,7 @@ export default async function ReportDetailPage({
   const def = getReport(reportId);
   if (!def) notFound();
 
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("rapports", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

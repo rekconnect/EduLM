@@ -20,7 +20,7 @@ const relRank = (r: string | null) =>
   r === "pere" ? 0 : r === "mere" ? 1 : 2;
 
 export default async function FamillesReport() {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("rapports", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

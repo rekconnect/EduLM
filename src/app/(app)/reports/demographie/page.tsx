@@ -15,7 +15,7 @@ function str(v: unknown): string {
 }
 
 export default async function DemographieReport() {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("rapports", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

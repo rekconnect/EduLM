@@ -1,13 +1,13 @@
 import { getTranslations } from "next-intl/server";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody } from "@/components/ui/card";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { loadStudentCreateConfig } from "../../settings/_actions";
 import { createStudent } from "../_actions";
 import { StudentForm } from "../_form";
 
 export default async function NewStudentPage() {
-  await requireRole(["SCHOOL_ADMIN", "TEACHER"]);
+  await requireModuleAccess("eleves", "write");
   const t = await getTranslations("students");
   const tCommon = await getTranslations("common");
   const config = await loadStudentCreateConfig();

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db, unscopedDb } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess, type AccessLevel } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { decimalStringToCents } from "@/lib/money";
 import { sendApplicationDecidedEmail } from "@/lib/emails/notifications";
@@ -23,7 +23,7 @@ export async function setDossierState(
   applicationId: string,
   state: string,
 ): Promise<{ ok: boolean }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false };
   if (!(DOSSIER_STATES as readonly string[]).includes(state)) return { ok: false };
@@ -66,7 +66,7 @@ export async function createCycle(
   _prev: CycleFormState,
   formData: FormData,
 ): Promise<CycleFormState> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { formError: "no-tenant" };
 
@@ -139,7 +139,7 @@ export async function updateCycle(
   _prev: CycleFormState,
   formData: FormData,
 ): Promise<CycleFormState> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { formError: "no-tenant" };
 
@@ -204,7 +204,7 @@ export async function updateCycle(
 export async function deleteCycle(
   cycleId: string,
 ): Promise<{ ok: boolean; error?: string; producedStudentCount?: number }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 

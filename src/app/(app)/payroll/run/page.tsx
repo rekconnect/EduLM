@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody } from "@/components/ui/card";
 import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { formatMoney } from "@/lib/money";
 import { computeMonthlyPayslips } from "@/lib/payroll-run";
@@ -18,7 +18,7 @@ export default async function PayrollRunPage({
   searchParams: Promise<{ year?: string; month?: string }>;
 }) {
   const sp = await searchParams;
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

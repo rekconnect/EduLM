@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/shell/page-header";
-import { withTenantSession } from "@/lib/session";
+import { withModuleSession } from "@/lib/permissions";
 import { registerCantineStudent, setCantineServices } from "../students/_actions";
 import { ServicesList } from "./_list";
 import { CantineRegister } from "./_register";
@@ -12,17 +12,7 @@ import { loadCantineRows } from "./_data";
  * Excel + PDF exports.
  */
 export default async function CantinePage() {
-  return withTenantSession(async (user) => {
-    if (user.role !== "SCHOOL_ADMIN") {
-      return (
-        <main className="mx-auto max-w-3xl px-6 py-10">
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            Accès réservé aux administrateurs.
-          </p>
-        </main>
-      );
-    }
-
+  return withModuleSession("services", "read", async () => {
     const { rows, yearLabel, candidates } = await loadCantineRows();
 
     return (

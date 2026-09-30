@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { unscopedDb } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { DOSSIER_TABS, parseTabsConfig } from "@/lib/dossier-tabs";
 
 const tabsConfigSchema = z.object({
@@ -29,7 +29,7 @@ const tabsConfigSchema = z.object({
 export async function updateInscriptionTabsConfig(
   formData: FormData,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("formulaires", "write");
   if (!user.tenantId) return { ok: false, error: "no-tenant" };
 
   const raw: Record<string, boolean> = {};
@@ -57,7 +57,7 @@ export async function updateInscriptionTabsConfig(
  * anything yet.
  */
 export async function loadInscriptionTabsConfig() {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("formulaires", "read");
   if (!user.tenantId) return parseTabsConfig(null);
 
   const tenant = await unscopedDb().tenant.findUnique({

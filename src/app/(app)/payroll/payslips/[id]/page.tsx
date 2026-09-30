@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { db, unscopedDb } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { PayslipDocument, type PayslipData } from "@/components/payslip/payslip-document";
 import { PrintButton } from "@/components/payslip/print-button";
@@ -10,7 +10,7 @@ import type { PayslipBreakdown } from "@/lib/payroll-run";
 
 export default async function AdminPayslipDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

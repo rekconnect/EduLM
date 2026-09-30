@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody } from "@/components/ui/card";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { createClass } from "../_actions";
 import { ClassForm } from "../_form";
@@ -13,7 +13,7 @@ export default async function NewClassPage({
   searchParams: Promise<{ yearId?: string }>;
 }) {
   const { yearId: preselectedYearId } = await searchParams;
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

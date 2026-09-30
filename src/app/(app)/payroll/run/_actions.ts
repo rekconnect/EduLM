@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { computeMonthlyPayslips } from "@/lib/payroll-run";
 import type { Prisma } from "@prisma/client";
@@ -13,7 +13,7 @@ import type { Prisma } from "@prisma/client";
  * imported history (darsSalaryId set) is never touched. Preserves publishedAt.
  */
 export async function generateMonth(year: number, month: number): Promise<void> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
@@ -47,7 +47,7 @@ export async function generateMonth(year: number, month: number): Promise<void> 
 
 /** Publish (or unpublish) all generated payslips for a month — gates staff visibility. */
 export async function setMonthPublished(year: number, month: number, published: boolean): Promise<void> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {

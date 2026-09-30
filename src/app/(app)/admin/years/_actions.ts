@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { nextLevel } from "@/lib/levels";
 
@@ -24,7 +24,7 @@ export async function createYear(
   _prev: YearFormState,
   formData: FormData,
 ): Promise<YearFormState> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { formError: "no-tenant" };
 
@@ -101,7 +101,7 @@ export async function promoteYear(
   targetYearId: string,
   excludeStudentIds: string[],
 ): Promise<PromoteResult> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
   const exclude = new Set(excludeStudentIds);
@@ -199,7 +199,7 @@ export async function promoteYear(
 }
 
 export async function setActiveYear(yearId: string) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
@@ -227,7 +227,7 @@ export async function setActiveYear(yearId: string) {
 export async function deleteYear(
   yearId: string,
 ): Promise<{ ok: boolean; error?: string; enrollmentCount?: number }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -307,7 +307,7 @@ async function generateClassesInternal(
 }
 
 export async function generateClassesForYear(yearId: string): Promise<void> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
@@ -326,7 +326,7 @@ export async function generateClassesForYear(yearId: string): Promise<void> {
  * "Générer les classes" can always recreate a section later if needed.
  */
 export async function deleteEmptyClasses(yearId: string): Promise<void> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {

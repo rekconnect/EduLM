@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { db } from "@/lib/db";
 import { joinName } from "@/lib/names";
@@ -19,7 +19,7 @@ export async function saveGuardianFiche(
   userId: string,
   values: Record<string, string>,
 ): Promise<{ ok: boolean; error?: string }> {
-  const admin = await requireRole("SCHOOL_ADMIN");
+  const { user: admin } = await requireModuleAccess("eleves", "write");
   const tenantId = admin.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -109,7 +109,7 @@ export async function saveStudentFiche(
   studentId: string,
   values: Record<string, string>,
 ): Promise<{ ok: boolean; error?: string }> {
-  const admin = await requireRole("SCHOOL_ADMIN");
+  const { user: admin } = await requireModuleAccess("eleves", "write");
   const tenantId = admin.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 

@@ -127,7 +127,7 @@ export async function updateAutocar(
 
 /** Remove a bus from the fleet. */
 export async function deleteAutocar(id: string): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("services", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
   return runWithTenant({ tenantId, slug: null }, async () => {
@@ -142,7 +142,7 @@ export async function createBusCircuit(input: {
   autocarNumber: string;
   activite: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("services", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
   const autocarNumber = s(input.autocarNumber, 10);
@@ -162,7 +162,7 @@ export async function updateBusCircuit(
   id: string,
   input: { autocarNumber: string; activite: string },
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("services", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
   const autocarNumber = s(input.autocarNumber, 10);

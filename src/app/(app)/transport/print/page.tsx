@@ -1,4 +1,4 @@
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { unscopedDb } from "@/lib/db";
 import { PrintControls } from "../../reports/lists/_print-controls";
@@ -30,7 +30,7 @@ export default async function TransportPrintPage({
   }>;
 }) {
   const { yearId, trim: trimParam, q, bus, zoneno, zone, niveau, trajet, circuit } = await searchParams;
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("services", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

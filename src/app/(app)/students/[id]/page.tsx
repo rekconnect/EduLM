@@ -38,7 +38,7 @@ import {
   type FieldDef,
 } from "@/lib/entity-fields";
 import { db } from "@/lib/db";
-import { withTenantSession } from "@/lib/session";
+import { withModuleSession } from "@/lib/permissions";
 import {
   deleteStudent,
   saveAuthorizedPersons,
@@ -102,7 +102,7 @@ export default async function StudentDetailPage({
 }) {
   const { id } = await params;
 
-  return withTenantSession(async (user) => {
+  return withModuleSession("eleves", "read", async (user) => {
     const t = await getTranslations("students");
     const tCommon = await getTranslations("common");
 

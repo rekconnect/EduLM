@@ -263,7 +263,7 @@ export async function updateCycleFieldConfig(
   cycleId: string,
   formData: FormData,
 ): Promise<{ error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { error: "no-tenant" };
 
@@ -322,7 +322,7 @@ export async function updateCycleCustomQuestions(
   cycleId: string,
   formData: FormData,
 ): Promise<{ error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { error: "no-tenant" };
 
@@ -387,7 +387,7 @@ export async function updateCycleRequiredDocuments(
   cycleId: string,
   formData: FormData,
 ): Promise<{ error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { error: "no-tenant" };
 
@@ -435,7 +435,7 @@ export async function updateCycleLabelsAndIntros(
   cycleId: string,
   formData: FormData,
 ): Promise<{ error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { error: "no-tenant" };
 

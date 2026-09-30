@@ -1032,7 +1032,7 @@ export async function bulkSoftDeleteApplications(
 export async function bulkRestoreApplications(
   ids: string[],
 ): Promise<BulkResult> {
-  return withParents(ids, async () => {
+  return withParents(ids, "write", async () => {
     const r = await db.application.updateMany({
       where: { id: { in: ids } },
       data: { deletedAt: null, archived: false, archivedAt: null },

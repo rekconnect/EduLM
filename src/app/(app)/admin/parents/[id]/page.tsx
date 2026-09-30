@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { cn } from "@/lib/utils";
 import { splitLegacyName } from "@/lib/names";
@@ -119,7 +119,7 @@ export default async function ParentDetailPage({
   const currentTab = parseTab(tab);
   const isEditMode = mode === "edit";
 
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

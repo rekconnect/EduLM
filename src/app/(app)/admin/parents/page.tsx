@@ -15,7 +15,7 @@ import {
   BulkSelectionProvider,
 } from "@/components/bulk-selection";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { cn } from "@/lib/utils";
 import { displayName } from "@/lib/names";
@@ -104,7 +104,7 @@ export default async function ParentsListPage({
     page: pageParam,
   } = await searchParams;
   const currentView: View = parseView(view);
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

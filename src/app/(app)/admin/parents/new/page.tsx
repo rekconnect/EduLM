@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody } from "@/components/ui/card";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import {
   loadEntityFieldsConfig,
   loadParentCreateConfig,
@@ -10,7 +10,7 @@ import { DEFAULT_PARENT_CREATE_CONFIG } from "@/lib/parent-create-config";
 import { CreateParentForm } from "./_form";
 
 export default async function NewParentPage() {
-  await requireRole("SCHOOL_ADMIN");
+  await requireModuleAccess("eleves", "write");
   // Load both configs in parallel:
   //  - parentCreateConfig — drives the form structure (which built-in
   //    fields show, which extras to add)

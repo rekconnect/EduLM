@@ -52,41 +52,67 @@ function ModulesGrid({
 }) {
   const t = useTranslations("adminPermissions");
   return (
+    <div className="space-y-3">
+    <div className="flex flex-wrap gap-x-4 gap-y-1.5 rounded-lg bg-[color:var(--color-surface-sunken)] px-3 py-2 text-xs text-[color:var(--color-foreground-muted)]">
+      {ACCESS_LEVELS.map((lvl) => (
+        <span key={lvl} className="inline-flex items-center gap-1.5">
+          <span
+            className={cn(
+              "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium",
+              LEVEL_TONE[lvl],
+            )}
+          >
+            {t(`level_${lvl}`)}
+          </span>
+          {t(`levelHint_${lvl}`)}
+        </span>
+      ))}
+    </div>
     <div className="grid gap-2 sm:grid-cols-2">
       {ADMIN_MODULES.map((m) => (
         <div
           key={m}
-          className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface)] px-3 py-2"
+          className={cn(
+            "flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors duration-150 ease-out",
+            value[m]
+              ? "border-[color:var(--color-brand-500)]/40 bg-[color:var(--color-brand-50)]/40"
+              : "border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface)]",
+          )}
         >
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-[color:var(--color-foreground)]">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium leading-snug text-[color:var(--color-foreground)]">
               {t(`module_${m}`)}
             </p>
-            <p className="truncate text-xs text-[color:var(--color-foreground-subtle)]">
+            <p className="mt-0.5 text-xs leading-snug text-[color:var(--color-foreground-subtle)]">
               {t(`moduleDesc_${m}`)}
             </p>
           </div>
-          <Select
-            value={value[m] ?? ""}
-            disabled={disabled}
-            onChange={(e) => {
-              const v = e.target.value as AccessLevel | "";
-              const next = { ...value };
-              if (v === "") delete next[m];
-              else next[m] = v;
-              onChange(next);
-            }}
-            className="w-40 shrink-0"
-          >
-            <option value="">{t("levelNone")}</option>
-            {ACCESS_LEVELS.map((lvl) => (
-              <option key={lvl} value={lvl}>
-                {t(`level_${lvl}`)}
-              </option>
-            ))}
-          </Select>
+          {/* Fixed-width wrapper: the shared Select is w-full by design, so
+              it must be sized from outside or it crushes the title column. */}
+          <div className="w-40 shrink-0">
+            <Select
+              aria-label={t(`module_${m}`)}
+              value={value[m] ?? ""}
+              disabled={disabled}
+              onChange={(e) => {
+                const v = e.target.value as AccessLevel | "";
+                const next = { ...value };
+                if (v === "") delete next[m];
+                else next[m] = v;
+                onChange(next);
+              }}
+            >
+              <option value="">{t("levelNone")}</option>
+              {ACCESS_LEVELS.map((lvl) => (
+                <option key={lvl} value={lvl}>
+                  {t(`level_${lvl}`)}
+                </option>
+              ))}
+            </Select>
+          </div>
         </div>
       ))}
+    </div>
     </div>
   );
 }

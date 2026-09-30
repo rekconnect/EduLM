@@ -1859,6 +1859,9 @@
     "module_formulaires": "Formulaires d'inscription",
     "moduleDesc_formulaires": "Configuration des champs et formulaires",
     "module_admissions": "Admissions, campagnes & années",
-    "moduleDesc_admissions": "Dossiers, campagnes, années scolaires"
+    "moduleDesc_admissions": "Dossiers, campagnes, années scolaires",
+    "levelHint_read": "consulter uniquement",
+    "levelHint_write": "consulter + créer / modifier",
+    "levelHint_full": "tout, y compris supprimer et configurer"
   }
 }

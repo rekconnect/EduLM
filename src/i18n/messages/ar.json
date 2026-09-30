@@ -1859,6 +1859,9 @@
     "module_formulaires": "استمارات التسجيل",
     "moduleDesc_formulaires": "إعداد الحقول والاستمارات",
     "module_admissions": "القبول والحملات والسنوات",
-    "moduleDesc_admissions": "الملفات والحملات والسنوات الدراسية"
+    "moduleDesc_admissions": "الملفات والحملات والسنوات الدراسية",
+    "levelHint_read": "عرض فقط",
+    "levelHint_write": "عرض + إنشاء / تعديل",
+    "levelHint_full": "كل شيء بما فيه الحذف والإعداد"
   }
 }

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db, unscopedDb } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import {
   parseEntityFieldsConfig,
@@ -95,7 +95,7 @@ export async function createStudent(
   _prev: StudentFormState,
   formData: FormData,
 ): Promise<StudentFormState> {
-  const user = await requireRole(["SCHOOL_ADMIN", "TEACHER"]);
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { formError: "No tenant" };
   const parsed = parseForm(formData);
@@ -141,7 +141,7 @@ export async function updateStudent(
   _prev: StudentFormState,
   formData: FormData,
 ): Promise<StudentFormState> {
-  const user = await requireRole(["SCHOOL_ADMIN", "TEACHER"]);
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { formError: "No tenant" };
   const parsed = parseForm(formData);
@@ -160,7 +160,7 @@ export async function updateStudent(
 }
 
 export async function deleteStudent(id: string) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
@@ -179,7 +179,7 @@ export async function saveStudentIdentity(
   studentId: string,
   values: Record<string, string>,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole(["SCHOOL_ADMIN", "TEACHER"]);
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
   const parsed = studentSchema.safeParse(values);

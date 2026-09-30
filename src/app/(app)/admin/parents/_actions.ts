@@ -67,7 +67,7 @@ export async function updateParentIdentity(
   _prev: ParentIdentityFormState,
   formData: FormData,
 ): Promise<ParentIdentityFormState> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { formError: "no-tenant" };
 
@@ -157,7 +157,7 @@ export async function createParent(
   _prev: ParentFormState,
   formData: FormData,
 ): Promise<ParentFormState> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { formError: "no-tenant" };
 
@@ -280,7 +280,7 @@ export async function updateParent(
   _prev: ParentFormState,
   formData: FormData,
 ): Promise<ParentFormState> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { formError: "no-tenant" };
 
@@ -356,7 +356,7 @@ export async function updateParent(
 }
 
 export async function resetParentPassword(parentId: string): Promise<ParentFormState> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { formError: "no-tenant" };
   const newPassword = genTempPassword();
@@ -382,7 +382,7 @@ export async function resetParentPassword(parentId: string): Promise<ParentFormS
 }
 
 export async function toggleParentStatus(parentId: string) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
@@ -401,7 +401,7 @@ export async function toggleParentStatus(parentId: string) {
 // ── Guardian links ───────────────────────────────────────────
 
 export async function linkGuardianToStudent(formData: FormData) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   const studentId = String(formData.get("studentId") ?? "");
@@ -440,7 +440,7 @@ export async function linkGuardianToStudent(formData: FormData) {
 }
 
 export async function unlinkGuardianFromStudent(studentId: string, parentUserId: string) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
@@ -472,7 +472,7 @@ export async function updateParentCustomAnswers(
   parentUserId: string,
   formData: FormData,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 

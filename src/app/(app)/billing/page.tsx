@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
 import { Prisma, InvoiceStatus } from "@prisma/client";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -37,7 +37,7 @@ export default async function BillingPage({
   searchParams: Promise<{ status?: string; view?: string; q?: string; yearId?: string; student?: string }>;
 }) {
   const { status, view, q, yearId, student } = await searchParams;
-  const user = await requireRole(["SCHOOL_ADMIN", "TEACHER"]);
+  const { user } = await requireModuleAccess("facturation", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

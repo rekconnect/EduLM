@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db, unscopedDb } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { decimalStringToCents, sumLines } from "@/lib/money";
 import {
@@ -53,7 +53,7 @@ export async function createInvoice(
   _prev: InvoiceFormState,
   formData: FormData,
 ): Promise<InvoiceFormState> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("facturation", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { formError: "No tenant" };
 
@@ -128,7 +128,7 @@ const paymentSchema = z.object({
 });
 
 export async function recordPayment(invoiceId: string, formData: FormData) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("facturation", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return;
 
@@ -268,7 +268,7 @@ async function notifyParentOfPayment(
 }
 
 export async function deleteInvoice(invoiceId: string) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("facturation", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
@@ -281,7 +281,7 @@ export async function deleteInvoice(invoiceId: string) {
 }
 
 export async function issueInvoice(invoiceId: string) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("facturation", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {

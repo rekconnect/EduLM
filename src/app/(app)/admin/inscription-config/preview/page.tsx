@@ -3,7 +3,7 @@ import { getLocale } from "next-intl/server";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { unscopedDb } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import {
   parseTenantInscriptionFormConfig,
   type DossierLocale,
@@ -19,7 +19,7 @@ import { PreviewClient } from "./_client";
  * across the other 9 tabs once the API has been proven against this one.
  */
 export default async function InscriptionConfigPreviewPage() {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("formulaires", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

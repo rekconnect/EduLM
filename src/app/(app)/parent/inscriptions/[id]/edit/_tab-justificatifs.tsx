@@ -39,7 +39,16 @@ export function DossierTabJustificatifs({
       disabled={disabled}
       renewal={renewal}
       extras={{ onUploadFile }}
-      save={(answers) => saveJustificatifsTab(applicationId, answers)}
+      // Translate FieldsRenderer's id-keyed answers → key-keyed storage (the
+      // page prefill reads by f.key; ids ≠ keys for /settings-created fields).
+      save={(answers, cfg) => {
+        const out: Record<string, string> = {};
+        for (const f of cfg.fields) {
+          const v = answers[f.id];
+          if (typeof v === "string" && v !== "") out[f.key] = v;
+        }
+        return saveJustificatifsTab(applicationId, out);
+      }}
     />
   );
 }

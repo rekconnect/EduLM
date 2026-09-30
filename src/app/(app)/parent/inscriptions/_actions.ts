@@ -9,10 +9,28 @@ import { requireRole, requireUser } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
 import {
   evaluateShowIf,
+  fieldRequiredOnForm,
+  fieldVisibleOnForm,
   missingRequiredOnForm,
   parseEntityFieldsConfig,
   type EntityFieldsConfig,
 } from "@/lib/entity-fields";
+import {
+  parseTransport,
+  serviceAnswersFromTransport,
+  serviceAnswersFromRecord,
+  SERVICE_ANSWER_KEYS,
+} from "@/lib/dossier-content";
+import {
+  hiddenCategoryNames,
+  parseTabsConfig,
+  tabsConfigForDossier,
+} from "@/lib/dossier-tabs";
+import {
+  resolveDossierState,
+  servicesHiddenInState,
+} from "@/lib/dossier-state";
+import { isMaternelleNiveau } from "@/lib/pedagogique";
 import {
   parseTenantInscriptionFormConfig,
   resolveField,
@@ -631,6 +649,9 @@ export async function submitDossier(
         status: true,
         parentAnswers: true,
         studentAnswers: true,
+        dossierAnswers: true,
+        existingStudentId: true,
+        dossierState: true,
         // Bound-source columns — for any custom field with
         // dossierBoundTo, the canonical value lives here (filled by
         // the parent through the Élève card / Scolarité tab). Submit
@@ -662,7 +683,13 @@ export async function submitDossier(
 
     const tenant = await unscopedDb().tenant.findUnique({
       where: { id: tenantId },
-      select: { parentFieldsConfig: true, studentFieldsConfig: true },
+      select: {
+        parentFieldsConfig: true,
+        studentFieldsConfig: true,
+        inscriptionTabsConfig: true,
+        dossierStateInscription: true,
+        dossierStateRenewal: true,
+      },
     });
     const parentConfig: EntityFieldsConfig = parseEntityFieldsConfig(
       tenant?.parentFieldsConfig,
@@ -671,7 +698,84 @@ export async function submitDossier(
       tenant?.studentFieldsConfig,
     );
 
+    const renewal = app.existingStudentId != null;
+
+    // Tab-level visibility — a category whose TAB the parent cannot see
+    // (tenant tab config, renewal-hidden Scolarité, services_hidden dossier
+    // state) must never gate submission: the parent has no surface to fill
+    // it. Mirrors the edit page's visibleTabs computation exactly.
+    const tabsVisible = tabsConfigForDossier(
+      parseTabsConfig(tenant?.inscriptionTabsConfig),
+      { renewal },
+    );
+    const dossierState = resolveDossierState(
+      app.dossierState,
+      renewal ? tenant?.dossierStateRenewal : tenant?.dossierStateInscription,
+    );
+    if (servicesHiddenInState(dossierState)) tabsVisible.transport = false;
+    const skippedCategories = hiddenCategoryNames(tabsVisible);
+
     const studentAns = (app.studentAnswers ?? {}) as Record<string, string>;
+
+    // Blob-backed tabs (Services, Autorisations, Foyer, …) store their
+    // answers under Application.dossierAnswers.<tab>, keyed by the Dars
+    // field keys — NOT in studentAnswers. Submit validation must look there
+    // too, or every required blob-backed field reads as empty (the
+    // "Collations · Repas chaud · Transport (autocar)" submit blocker).
+    // Transport may still carry the legacy TransportData shape → convert
+    // through the same inverse map the tab prefill uses.
+    const mergedAns: Record<string, string> = { ...studentAns };
+    const blobs =
+      app.dossierAnswers && typeof app.dossierAnswers === "object"
+        ? (app.dossierAnswers as Record<string, unknown>)
+        : {};
+    for (const [tab, blob] of Object.entries(blobs)) {
+      if (!blob || typeof blob !== "object") continue;
+      let entries = blob as Record<string, unknown>;
+      if (
+        tab === "transport" &&
+        !SERVICE_ANSWER_KEYS.some((k) => k in entries)
+      ) {
+        entries = serviceAnswersFromTransport(parseTransport(entries));
+      }
+      for (const [k, v] of Object.entries(entries)) {
+        if (typeof v === "string" && v !== "") mergedAns[k] = v;
+      }
+    }
+
+    // Renewal fallback: the Transport tab prefills from the student's stored
+    // Services answers when the draft carries no transport blob — submit must
+    // judge the same picture, or a form that looks complete blocks on the
+    // Services questions the parent never re-typed.
+    if (
+      renewal &&
+      app.existingStudentId &&
+      !SERVICE_ANSWER_KEYS.some((k) => mergedAns[k])
+    ) {
+      const st = await db.student.findUnique({
+        where: { id: app.existingStudentId },
+        select: { customAnswers: true },
+      });
+      const fromStudent = serviceAnswersFromRecord(
+        (st?.customAnswers ?? {}) as Record<string, unknown>,
+      );
+      for (const [k, v] of Object.entries(fromStudent)) {
+        if (!mergedAns[k]) mergedAns[k] = v;
+      }
+    }
+    // Maternelle (PS/MS/GS) → collation obligatoire: mirror saveTransportTab's
+    // server-side lock so submit never demands an answer the save would force.
+    if (isMaternelleNiveau(app.niveau)) mergedAns.collations = "yes";
+
+    // Alias id ⇄ key (same hardening as missingRequiredOnForm): payload keys
+    // vary by writer, and showIf rules resolve their source via rule.fieldId.
+    for (const f of studentConfig.fields) {
+      const v = mergedAns[f.key] ?? mergedAns[f.id];
+      if (v !== undefined) {
+        mergedAns[f.key] = v;
+        mergedAns[f.id] = v;
+      }
+    }
 
     // ── Bound-source value resolvers ───────────────────────────────
     // dossierBoundTo (student side) — pull from Application columns.
@@ -738,14 +842,28 @@ export async function submitDossier(
       missing.push(...(best ?? []));
     }
 
+    // Same authority as the tab badges: category must be active AND its tab
+    // visible, the field must actually render on THIS form (inscription vs
+    // réinscription, formHidden), its showIf must match, and required may be
+    // overridden per-form — all evaluated against the merged answer picture.
+    const activeCatIds = new Set(
+      studentConfig.categories
+        .filter(
+          (c) => c.active !== false && !skippedCategories.has(c.name),
+        )
+        .map((c) => c.id),
+    );
     for (const f of studentConfig.fields) {
-      if (!f.required) continue;
-      if (!evaluateShowIf(f, studentAns)) continue;
+      if (!activeCatIds.has(f.categoryId)) continue;
+      if (f.active === false) continue;
+      if (!fieldVisibleOnForm(f, { renewal })) continue;
+      if (!evaluateShowIf(f, mergedAns)) continue;
+      if (!fieldRequiredOnForm(f, { renewal })) continue;
       let value: string;
       if (f.dossierBoundTo) {
         value = resolveDossierBound(f.dossierBoundTo);
       } else {
-        value = (studentAns[f.id] ?? "").trim();
+        value = (mergedAns[f.id] ?? mergedAns[f.key] ?? "").trim();
       }
       if (value === "") missing.push(f.label);
     }
@@ -1185,7 +1303,6 @@ export async function saveTransportTab(
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
-  const { isMaternelleNiveau } = await import("@/lib/pedagogique");
 
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await loadApplicationOwnedBy(applicationId, user);
@@ -1247,45 +1364,9 @@ export async function saveTransportTab(
   });
 }
 
-export async function setDossierTabCompleted(
-  applicationId: string,
-  tab: string,
-  completed: boolean,
-): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireDossierActor();
-  const tenantId = user.tenantId;
-  if (!tenantId) return { ok: false, error: "no-tenant" };
-  if (!(DOSSIER_TABS_LIST as readonly string[]).includes(tab)) {
-    return { ok: false, error: "unknown-tab" };
-  }
-
-  return runWithTenant({ tenantId, slug: null }, async () => {
-    const app = await db.application.findUnique({
-      where: { id: applicationId },
-      select: { id: true, status: true, submittedByUserId: true, tabsCompleted: true },
-    });
-    if (!app || !(await actorOwnsOrAdmin(app, user))) {
-      return { ok: false, error: "not-found" };
-    }
-    if (!statusEditableFor(app.status, user)) return { ok: false, error: "locked" };
-    const current =
-      app.tabsCompleted && typeof app.tabsCompleted === "object"
-        ? (app.tabsCompleted as Record<string, unknown>)
-        : {};
-    const next: Record<string, boolean> = {};
-    for (const k of DOSSIER_TABS_LIST) {
-      const v = current[k];
-      if (typeof v === "boolean") next[k] = v;
-    }
-    next[tab as DossierTabName] = completed;
-    await db.application.update({
-      where: { id: applicationId },
-      data: { tabsCompleted: next },
-    });
-    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
-    return { ok: true };
-  });
-}
+// setDossierTabCompleted (Phase-1 "mark this placeholder tab done" action)
+// was removed: every tab now computes real completeness in its own save
+// action, and the endpoint let any dossier owner forge a green badge.
 
 // ── Autres contacts tab (urgence + pickup lists) ──────────────────
 

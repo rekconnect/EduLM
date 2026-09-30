@@ -639,14 +639,27 @@ export function missingRequiredOnForm(
       .filter((c) => c.active !== false && categoryNames.includes(c.name))
       .map((c) => c.id),
   );
+  // Alias id ⇄ key: payloads arrive keyed either by f.id (FieldsRenderer)
+  // or by f.key (tab saves), and showIf rules resolve their source via
+  // rule.fieldId. For Dars-seeded fields id === key, but /settings-created
+  // fields get a generated id ≠ key — aliasing makes both key spaces (and
+  // conditional sources) resolve regardless of which one the caller used.
+  const ans: Record<string, string> = { ...answers };
+  for (const f of config.fields) {
+    const v = answers[f.key] ?? answers[f.id];
+    if (v !== undefined) {
+      ans[f.key] = v;
+      ans[f.id] = v;
+    }
+  }
   const out: string[] = [];
   for (const f of config.fields) {
     if (!catIds.has(f.categoryId)) continue;
     if (f.active === false) continue;
     if (!fieldVisibleOnForm(f, opts)) continue;
-    if (!evaluateShowIf(f, answers)) continue;
+    if (!evaluateShowIf(f, ans)) continue;
     if (!fieldRequiredOnForm(f, opts)) continue;
-    const v = answers[f.key] ?? "";
+    const v = ans[f.key] ?? "";
     if (!v.trim()) out.push(f.label);
   }
   return out;

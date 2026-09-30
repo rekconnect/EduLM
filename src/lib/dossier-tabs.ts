@@ -4,6 +4,8 @@
  * `inscriptionFormConfig` JSON authored via the WYSIWYG admin editor.
  */
 
+import { SCOLARITE_CATEGORY_NAMES } from "./scolarite-config";
+
 export const DOSSIER_TABS = [
   "eleve",
   "responsables",
@@ -104,4 +106,32 @@ export function tabsConfigForDossier(
   opts: { renewal: boolean },
 ): TabsConfig {
   return opts.renewal ? { ...base, scolarite: false } : base;
+}
+
+/**
+ * Entity-field categories each dossier tab renders (mirror of the per-tab
+ * configForCategories calls on the parent edit page). Submit validation
+ * uses it to skip categories whose tab is not visible for a dossier — a
+ * field the parent cannot reach must never gate submission.
+ */
+export const DOSSIER_TAB_CATEGORIES: Partial<Record<DossierTab, string[]>> = {
+  eleve: ["Info générale", "Info Arabe"],
+  transport: ["Services"],
+  autorisations: ["Autorisations"],
+  contacts: ["Contacts"],
+  foyer: ["Foyer"],
+  sante: ["Santé"],
+  finance: ["Finance"],
+  justificatifs: ["Justificatifs"],
+  scolarite: SCOLARITE_CATEGORY_NAMES,
+};
+
+/** Category names whose tab is hidden under this visibility config. */
+export function hiddenCategoryNames(visibility: TabsConfig): Set<string> {
+  const out = new Set<string>();
+  for (const tab of DOSSIER_TABS) {
+    if (visibility[tab]) continue;
+    for (const c of DOSSIER_TAB_CATEGORIES[tab] ?? []) out.add(c);
+  }
+  return out;
 }

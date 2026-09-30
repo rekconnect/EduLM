@@ -12,6 +12,7 @@ import { db, unscopedDb } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
 import { COUNTRIES_FR } from "@/lib/lookups";
+import { serviceAnswersFromRecord } from "@/lib/dossier-content";
 import { sendApplicationSubmittedEmail } from "@/lib/emails/notifications";
 import { uploadDocument, deleteFromStorage } from "@/lib/storage";
 import {
@@ -164,6 +165,16 @@ function buildGuardianResponsables(links: GuardianLink[], tenantId: string) {
  *  (Dars-imported students). Returns null when nothing is known. */
 function transportFromStudent(ca: Record<string, unknown>): Record<string, unknown> | null {
   const str = (k: string) => (typeof ca[k] === "string" ? (ca[k] as string) : "");
+
+  // Preferred source: the student's TOP-LEVEL Dars Services keys (the Dars
+  // import + acceptance bridge write these 1:1). Emit the same Dars-key
+  // shape the config-driven Transport tab saves, so prefill, completeness
+  // and a Dars re-export all round-trip unchanged.
+  const svc = serviceAnswersFromRecord(ca);
+  if (Object.keys(svc).length) return svc;
+
+  // Fallback for older imports: last year's registration_by_year /
+  // services_by_year JSON blobs.
   let reg: Record<string, Record<string, string>> = {};
   let sby: Record<string, string> = {};
   try {
@@ -181,15 +192,12 @@ function transportFromStudent(ca: Record<string, unknown>): Record<string, unkno
   const svcYears = Object.keys(sby).sort();
   const lastSvc = svcYears.length ? (sby[svcYears[svcYears.length - 1]!] ?? "") : "";
 
-  const modeAller =
-    last.transport_aller === "Avec bus" ? "bus" : last.transport_aller === "Avec parent" ? "parents" : "";
-  const modeRetour =
-    last.transport_retour === "Avec bus" ? "bus" : last.transport_retour === "Avec parent" ? "parents" : "";
-  const collation = last.collations === "yes" || lastSvc.includes("Collation");
-  const cantine = last.repas_chaud === "yes" || lastSvc.includes("Cantine");
-
-  if (!modeAller && !modeRetour && !collation && !cantine && last.autocar == null) return null;
-  return { modeAller, modeRetour, collation, cantine };
+  const out = serviceAnswersFromRecord(last);
+  // services_by_year only knows the season's subscriptions — use it to fill
+  // the restauration answers when the registration blob left them blank.
+  if (!out.collations && lastSvc.includes("Collation")) out.collations = "yes";
+  if (!out.repas_chaud && lastSvc.includes("Cantine")) out.repas_chaud = "yes";
+  return Object.keys(out).length ? out : null;
 }
 
 export async function startApplication(formData: FormData): Promise<void> {
@@ -929,6 +937,7 @@ export async function startRenewal(formData: FormData): Promise<void> {
         id: true,
         status: true,
         parentAnswers: true,
+        dossierAnswers: true,
         submitterRelation: true,
         responsables: { select: { id: true, customAnswers: true } },
       },
@@ -969,6 +978,29 @@ export async function startRenewal(formData: FormData): Promise<void> {
             if (typeof v === "string" && v.trim()) ans[k] = v;
           }
           if (Object.keys(ans).length) data.parentAnswers = ans as Prisma.InputJsonValue;
+        }
+        // Transport & restauration: drafts created before transport seeding
+        // have no dossierAnswers.transport although the student's stored
+        // registration knows last year's answers — backfill it (never
+        // overwrites a blob the parent already saved).
+        const da =
+          existing.dossierAnswers && typeof existing.dossierAnswers === "object"
+            ? (existing.dossierAnswers as Record<string, unknown>)
+            : null;
+        if (!da?.transport) {
+          const st = await db.student.findUnique({
+            where: { id: studentId },
+            select: { customAnswers: true },
+          });
+          const t = transportFromStudent(
+            (st?.customAnswers ?? {}) as Record<string, unknown>,
+          );
+          if (t) {
+            data.dossierAnswers = {
+              ...(da ?? {}),
+              transport: t,
+            } as Prisma.InputJsonValue;
+          }
         }
         // Submitter relation (so the dropdown is pre-selected).
         if (!existing.submitterRelation) {

@@ -1,5 +1,11 @@
 import type { Prisma } from "@prisma/client";
-import { parseTransport, parseSante, parseScolarite } from "@/lib/dossier-content";
+import {
+  parseTransport,
+  parseSante,
+  parseScolarite,
+  serviceAnswersFromRecord,
+  SERVICE_ANSWER_KEYS,
+} from "@/lib/dossier-content";
 import { parseEntityFieldsConfig } from "@/lib/entity-fields";
 
 /**
@@ -130,6 +136,24 @@ export async function applyDossierToStudent(
   }
   if (transport.collation !== null) year.collations = transport.collation ? "yes" : "no";
   if (transport.cantine !== null) year.repas_chaud = transport.cantine ? "yes" : "no";
+  // New Dars-key blobs (config-driven Transport tab): overlay the parent's
+  // answers VERBATIM. The derived mapping above loses autocar = "no" (the
+  // mode selects are showIf-hidden then, so `answered` stays false) and
+  // rewrites explicit answers; the overlay keeps them word-for-word. Legacy
+  // TransportData blobs contribute nothing here and keep the derived keys.
+  const svcVerbatim = serviceAnswersFromRecord(
+    dossier.transport && typeof dossier.transport === "object"
+      ? (dossier.transport as Record<string, unknown>)
+      : {},
+  );
+  Object.assign(year, svcVerbatim);
+  // Mirror the season's Services answers onto the student's TOP-LEVEL keys —
+  // the same place the Dars import writes them — so renewal prefill and
+  // submit's fallback always read the latest answers.
+  for (const k of SERVICE_ANSWER_KEYS) {
+    const v = year[k];
+    if (typeof v === "string" && v !== "") ca[k] = v;
+  }
   // "Autorisé à quitter seul" — from the Autorisations tab.
   const autz =
     dossier.autorisations && typeof dossier.autorisations === "object"

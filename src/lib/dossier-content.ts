@@ -318,6 +318,41 @@ export function serviceAnswersFromTransport(
 // same config that renders it), so showIf-hidden fields never block. The old
 // hardcoded isTransportComplete rule was removed with the unification pass.
 
+/**
+ * The 13 Dars "Services" answer keys — exactly what the Dars import writes on
+ * Student.customAnswers, what the config-driven Transport tab saves, and what
+ * the acceptance bridge propagates back. Single list so prefill/seeding code
+ * never drifts from the round-trip vocabulary.
+ */
+export const SERVICE_ANSWER_KEYS = [
+  "autocar",
+  "transport_aller",
+  "transport_retour",
+  "transport_adresse_diff",
+  "transport_caza",
+  "transport_village",
+  "transport_rue",
+  "transport_immeuble",
+  "transport_etage",
+  "transport_place",
+  "transport_remarque",
+  "collations",
+  "repas_chaud",
+] as const;
+
+/** Pick the Dars Services answers present on an answers blob (e.g. the
+ *  student's customAnswers) — empty object when none are known. */
+export function serviceAnswersFromRecord(
+  ca: Record<string, unknown>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const k of SERVICE_ANSWER_KEYS) {
+    const v = ca[k];
+    if (typeof v === "string" && v !== "") out[k] = v;
+  }
+  return out;
+}
+
 // ── Santé ──────────────────────────────────────────────
 // Stored under Application.dossierAnswers.sante. Hidden by default for
 // Lycée Montaigne; other MLF schools flip the tab on via tenant config.

@@ -19,7 +19,7 @@ const REPORTS = [
 ] as const;
 
 export default async function ReportsLandingPage() {
-  await requireRole("SCHOOL_ADMIN");
+  await requireModuleAccess("rapports", "read");
   const t = await getTranslations("reports");
 
   return (

@@ -16,7 +16,7 @@ export default async function FinanceReportPage({
 }: {
   searchParams: Promise<{ cycleId?: string }>;
 }) {
-  await requireRole("SCHOOL_ADMIN");
+  await requireModuleAccess("rapports", "read");
   const { cycleId } = await searchParams;
   const cycleFilter = cycleId || null;
 

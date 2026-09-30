@@ -1,11 +1,11 @@
 import { getTranslations } from "next-intl/server";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody } from "@/components/ui/card";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { YearForm } from "./_form";
 
 export default async function NewYearPage() {
-  const user = await requireRole("SCHOOL_ADMIN");
+  await requireModuleAccess("admissions", "full");
   const t = await getTranslations("admissions");
 
   return (

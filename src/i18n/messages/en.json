@@ -1907,7 +1907,9 @@
       "previewLoading": "Counting recipients…",
       "previewError": "Unable to count recipients right now.",
       "previewNone": "No parent matches this selection.",
-      "previewMore": "and {count, plural, one {# other} other {# others}}"
+      "previewMore": "and {count, plural, one {# other} other {# others}}",
+      "previewInactive": "{count, plural, one {incl. # inactive account} other {incl. # inactive accounts}}",
+      "previewInactiveHint": "The message waits in their inbox: they'll see it as soon as their account is activated (no email meanwhile)."
     },
     "compose": {
       "pageTitle": "New message",
@@ -2096,7 +2098,9 @@
       "deleteCancel": "Cancel",
       "deletedToast": "Message deleted",
       "errNotFound": "This message no longer exists.",
-      "errGeneric": "Something went wrong. Please try again."
+      "errGeneric": "Something went wrong. Please try again.",
+      "inactiveAccount": "Inactive account",
+      "inactiveAccountHint": "This parent has no active account yet: the message waits in their inbox and will be read after activation."
     },
     "parent": {
       "title": "Messages",

@@ -95,5 +95,8 @@ export type PickerRecipient =
 
 export type AudiencePreview = {
   count: number;
+  /** Of `count`, parents whose account is disabled: the message waits in
+   *  their inbox, but they can't read it (nor get an email) until activated. */
+  inactive: number;
   sample: string[];
 };

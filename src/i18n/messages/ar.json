@@ -1907,7 +1907,9 @@
       "previewLoading": "جارٍ حساب المستلمين…",
       "previewError": "تعذّر حساب عدد المستلمين حاليًا.",
       "previewNone": "لا يوجد وليّ أمر يطابق هذا الاختيار.",
-      "previewMore": "و{count, plural, one {شخص آخر} two {شخصان آخران} few {# آخرين} many {# آخرين} other {# آخرين}}"
+      "previewMore": "و{count, plural, one {شخص آخر} two {شخصان آخران} few {# آخرين} many {# آخرين} other {# آخرين}}",
+      "previewInactive": "{count, plural, one {منهم حساب واحد غير مفعّل} other {منهم # حسابات غير مفعّلة}}",
+      "previewInactiveHint": "الرسالة بانتظارهم في صندوق الوارد: سيرونها فور تفعيل حسابهم (دون بريد إلكتروني في الأثناء)."
     },
     "compose": {
       "pageTitle": "رسالة جديدة",
@@ -2096,7 +2098,9 @@
       "deleteCancel": "إلغاء",
       "deletedToast": "تم حذف الرسالة",
       "errNotFound": "هذه الرسالة لم تعد موجودة.",
-      "errGeneric": "حدث خطأ. يُرجى المحاولة مرة أخرى."
+      "errGeneric": "حدث خطأ. يُرجى المحاولة مرة أخرى.",
+      "inactiveAccount": "حساب غير مفعّل",
+      "inactiveAccountHint": "ليس لهذا الولي حساب مفعّل بعد: الرسالة بانتظاره في صندوق الوارد وستُقرأ بعد التفعيل."
     },
     "parent": {
       "title": "الرسائل",

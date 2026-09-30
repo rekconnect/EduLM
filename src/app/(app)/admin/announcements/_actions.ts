@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { hasModule, requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
-import { notifyParentsOfMessage, resolveAudience } from "@/lib/messaging";
+import { emailableAddresses, notifyParentsOfMessage, resolveAudience } from "@/lib/messaging";
 import {
   isEmptyAudience,
   parseAudienceSpec,
@@ -119,7 +119,7 @@ export async function createAnnouncement(
     // the response so a large audience doesn't delay the redirect.
     notifyParentsOfMessage({
       tenantId,
-      emails: recipients.map((r) => r.email),
+      emails: emailableAddresses(recipients),
       subject: title,
       body,
       kind: "announcement",

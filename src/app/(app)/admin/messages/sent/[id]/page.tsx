@@ -99,6 +99,7 @@ export default async function SentMessagePage({
               firstName: true,
               lastName: true,
               email: true,
+              status: true,
               guardianProfile: {
                 select: {
                   childLinks: { select: { student: { select: { firstName: true } } } },
@@ -331,7 +332,17 @@ export default async function SentMessagePage({
                   return (
                     <TR key={th.id}>
                       <TD className="min-w-[200px]">
-                        <p className="font-medium text-[color:var(--color-foreground)]">{name}</p>
+                        <p className="font-medium text-[color:var(--color-foreground)]">
+                          {name}
+                          {th.parent.status === "DISABLED" ? (
+                            <span
+                              className="ms-2 inline-flex items-center rounded-full bg-[color:var(--color-surface-sunken)] px-2 py-0.5 align-middle text-[10px] font-medium text-[color:var(--color-foreground-muted)]"
+                              title={t("inactiveAccountHint")}
+                            >
+                              {t("inactiveAccount")}
+                            </span>
+                          ) : null}
+                        </p>
                         {kids.length ? (
                           <p className="mt-0.5 text-xs text-[color:var(--color-foreground-subtle)]">
                             {t("childrenOf", { names: kids.join(", ") })}

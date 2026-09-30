@@ -7,6 +7,8 @@ import { runWithTenant } from "@/lib/tenant-context";
 import { hasModule, requireModuleAccess } from "@/lib/permissions";
 import {
   describeAudience,
+  emailableAddresses,
+  isEmailable,
   notifyParentOfReply,
   notifyParentsOfMessage,
   parentDisplayName,
@@ -54,10 +56,14 @@ const sendSchema = z.object({
 export async function previewAudience(rawSpec: unknown): Promise<AudiencePreview> {
   const { user } = await requireModuleAccess("communication", "write");
   const spec = parseAudienceSpec(rawSpec);
-  if (isEmptyAudience(spec)) return { count: 0, sample: [] };
+  if (isEmptyAudience(spec)) return { count: 0, inactive: 0, sample: [] };
   return runWithTenant({ tenantId: user.tenantId, slug: null }, async () => {
     const rows = await resolveAudience(spec);
-    return { count: rows.length, sample: rows.slice(0, 5).map(parentDisplayName) };
+    return {
+      count: rows.length,
+      inactive: rows.filter((r) => r.status === "DISABLED").length,
+      sample: rows.slice(0, 5).map(parentDisplayName),
+    };
   });
 }
 
@@ -75,7 +81,6 @@ export async function searchRecipients(query: string): Promise<PickerRecipient[]
           role: "PARENT",
           deletedAt: null,
           archived: false,
-          status: { not: "DISABLED" },
           OR: [
             { lastName: contains },
             { firstName: contains },
@@ -96,6 +101,7 @@ export async function searchRecipients(query: string): Promise<PickerRecipient[]
           name: true,
           firstName: true,
           lastName: true,
+          status: true,
           guardianProfile: {
             select: {
               childLinks: {
@@ -124,11 +130,12 @@ export async function searchRecipients(query: string): Promise<PickerRecipient[]
       const kids = (p.guardianProfile?.childLinks ?? [])
         .map((l) => [l.student.firstName, l.student.lastName].filter(Boolean).join(" "))
         .filter(Boolean);
+      const base = kids.length ? `Parent de ${kids.join(", ")}` : p.email;
       return {
         kind: "parent",
         id: p.id,
         label: parentDisplayName(p),
-        detail: kids.length ? `Parent de ${kids.join(", ")}` : p.email,
+        detail: p.status === "DISABLED" ? `${base} · compte inactif` : base,
       };
     });
     for (const f of families) {
@@ -252,7 +259,7 @@ export async function sendBroadcast(formData: FormData): Promise<SendResult> {
 
     notifyParentsOfMessage({
       tenantId,
-      emails: recipients.map((r) => r.email),
+      emails: emailableAddresses(recipients),
       subject: parsed.data.subject,
       body: parsed.data.body,
     });
@@ -270,7 +277,7 @@ export async function replyAsSchool(threadId: string, body: string): Promise<Act
   return runWithTenant({ tenantId: user.tenantId, slug: null }, async () => {
     const thread = await db.messageThread.findFirst({
       where: { id: threadId },
-      select: { id: true, subject: true, parent: { select: { email: true } } },
+      select: { id: true, subject: true, parent: { select: { email: true, status: true } } },
     });
     if (!thread) return { ok: false, error: "not-found" } as const;
     const now = new Date();
@@ -300,7 +307,7 @@ export async function replyAsSchool(threadId: string, body: string): Promise<Act
     notifyParentOfReply({
       tenantId: user.tenantId,
       threadId,
-      email: thread.parent.email,
+      email: isEmailable(thread.parent) ? thread.parent.email : "",
       subject: thread.subject,
       body: text,
     });

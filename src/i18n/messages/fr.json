@@ -1907,7 +1907,9 @@
       "previewLoading": "Calcul des destinataires…",
       "previewError": "Impossible de calculer le nombre de destinataires pour le moment.",
       "previewNone": "Aucun parent ne correspond à cette sélection.",
-      "previewMore": "et {count, plural, one {# autre} other {# autres}}"
+      "previewMore": "et {count, plural, one {# autre} other {# autres}}",
+      "previewInactive": "{count, plural, one {dont # compte inactif} other {dont # comptes inactifs}}",
+      "previewInactiveHint": "Le message les attend dans leur boîte : ils le verront dès l'activation de leur compte (pas d'e-mail entre-temps)."
     },
     "compose": {
       "pageTitle": "Nouveau message",
@@ -2096,7 +2098,9 @@
       "deleteCancel": "Annuler",
       "deletedToast": "Message supprimé",
       "errNotFound": "Ce message n'existe plus.",
-      "errGeneric": "Une erreur est survenue. Veuillez réessayer."
+      "errGeneric": "Une erreur est survenue. Veuillez réessayer.",
+      "inactiveAccount": "Compte inactif",
+      "inactiveAccountHint": "Ce parent n'a pas encore de compte actif : le message l'attend dans sa boîte et sera lu après l'activation."
     },
     "parent": {
       "title": "Messagerie",

@@ -926,6 +926,14 @@ export function RecipientPicker({
               <span className="font-semibold tabular-nums text-[color:var(--color-brand-700)]">
                 {t("previewCount", { count: previewData.count })}
               </span>
+              {previewData.inactive > 0 ? (
+                <span
+                  className="text-xs text-[color:var(--color-foreground-muted)]"
+                  title={t("previewInactiveHint")}
+                >
+                  {t("previewInactive", { count: previewData.inactive })}
+                </span>
+              ) : null}
               {previewData.sample.length > 0 ? (
                 <span className="min-w-0 text-xs text-[color:var(--color-foreground-subtle)]">
                   {previewData.sample.join(", ")}

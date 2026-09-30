@@ -20,7 +20,26 @@ export type ResolvedParent = {
   name: string | null;
   firstName: string | null;
   lastName: string | null;
+  status: "INVITED" | "ACTIVE" | "DISABLED";
 };
+
+/**
+ * Disabled parent accounts still RECEIVE messages (Raed 2026-09-30): the
+ * message waits in their inbox for when the account is activated — but they
+ * are never emailed. Placeholder addresses (reserved TLDs such as the import's
+ * "@import.lyceemontaigne.local") are never emailed either.
+ */
+export function isEmailable(p: { email: string; status: string }): boolean {
+  if (p.status === "DISABLED") return false;
+  const e = p.email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return false;
+  return !/\.(local|invalid|test|example|localhost)$/.test(e);
+}
+
+/** Addresses to notify for a resolved audience (active, real mailboxes only). */
+export function emailableAddresses(recipients: ResolvedParent[]): string[] {
+  return recipients.filter(isEmailable).map((r) => r.email);
+}
 
 export function parentDisplayName(
   u: {
@@ -65,7 +84,9 @@ async function establishmentLevels(ids: string[]): Promise<string[]> {
  *   - group clauses (all / establishments / levels / classes): parents with a
  *     child currently enrolled (active year, not withdrawn) matching the clause;
  *   - explicit families (every guardian of the family) and parents.
- * Always excludes disabled, archived and deleted accounts. Deduplicated.
+ * Includes DISABLED accounts (the message waits in their inbox; see
+ * isEmailable — they are never emailed). Excludes archived and deleted
+ * accounts. Deduplicated.
  */
 export async function resolveAudience(spec: AudienceSpec): Promise<ResolvedParent[]> {
   const or: Prisma.UserWhereInput[] = [];
@@ -118,10 +139,9 @@ export async function resolveAudience(spec: AudienceSpec): Promise<ResolvedParen
       role: "PARENT",
       deletedAt: null,
       archived: false,
-      status: { not: "DISABLED" },
       OR: or,
     },
-    select: { id: true, email: true, name: true, firstName: true, lastName: true },
+    select: { id: true, email: true, name: true, firstName: true, lastName: true, status: true },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
   });
 }

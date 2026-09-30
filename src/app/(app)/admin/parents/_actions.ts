@@ -529,7 +529,7 @@ export async function setParentArchived(
   parentUserId: string,
   archived: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -562,7 +562,7 @@ export async function setParentArchived(
 export async function softDeleteParent(
   parentUserId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -586,7 +586,7 @@ export async function softDeleteParent(
 export async function restoreParent(
   parentUserId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -615,7 +615,7 @@ export async function restoreParent(
 export async function permanentlyDeleteParent(
   parentUserId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -648,7 +648,7 @@ async function withParentTenant<T>(
   if (ids.length === 0) {
     return { ok: false, processed: 0, skipped: 0 } as unknown as T;
   }
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "full");
   const tenantId = user.tenantId;
   if (!tenantId) {
     return { ok: false, processed: 0, skipped: 0 } as unknown as T;

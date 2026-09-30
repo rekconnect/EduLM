@@ -1049,7 +1049,7 @@ export async function bulkRestoreApplications(
 export async function bulkPermanentlyDeleteApplications(
   ids: string[],
 ): Promise<BulkResult> {
-  return withParents(ids, async () => {
+  return withParents(ids, "full", async () => {
     const r = await db.application.deleteMany({
       where: { id: { in: ids }, resultingStudentId: null },
     });
@@ -1065,7 +1065,7 @@ export async function bulkPermanentlyDeleteApplications(
  * so parents saw no réinscription at all.
  */
 export async function toggleCycleActive(cycleId: string): Promise<void> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
@@ -1094,7 +1094,7 @@ export async function toggleCycleActive(cycleId: string): Promise<void> {
  * came from the dossier the parent filled — re-accepting rewrites them).
  */
 export async function revertDecision(applicationId: string): Promise<void> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {

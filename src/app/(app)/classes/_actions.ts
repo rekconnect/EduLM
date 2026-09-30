@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 
 const classSchema = z.object({
@@ -23,7 +23,7 @@ export async function createClass(
   _prev: ClassFormState,
   formData: FormData,
 ): Promise<ClassFormState> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { formError: "No tenant" };
 
@@ -75,7 +75,7 @@ export async function createClass(
 }
 
 export async function enrollStudent(classId: string, formData: FormData) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   const studentId = String(formData.get("studentId") ?? "");
@@ -104,7 +104,7 @@ export async function enrollStudent(classId: string, formData: FormData) {
 }
 
 export async function unenrollStudent(classId: string, studentId: string) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return;
 

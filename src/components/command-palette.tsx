@@ -110,7 +110,7 @@ function navGroupsForRole(role: Role | null, t: (k: string) => string): CmdGroup
             { label: t("myInvoices"), href: "/parent/invoices", icon: Receipt },
             { label: t("myAnnouncements"), href: "/parent/announcements", icon: Megaphone },
             { label: t("myDocuments"), href: "/parent/documents", icon: FolderOpen },
-            { label: t("contact"), href: "/parent/contact", icon: MessageSquare },
+            { label: t("myMessages"), href: "/parent/messages", icon: MessageSquare },
           ],
         },
       ];

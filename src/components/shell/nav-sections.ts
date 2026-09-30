@@ -77,6 +77,7 @@ type Labels = {
   myAnnouncements: string;
   myDocuments: string;
   myInvoices: string;
+  myMessages: string;
   tenants: string;
   sectionAdmissions: string;
   sectionDaily: string;
@@ -268,7 +269,7 @@ export function navSectionsForRole(role: Role, l: Labels): NavSection[] {
           items: [
             { label: l.myAnnouncements, href: "/parent/announcements", icon: "announcements" },
             { label: l.myDocuments, href: "/parent/documents", icon: "documents" },
-            { label: l.contact, href: "/parent/contact", icon: "contact" },
+            { label: l.myMessages, href: "/parent/messages", icon: "messages" },
           ],
         },
       ];

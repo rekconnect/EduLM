@@ -3,159 +3,156 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { db, unscopedDb } from "@/lib/db";
+import { Prisma } from "@prisma/client";
+import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
-import { requireModuleAccess } from "@/lib/permissions";
+import { hasModule, requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
-import { sendAnnouncementEmail } from "@/lib/emails/notifications";
+import { notifyParentsOfMessage, resolveAudience } from "@/lib/messaging";
+import {
+  isEmptyAudience,
+  parseAudienceSpec,
+  MESSAGE_BODY_MAX,
+  MESSAGE_SUBJECT_MAX,
+} from "@/lib/messaging-shared";
 
-const AUDIENCES = ["ALL_PARENTS", "CLASS", "ACADEMIC_YEAR"] as const;
+/**
+ * Announcement board (module "communication").
+ *   write → publish an announcement to a targeted audience
+ *   full  → publish to the WHOLE school (spec.all)
+ *
+ * The audience is the same AudienceSpec as the messagerie, stored in
+ * Announcement.audienceSpec, and the parents it resolved to at publish time
+ * are snapshotted in AnnouncementRecipient — the parent board shows it to
+ * exactly those parents (a later year switch / class change / withdrawal can
+ * never re-route it). The legacy audience/classId/academicYearId trio is
+ * always written as CLASS + null, which every legacy filter matches to
+ * nobody — so no old code path can ever show it to every parent.
+ */
 
 const schema = z.object({
-  title: z.string().trim().min(1).max(160),
-  body: z.string().trim().min(1).max(5000),
-  audience: z.enum(AUDIENCES),
-  classId: z.string().optional(),
-  academicYearId: z.string().optional(),
+  title: z.string().trim().min(1).max(MESSAGE_SUBJECT_MAX),
+  body: z.string().trim().min(1).max(MESSAGE_BODY_MAX),
 });
 
 export type AnnouncementFormState = {
+  /** Field → error code ("required" | "tooLong" | "noAudience"); the form translates it. */
   errors?: Record<string, string>;
+  /** Form-level error code ("forbiddenAll" | "noRecipients" | "invalid"). */
   formError?: string;
+  /** Echo of the submitted text so React's post-action form reset keeps it. */
+  values?: { title: string; body: string };
 };
 
 export async function createAnnouncement(
   _prev: AnnouncementFormState,
   formData: FormData,
 ): Promise<AnnouncementFormState> {
-  const { user } = await requireModuleAccess("communication", "write");
+  const { user, access } = await requireModuleAccess("communication", "write");
   const tenantId = user.tenantId;
-  if (!tenantId) return { formError: "no-tenant" };
 
-  const parsed = schema.safeParse({
+  const values = {
     title: String(formData.get("title") ?? ""),
     body: String(formData.get("body") ?? ""),
-    audience: String(formData.get("audience") ?? "ALL_PARENTS"),
-    classId: String(formData.get("classId") ?? "") || undefined,
-    academicYearId: String(formData.get("academicYearId") ?? "") || undefined,
-  });
+  };
+
+  const errors: Record<string, string> = {};
+  const parsed = schema.safeParse(values);
   if (!parsed.success) {
-    const flat = z.flattenError(parsed.error).fieldErrors as Record<string, string[] | undefined>;
-    const errors: Record<string, string> = {};
-    for (const [k, v] of Object.entries(flat)) if (v?.[0]) errors[k] = v[0];
-    return { errors };
+    for (const issue of parsed.error.issues) {
+      const field = String(issue.path[0] ?? "");
+      if (!field || errors[field]) continue;
+      errors[field] = issue.code === "too_big" ? "tooLong" : "required";
+    }
   }
 
-  if (parsed.data.audience === "CLASS" && !parsed.data.classId) {
-    return { errors: { classId: "required" } };
+  let rawSpec: unknown = {};
+  try {
+    rawSpec = JSON.parse(String(formData.get("audienceSpec") ?? "{}"));
+  } catch {
+    rawSpec = {};
   }
-  if (parsed.data.audience === "ACADEMIC_YEAR" && !parsed.data.academicYearId) {
-    return { errors: { academicYearId: "required" } };
+  const spec = parseAudienceSpec(rawSpec);
+  if (isEmptyAudience(spec)) errors.audienceSpec = "noAudience";
+
+  if (!parsed.success || Object.keys(errors).length) {
+    return { errors, values };
+  }
+  // Whole-school announcements are reserved to "Accès complet".
+  if (spec.all && !hasModule(access, "communication", "full")) {
+    return { formError: "forbiddenAll", values };
   }
 
-  await runWithTenant({ tenantId, slug: null }, async () => {
-    await db.announcement.create({
-      data: {
-        tenantId,
-        title: parsed.data.title,
-        body: parsed.data.body,
-        audience: parsed.data.audience,
-        classId: parsed.data.audience === "CLASS" ? parsed.data.classId ?? null : null,
-        academicYearId:
-          parsed.data.audience === "ACADEMIC_YEAR" ? parsed.data.academicYearId ?? null : null,
-        publishedByUserId: user.id,
-      },
+  const { title, body } = parsed.data;
+
+  const recipientCount = await runWithTenant({ tenantId, slug: null }, async () => {
+    // Same resolution as the messagerie: current enrollments of the active
+    // year + explicit families/parents; disabled/archived accounts excluded.
+    const recipients = await resolveAudience(spec);
+    if (!recipients.length) return 0;
+
+    await db.$transaction(async (tx) => {
+      const ann = await tx.announcement.create({
+        data: {
+          tenantId,
+          title,
+          body,
+          audienceSpec: spec,
+          audience: "CLASS",
+          classId: null,
+          academicYearId: null,
+          publishedByUserId: user.id,
+        },
+        select: { id: true },
+      });
+      await tx.announcementRecipient.createMany({
+        data: recipients.map((r) => ({
+          tenantId,
+          announcementId: ann.id,
+          userId: r.id,
+        })),
+        skipDuplicates: true,
+      });
     });
+
+    // One private email per parent (never a shared To: list), sent after
+    // the response so a large audience doesn't delay the redirect.
+    notifyParentsOfMessage({
+      tenantId,
+      emails: recipients.map((r) => r.email),
+      subject: title,
+      body,
+      kind: "announcement",
+    });
+    return recipients.length;
   });
 
-  notifyAudienceOfAnnouncement(
-    tenantId,
-    parsed.data.title,
-    parsed.data.body,
-    parsed.data.audience,
-    parsed.data.classId,
-    parsed.data.academicYearId,
-  ).catch((e) => console.error("[email] announcement notify failed:", e));
+  if (!recipientCount) return { formError: "noRecipients", values };
 
   revalidatePath("/admin/announcements");
   revalidatePath("/parent/announcements");
-  redirect("/admin/announcements");
-}
-
-async function notifyAudienceOfAnnouncement(
-  tenantId: string,
-  title: string,
-  body: string,
-  audience: (typeof AUDIENCES)[number],
-  classId: string | undefined,
-  academicYearId: string | undefined,
-) {
-  const u = unscopedDb();
-      const tenant = await u.tenant.findUnique({
-      where: { id: tenantId },
-      select: { name: true },
-    });
-    if (!tenant) return;
-
-    // Resolve which parent users to email based on audience.
-    let parentEmails: { email: string; name: string | null }[] = [];
-    if (audience === "ALL_PARENTS") {
-      parentEmails = await u.user.findMany({
-        where: { tenantId, role: "PARENT", status: "ACTIVE" },
-        select: { email: true, name: true },
-      });
-    } else if (audience === "CLASS" && classId) {
-      const guardians = await u.user.findMany({
-        where: {
-          tenantId,
-          role: "PARENT",
-          status: "ACTIVE",
-          guardianProfile: {
-            childLinks: {
-              some: { student: { enrollments: { some: { classId } } } },
-            },
-          },
-        },
-        select: { email: true, name: true },
-      });
-      parentEmails = guardians;
-    } else if (audience === "ACADEMIC_YEAR" && academicYearId) {
-      const guardians = await u.user.findMany({
-        where: {
-          tenantId,
-          role: "PARENT",
-          status: "ACTIVE",
-          guardianProfile: {
-            childLinks: {
-              some: { student: { enrollments: { some: { academicYearId } } } },
-            },
-          },
-        },
-        select: { email: true, name: true },
-      });
-      parentEmails = guardians;
-    }
-
-    if (parentEmails.length === 0) return;
-
-    // Resend allows up to 50 recipients per call. Chunk if needed.
-    const CHUNK = 50;
-    for (let i = 0; i < parentEmails.length; i += CHUNK) {
-      const slice = parentEmails.slice(i, i + CHUNK);
-      await sendAnnouncementEmail({
-        to: slice,
-        tenantName: tenant.name,
-        title,
-        body,
-      });
-    }
+  redirect(`/admin/announcements?published=${recipientCount}`);
 }
 
 export async function markAnnouncementRead(announcementId: string) {
+  if (typeof announcementId !== "string" || !announcementId || announcementId.length > 64) return;
   const user = await requireRole("PARENT");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
+    // Tenant-scoped lookup + recipient check for targeted announcements, so a
+    // read receipt can't be created for an announcement this parent never got.
+    const visible = await db.announcement.findFirst({
+      where: {
+        id: announcementId,
+        OR: [
+          { audienceSpec: { equals: Prisma.DbNull } },
+          { recipients: { some: { userId: user.id } } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!visible) return;
     await db.announcementRead.upsert({
       where: { announcementId_userId: { announcementId, userId: user.id } },
       update: {},

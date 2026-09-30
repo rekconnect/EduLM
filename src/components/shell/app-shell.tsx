@@ -32,6 +32,7 @@ export async function AppShell({
     discipline: tNav("discipline"),
     billing: tNav("billing"),
     contact: tNav("contact"),
+    myMessages: tNav("myMessages"),
     settings: tNav("settings"),
     reports: tNav("reports"),
     transport: tNav("transport"),

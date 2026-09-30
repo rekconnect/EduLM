@@ -1,39 +1,38 @@
 import { getTranslations } from "next-intl/server";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody } from "@/components/ui/card";
-import { db } from "@/lib/db";
-import { requireModuleAccess } from "@/lib/permissions";
+import { hasModule, requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
+import { loadPickerOptions } from "@/lib/messaging";
 import { AnnouncementForm } from "./_form";
 
 export default async function NewAnnouncementPage() {
-  const { user } = await requireModuleAccess("communication", "write");
+  const { user, access } = await requireModuleAccess("communication", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 
   return runWithTenant({ tenantId, slug: null }, async () => {
     const t = await getTranslations("communication");
+    const tA = await getTranslations("messaging.annonces");
 
-    const [classes, years] = await Promise.all([
-      db.class.findMany({
-        orderBy: [{ level: "asc" }, { section: "asc" }],
-        select: { id: true, name: true },
-      }),
-      db.academicYear.findMany({
-        orderBy: { startDate: "desc" },
-        select: { id: true, label: true, isActive: true },
-      }),
-    ]);
+    // Establishments, levels and classes of the ACTIVE academic year — the
+    // same option set the messagerie composer uses.
+    const { establishments, levels, classes } = await loadPickerOptions();
 
     return (
-        <main className="mx-auto max-w-2xl px-6 py-10">
-          <PageHeader title={t("newAnnouncementTitle")} />
-          <Card>
-            <CardBody>
-              <AnnouncementForm classes={classes} years={years} />
-            </CardBody>
-          </Card>
-        </main>
+      <main className="mx-auto max-w-3xl px-6 py-10">
+        <PageHeader title={t("newAnnouncementTitle")} description={tA("newLead")} />
+        <Card>
+          <CardBody>
+            <AnnouncementForm
+              establishments={establishments}
+              levels={levels}
+              classes={classes}
+              allowAll={hasModule(access, "communication", "full")}
+            />
+          </CardBody>
+        </Card>
+      </main>
     );
   });
 }

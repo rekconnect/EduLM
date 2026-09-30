@@ -136,6 +136,11 @@ model Tenant {
   documents        TenantDocument[]
   announcements    Announcement[]
   contactMessages  ContactMessage[]
+  messageBroadcasts  MessageBroadcast[]
+  messageThreads     MessageThread[]
+  messagePosts       MessagePost[]
+  messageAttachments MessageAttachment[]
+  announcementRecipients AnnouncementRecipient[]
   applicationResponsables ApplicationResponsable[]
   applicationContacts     ApplicationContact[]
   applicationSiblings     ApplicationSibling[]
@@ -200,6 +205,10 @@ model User {
   announcementReads  AnnouncementRead[]
   sentMessages       ContactMessage[]  @relation("ContactSender")
   readMessages       ContactMessage[]  @relation("ContactReader")
+  messageBroadcasts  MessageBroadcast[] @relation("MessageBroadcastSender")
+  messageThreads     MessageThread[]    @relation("MessageThreadParent")
+  messagePosts       MessagePost[]      @relation("MessagePostAuthor")
+  announcementRecipients AnnouncementRecipient[] @relation("AnnouncementRecipientUser")
   inscriptionFormAuditEntries TenantConfigAuditLog[]
   payrollEmployee    PayrollEmployee?
   staffNotifications StaffNotification[]
@@ -1508,6 +1517,9 @@ model Announcement {
   audience          AnnouncementAudience @default(ALL_PARENTS)
   classId           String?
   academicYearId    String?
+  // Flexible audience (same AudienceSpec as the messagerie). When set it
+  // supersedes the legacy audience/classId/academicYearId trio.
+  audienceSpec      Json?
   publishedAt       DateTime             @default(now())
   publishedByUserId String
   createdAt         DateTime             @default(now())
@@ -1518,6 +1530,7 @@ model Announcement {
   academicYear AcademicYear?      @relation(fields: [academicYearId], references: [id], onDelete: SetNull)
   publishedBy  User               @relation("AnnouncementPublisher", fields: [publishedByUserId], references: [id])
   reads        AnnouncementRead[]
+  recipients   AnnouncementRecipient[]
 
   @@index([tenantId, publishedAt])
   @@index([tenantId, classId])
@@ -1534,6 +1547,24 @@ model AnnouncementRead {
 
   @@id([announcementId, userId])
   @@index([userId])
+}
+
+// Who a targeted announcement was published to — snapshotted from
+// resolveAudience at publish time. The parent board shows a targeted
+// announcement to exactly these parents, so a year switch, a class change or
+// a withdrawal can never re-route an old announcement to a different cohort.
+model AnnouncementRecipient {
+  tenantId       String
+  announcementId String
+  userId         String
+  createdAt      DateTime @default(now())
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user         User         @relation("AnnouncementRecipientUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([announcementId, userId])
+  @@index([tenantId, userId])
 }
 
 enum ContactMessageStatus {
@@ -1562,6 +1593,113 @@ model ContactMessage {
 
   @@index([tenantId, status, createdAt])
   @@index([tenantId, fromUserId])
+}
+
+// ───────────────────────── Messagerie (école ⇄ parents) ─────────────────────────
+// A MessageBroadcast is what staff compose ("Nouveau message"): one send to an
+// audience — whole school / establishments / levels / classes / families /
+// individual parents (union), resolved against the ACTIVE year at send time.
+// It fans out into one MessageThread PER PARENT: a private school ⇄ parent
+// conversation, so a reply to a group message is only ever seen by the school,
+// never by the other parents. A parent writing to the school ("Écrire à
+// l'école") opens a thread with origin PARENT and no broadcast. Replaces the
+// one-way ContactMessage inbox (kept read-only for history).
+
+enum MessageThreadOrigin {
+  SCHOOL
+  PARENT
+}
+
+enum MessageThreadStatus {
+  OPEN
+  CLOSED
+}
+
+model MessageBroadcast {
+  id             String   @id @default(cuid())
+  tenantId       String
+  subject        String
+  body           String
+  senderUserId   String?
+  allowReplies   Boolean  @default(false)
+  // AudienceSpec snapshot (src/lib/messaging-shared.ts) + its human summary at
+  // send time — the recipient list itself is the fanned-out threads.
+  audience       Json     @default("{}")
+  audienceLabel  String   @default("")
+  recipientCount Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sender      User?               @relation("MessageBroadcastSender", fields: [senderUserId], references: [id], onDelete: SetNull)
+  threads     MessageThread[]
+  attachments MessageAttachment[]
+
+  @@index([tenantId, createdAt])
+}
+
+model MessageThread {
+  id               String              @id @default(cuid())
+  tenantId         String
+  parentUserId     String
+  subject          String
+  origin           MessageThreadOrigin
+  broadcastId      String?
+  allowReplies     Boolean             @default(true)
+  status           MessageThreadStatus @default(OPEN)
+  lastMessageAt    DateTime            @default(now())
+  // Read state per side. parentReadAt = FIRST time the parent opened it (read
+  // stats); the *Unread flags drive the badges and flip on every new post.
+  parentUnread     Boolean             @default(true)
+  parentReadAt     DateTime?
+  schoolUnread     Boolean             @default(false)
+  schoolReadAt     DateTime?
+  schoolReadByUserId String?
+  closedAt         DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent    User              @relation("MessageThreadParent", fields: [parentUserId], references: [id], onDelete: Cascade)
+  broadcast MessageBroadcast? @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  posts     MessagePost[]
+
+  @@index([tenantId, parentUserId, lastMessageAt])
+  @@index([tenantId, schoolUnread, lastMessageAt])
+  @@index([broadcastId])
+}
+
+model MessagePost {
+  id           String   @id @default(cuid())
+  tenantId     String
+  threadId     String
+  // Nullable + SetNull: deleting a user (e.g. the duplicate-parent cleanup)
+  // must never be blocked by message history, nor erase the conversation.
+  authorUserId String?
+  fromSchool   Boolean
+  body         String
+  createdAt    DateTime @default(now())
+
+  tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  thread MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author User?         @relation("MessagePostAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  @@index([threadId, createdAt])
+}
+
+model MessageAttachment {
+  id          String   @id @default(cuid())
+  tenantId    String
+  broadcastId String
+  storagePath String
+  fileName    String
+  mimeType    String
+  sizeBytes   Int
+  createdAt   DateTime @default(now())
+
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  broadcast MessageBroadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+
+  @@index([broadcastId])
 }
 
 // ───────────────────────── WYSIWYG audit log ─────────────────────────

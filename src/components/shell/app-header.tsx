@@ -46,7 +46,7 @@ async function navForRole(role: Role): Promise<NavItem[]> {
         { label: "Documents", href: "/parent/documents" },
         { label: "Annonces", href: "/parent/announcements" },
         { label: t("billing"), href: "/parent/invoices" },
-        { label: "Contact", href: "/parent/contact" },
+        { label: "Messages", href: "/parent/messages" },
       ];
   }
 }

@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { Megaphone, CheckCircle2 } from "lucide-react";
+import { Prisma } from "@prisma/client";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StaggerGrid } from "@/components/ui/stagger-grid";
@@ -23,30 +24,55 @@ export default async function ParentAnnouncementsPage() {
       yearIds = Array.from(new Set(enrollments.map((e) => e.academicYearId)));
     }
 
-    const announcements = await db.announcement.findMany({
-      where: {
-        OR: [
-          { audience: "ALL_PARENTS" },
-          {
-            audience: "CLASS",
-            classId: { in: classIds.length > 0 ? classIds : ["__none__"] },
-          },
-          {
-            audience: "ACADEMIC_YEAR",
-            academicYearId: {
-              in: yearIds.length > 0 ? yearIds : ["__none__"],
+    const select = {
+      id: true,
+      title: true,
+      body: true,
+      publishedAt: true,
+      reads: {
+        where: { userId: user.id },
+        select: { readAt: true },
+      },
+    } satisfies Prisma.AnnouncementSelect;
+
+    const [legacy, targeted] = await Promise.all([
+      // Legacy rows (no audienceSpec): the historical audience/class/year trio.
+      db.announcement.findMany({
+        where: {
+          audienceSpec: { equals: Prisma.DbNull },
+          OR: [
+            { audience: "ALL_PARENTS" },
+            {
+              audience: "CLASS",
+              classId: { in: classIds.length > 0 ? classIds : ["__none__"] },
             },
-          },
-        ],
-      },
-      orderBy: { publishedAt: "desc" },
-      include: {
-        reads: {
-          where: { userId: user.id },
-          select: { readAt: true },
+            {
+              audience: "ACADEMIC_YEAR",
+              academicYearId: {
+                in: yearIds.length > 0 ? yearIds : ["__none__"],
+              },
+            },
+          ],
         },
-      },
-    });
+        orderBy: { publishedAt: "desc" },
+        select,
+      }),
+      // Flexible-audience rows: exactly the parents snapshotted as recipients
+      // at publish time (AnnouncementRecipient) — never re-evaluated against
+      // later enrollments, so a year switch can't re-route an announcement.
+      db.announcement.findMany({
+        where: {
+          audienceSpec: { not: Prisma.DbNull },
+          recipients: { some: { userId: user.id } },
+        },
+        orderBy: { publishedAt: "desc" },
+        select,
+      }),
+    ]);
+
+    const announcements = [...legacy, ...targeted].sort(
+      (a, b) => b.publishedAt.getTime() - a.publishedAt.getTime(),
+    );
 
     return (
         <main className="mx-auto max-w-3xl space-y-4 px-6 py-10">
@@ -97,7 +123,7 @@ export default async function ParentAnnouncementsPage() {
                       }
                     />
                     <CardBody className="space-y-3">
-                      <p className="whitespace-pre-line text-sm leading-relaxed text-[color:var(--color-foreground)]">
+                      <p className="whitespace-pre-line break-words text-sm leading-relaxed text-[color:var(--color-foreground)]">
                         {a.body}
                       </p>
                       {unread ? (

@@ -1,99 +1,172 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Button } from "@/components/ui/button";
-import { Input, Select, Textarea } from "@/components/ui/input";
-import { Field, FormRow } from "@/components/ui/field";
+import { toast } from "sonner";
+import { Loader2, Megaphone, ShieldCheck } from "lucide-react";
+import { Button, LinkButton } from "@/components/ui/button";
+import { Input, Textarea } from "@/components/ui/input";
+import { Field } from "@/components/ui/field";
+import { RecipientPicker } from "@/components/messaging/recipient-picker";
+import {
+  isEmptyAudience,
+  MESSAGE_BODY_MAX,
+  MESSAGE_SUBJECT_MAX,
+  type AudienceSpec,
+  type PickerClass,
+  type PickerEstablishment,
+} from "@/lib/messaging-shared";
 import { createAnnouncement, type AnnouncementFormState } from "../_actions";
 
-type Audience = "ALL_PARENTS" | "CLASS" | "ACADEMIC_YEAR";
+/** Server error code → messaging.annonces key. */
+const ERROR_KEYS: Record<string, string> = {
+  required: "errRequired",
+  tooLong: "errTooLong",
+  noAudience: "errNoAudience",
+  forbiddenAll: "errForbiddenAll",
+  noRecipients: "errNoRecipients",
+};
 
 export function AnnouncementForm({
+  establishments,
+  levels,
   classes,
-  years,
+  allowAll,
 }: {
-  classes: { id: string; name: string }[];
-  years: { id: string; label: string; isActive: boolean }[];
+  establishments: PickerEstablishment[];
+  levels: string[];
+  classes: PickerClass[];
+  allowAll: boolean;
 }) {
   const t = useTranslations("communication");
+  const tA = useTranslations("messaging.annonces");
   const tCommon = useTranslations("common");
   const [state, formAction, pending] = useActionState<AnnouncementFormState, FormData>(
     createAnnouncement,
     {},
   );
-  const [audience, setAudience] = useState<Audience>("ALL_PARENTS");
+  const [spec, setSpec] = useState<AudienceSpec>({});
+  const audienceEmpty = isEmptyAudience(spec);
+
+  const errText = (code?: string) =>
+    code ? tA(ERROR_KEYS[code] ?? "errGeneric") : undefined;
+
+  // Success redirects to the list (which shows the confirmation); every
+  // returned state is therefore an error worth surfacing.
+  useEffect(() => {
+    if (state.formError) toast.error(errText(state.formError));
+    else if (state.errors && Object.keys(state.errors).length) toast.error(tA("errCheckForm"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
+
+  const audienceError = errText(state.errors?.audienceSpec);
 
   return (
-    <form action={formAction} className="space-y-5">
-      <Field label={t("fieldTitle")} htmlFor="title" required error={state.errors?.title}>
-        <Input id="title" name="title" required autoFocus />
-      </Field>
+    <form action={formAction} className="space-y-6">
+      <input type="hidden" name="audienceSpec" value={JSON.stringify(spec)} />
 
-      <Field label={t("fieldBody")} htmlFor="body" required error={state.errors?.body}>
-        <Textarea id="body" name="body" rows={6} required />
-      </Field>
-
-      <FormRow>
-        <Field label={t("fieldAudience")} htmlFor="audience" required>
-          <Select
-            id="audience"
-            name="audience"
-            value={audience}
-            onChange={(e) => setAudience(e.target.value as Audience)}
+      <section
+        role="group"
+        aria-labelledby="announcement-audience-label"
+        aria-describedby="announcement-audience-hint"
+        className="space-y-2"
+      >
+        <div>
+          <p
+            id="announcement-audience-label"
+            className="text-sm font-medium text-[color:var(--color-foreground)]"
           >
-            <option value="ALL_PARENTS">{t("audienceAll")}</option>
-            <option value="CLASS">{t("audienceClass")}</option>
-            <option value="ACADEMIC_YEAR">{t("audienceYear")}</option>
-          </Select>
-        </Field>
-        {audience === "CLASS" ? (
-          <Field label={t("fieldClass")} htmlFor="classId" required error={state.errors?.classId}>
-            <Select id="classId" name="classId" defaultValue="" required>
-              <option value="" disabled>
-                —
-              </option>
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        ) : audience === "ACADEMIC_YEAR" ? (
-          <Field label={t("fieldYear")} htmlFor="academicYearId" required error={state.errors?.academicYearId}>
-            <Select id="academicYearId" name="academicYearId" defaultValue="" required>
-              <option value="" disabled>
-                —
-              </option>
-              {years.map((y) => (
-                <option key={y.id} value={y.id}>
-                  {y.label}
-                  {y.isActive ? " (active)" : ""}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        ) : (
-          <span />
-        )}
-      </FormRow>
+            {t("fieldAudience")}
+            <span className="ms-0.5 text-[color:var(--color-danger)]">*</span>
+          </p>
+          <p
+            id="announcement-audience-hint"
+            className="mt-0.5 text-xs text-[color:var(--color-foreground-subtle)]"
+          >
+            {allowAll ? tA("audienceHint") : tA("audienceHintNoAll")}
+          </p>
+        </div>
+        <RecipientPicker
+          establishments={establishments}
+          levels={levels}
+          classes={classes}
+          value={spec}
+          onChange={setSpec}
+          allowAll={allowAll}
+          disabled={pending}
+          showPreview
+        />
+        {audienceError ? (
+          <p className="text-xs text-[color:var(--color-danger)]" role="alert">
+            {audienceError}
+          </p>
+        ) : null}
+      </section>
 
-      {state.formError ? (
-        <p className="text-sm text-red-600" role="alert">
-          {state.formError}
-        </p>
-      ) : null}
+      <Field
+        label={t("fieldTitle")}
+        htmlFor="title"
+        required
+        error={errText(state.errors?.title)}
+      >
+        <Input
+          id="title"
+          name="title"
+          required
+          maxLength={MESSAGE_SUBJECT_MAX}
+          defaultValue={state.values?.title}
+          placeholder={tA("titlePlaceholder")}
+          disabled={pending}
+        />
+      </Field>
 
-      <div className="flex items-center justify-end gap-2 pt-2">
-        <a
-          href="/admin/announcements"
-          className="inline-flex items-center rounded-md border border-[color:var(--border)] px-4 py-2 text-sm font-medium transition hover:bg-[color:var(--muted)]"
-        >
+      <Field
+        label={t("fieldBody")}
+        htmlFor="body"
+        required
+        error={errText(state.errors?.body)}
+      >
+        <Textarea
+          id="body"
+          name="body"
+          rows={8}
+          required
+          maxLength={MESSAGE_BODY_MAX}
+          defaultValue={state.values?.body}
+          placeholder={tA("bodyPlaceholder")}
+          disabled={pending}
+        />
+      </Field>
+
+      <div className="flex items-start gap-2 rounded-lg bg-[color:var(--color-surface-sunken)] px-3 py-2.5 text-xs leading-relaxed text-[color:var(--color-foreground-muted)]">
+        <ShieldCheck
+          className="mt-px size-4 shrink-0 text-[color:var(--color-brand-600)]"
+          aria-hidden
+        />
+        <p>{tA("emailPrivacyNote")}</p>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[color:var(--color-border-subtle)] pt-4">
+        {audienceEmpty ? (
+          <p className="me-auto text-xs text-[color:var(--color-foreground-subtle)]">
+            {tA("pickAudienceFirst")}
+          </p>
+        ) : null}
+        <LinkButton href="/admin/announcements" variant="secondary">
           {tCommon("cancel")}
-        </a>
-        <Button type="submit" disabled={pending}>
-          {pending ? tCommon("loading") : tCommon("create")}
+        </LinkButton>
+        <Button
+          type="submit"
+          disabled={pending || audienceEmpty}
+          aria-busy={pending}
+          className="gap-1.5"
+        >
+          {pending ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+          ) : (
+            <Megaphone className="size-4" aria-hidden />
+          )}
+          {pending ? tA("publishing") : tA("publish")}
         </Button>
       </div>
     </form>

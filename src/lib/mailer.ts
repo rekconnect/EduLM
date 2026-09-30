@@ -80,6 +80,94 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
   }
 }
 
+const BATCH_SIZE = 100; // Resend batch API maximum per call
+const BATCH_GAP_MS = 600; // stay under Resend's default 2 requests/second
+const BATCH_MAX_ATTEMPTS = 4;
+const RETRY_WAIT_CAP_MS = 30_000; // never outlive the function on a huge retry-after
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+export type BatchResult = { sent: number; failed: number; skipped: number };
+
+/**
+ * Send many transactional emails, ONE RECIPIENT EACH (never a shared To:
+ * list — every family's address stays private). Uses Resend's batch API
+ * (100 emails per call), paced under the rate limit, retrying rate-limit and
+ * server errors with backoff (honouring retry-after). "permissive" batch
+ * validation: one malformed address can't sink the other 99. Never throws.
+ */
+export async function sendMailBatch(inputs: SendMailInput[]): Promise<BatchResult> {
+  const client = getClient();
+  if (!inputs.length) return { sent: 0, failed: 0, skipped: 0 };
+  if (!client) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[mailer:no-config] batch of ${inputs.length} × "${inputs[0]!.subject}"`);
+    }
+    return { sent: 0, failed: 0, skipped: inputs.length };
+  }
+
+  let sent = 0;
+  let failed = 0;
+  // One idempotency key per chunk, stable across its retries: if Resend
+  // accepted a batch but the response was lost, a retry can't double-send.
+  const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  for (let i = 0; i < inputs.length; i += BATCH_SIZE) {
+    if (i > 0) await sleep(BATCH_GAP_MS);
+    const chunk = inputs.slice(i, i + BATCH_SIZE);
+    const payload = chunk.map((m) => ({
+      from: FROM,
+      to: (Array.isArray(m.to) ? m.to : [m.to]).map(normalizeRecipient),
+      subject: m.subject,
+      html: m.html,
+      text: m.text,
+      replyTo: m.replyTo,
+      tags: m.tag ? [{ name: "type", value: m.tag }] : undefined,
+    }));
+    let done = false;
+    for (let attempt = 1; attempt <= BATCH_MAX_ATTEMPTS && !done; attempt++) {
+      try {
+        const res = await client.batch.send(payload, {
+          batchValidation: "permissive",
+          idempotencyKey: `edulm-${runId}-${i / BATCH_SIZE}`,
+        });
+        if (!res.error) {
+          const rejected = (res.data as { errors?: unknown[] } | null)?.errors?.length ?? 0;
+          sent += chunk.length - rejected;
+          failed += rejected;
+          done = true;
+          break;
+        }
+        const quota =
+          res.error.name === "daily_quota_exceeded" ||
+          res.error.name === "monthly_quota_exceeded";
+        const retryable =
+          !quota &&
+          (res.error.name === "rate_limit_exceeded" ||
+            res.error.statusCode === 429 ||
+            res.error.statusCode === null || // network failure — safe to retry with the idempotency key
+            (res.error.statusCode ?? 0) >= 500);
+        if (!retryable || attempt === BATCH_MAX_ATTEMPTS) {
+          console.error("[mailer] batch failed:", res.error.name, res.error.message);
+          break;
+        }
+        const retryAfter = Number(res.headers?.["retry-after"]);
+        const wait =
+          Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000 * 2 ** (attempt - 1);
+        await sleep(Math.min(wait, RETRY_WAIT_CAP_MS));
+      } catch (e) {
+        if (attempt === BATCH_MAX_ATTEMPTS) {
+          console.error("[mailer] batch threw:", (e as Error).message);
+          break;
+        }
+        await sleep(1000 * 2 ** (attempt - 1));
+      }
+    }
+    if (!done) failed += chunk.length;
+  }
+  if (failed) console.error(`[mailer] batch summary: ${sent} sent, ${failed} failed`);
+  return { sent, failed, skipped: 0 };
+}
+
 /** Helper to build a minimal branded HTML wrapper around plain content. */
 export function htmlLayout(args: {
   preheader?: string;

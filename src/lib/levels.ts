@@ -44,6 +44,19 @@ function canonicalLevel(level: string): string {
 }
 
 /**
+ * Every stored spelling of a level ("2nde" → ["2nde", "Seconde"]), for
+ * `level: { in: … }` filters — Class.level is free text in both spellings.
+ */
+export function levelSpellings(level: string): string[] {
+  const canon = canonicalLevel(level);
+  const out = new Set<string>([level.trim(), canon]);
+  for (const [alias, target] of Object.entries(LEVEL_ALIASES)) {
+    if (target === canon) out.add(alias);
+  }
+  return [...out];
+}
+
+/**
  * Sort index for a level string. Accepts either spelling; unknown levels sort
  * last (returns LEVEL_ORDER.length so they land after every known level).
  */

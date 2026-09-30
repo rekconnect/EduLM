@@ -8,7 +8,8 @@ import {
 import { requireUser } from "@/lib/session";
 import { unscopedDb } from "@/lib/db";
 import { getStaffShellData } from "@/lib/staff-portal";
-import { getAdminAccess, type AdminAccess } from "@/lib/permissions";
+import { getAdminAccess, hasModule, type AdminAccess } from "@/lib/permissions";
+import { parentUnreadCount, schoolUnreadCount } from "@/lib/messaging";
 
 /**
  * Layout for every authenticated page. Persistent across navigations within
@@ -30,7 +31,7 @@ export default async function AppLayout({
   // The three per-navigation reads are independent — run them together
   // instead of serially (this layout renders on every authenticated page):
   // the mustChangePassword flag, the tenant brand/shell data, and nav labels.
-  const [acct, tenant, tNav, years, staffShell, adminAccess] = await Promise.all([
+  const [acct, tenant, tNav, years, staffShell, adminAccess, unreadMessages] = await Promise.all([
     unscopedDb().user.findUnique({
       where: { id: user.id },
       select: { mustChangePassword: true },
@@ -57,6 +58,15 @@ export default async function AppLayout({
     user.role === "TEACHER" || user.role === "STAFF"
       ? getAdminAccess(user)
       : Promise.resolve(null as AdminAccess | null),
+    // Messagerie unread badge: a parent's own unread conversations, or the
+    // school inbox's unread count for staff (shown only if they can see it).
+    !user.tenantId
+      ? Promise.resolve(0)
+      : user.role === "PARENT"
+        ? parentUnreadCount(user.tenantId, user.id)
+        : user.role === "SCHOOL_ADMIN" || user.role === "TEACHER" || user.role === "STAFF"
+          ? schoolUnreadCount(user.tenantId)
+          : Promise.resolve(0),
   ]);
 
   // Force users flagged for a password reset (e.g. bulk-onboarded parents
@@ -79,6 +89,7 @@ export default async function AppLayout({
     discipline: tNav("discipline"),
     billing: tNav("billing"),
     contact: tNav("contact"),
+    myMessages: tNav("myMessages"),
     settings: tNav("settings"),
     reports: tNav("reports"),
     transport: tNav("transport"),
@@ -137,6 +148,24 @@ export default async function AppLayout({
       }))
     : sections;
 
+  // Unread-message badges. Staff only see the inbox count when the inbox is
+  // theirs to see (SCHOOL_ADMIN, or a Communication grant).
+  const canSeeInbox =
+    user.role === "SCHOOL_ADMIN" ||
+    (adminAccess !== null && hasModule(adminAccess, "communication", "read"));
+  const navSections =
+    unreadMessages > 0
+      ? decoratedSections.map((section) => ({
+          ...section,
+          items: section.items.map((item) =>
+            (item.href === "/parent/messages" && user.role === "PARENT") ||
+            (item.href === "/admin/messages" && canSeeInbox)
+              ? { ...item, badge: unreadMessages }
+              : item,
+          ),
+        }))
+      : decoratedSections;
+
   const brandStyle = {
     ...(tenant?.brandLight
       ? { "--brand-override-light": tenant.brandLight }
@@ -152,7 +181,7 @@ export default async function AppLayout({
         role={user.role}
         userLabel={user.name ?? user.email}
         tenantLabel={tenant?.name}
-        sections={decoratedSections}
+        sections={navSections}
         signOutLabel={tNav("signOut")}
         logoUrl={tenant?.logoUrl ?? null}
         years={years}

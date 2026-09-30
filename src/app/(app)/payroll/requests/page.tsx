@@ -4,13 +4,13 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardBody } from "@/components/ui/card";
 import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { FinanceDecision, UndoButton, ForwardStrandedButton } from "./_decision";
 import { StatusPill, statusKey, kindLabelKey, formatRequestRange } from "../../staff/_request-shared";
 
 export default async function StaffRequestsAdminPage() {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
 

@@ -23,7 +23,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { unscopedDb } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import {
   applyFieldOverride,
   parseTenantInscriptionFormConfig,
@@ -61,7 +61,7 @@ export async function saveFieldOverride(
   fieldKey: string,
   raw: unknown,
 ): Promise<FieldOverrideResult> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("formulaires", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
@@ -126,7 +126,7 @@ export async function saveFieldOverride(
 export async function resetFieldOverride(
   fieldKey: string,
 ): Promise<FieldOverrideResult> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("formulaires", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
 

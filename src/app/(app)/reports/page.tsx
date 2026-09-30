@@ -8,7 +8,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 
 const REPORTS = [
   {

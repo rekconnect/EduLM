@@ -1,4 +1,4 @@
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { db } from "@/lib/db";
 import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";

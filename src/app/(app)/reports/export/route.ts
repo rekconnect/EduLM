@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("rapports", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return new Response("Aucun établissement.", { status: 400 });
 

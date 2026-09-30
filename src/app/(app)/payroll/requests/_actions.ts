@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { notifyUser } from "@/lib/staff-notify";
 
@@ -15,7 +15,7 @@ export async function financeDecision(
   decision: "approve" | "reject",
   formData?: FormData,
 ): Promise<void> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
@@ -55,7 +55,7 @@ export async function financeDecision(
  * supervisor stage. Requester notified.
  */
 export async function undoDecision(id: string): Promise<void> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
@@ -96,7 +96,7 @@ export async function undoDecision(id: string): Promise<void> {
  * it into the finance queue, where the normal decision flow takes over.
  */
 export async function forwardStrandedRequest(id: string): Promise<void> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("paie", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {

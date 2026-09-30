@@ -676,7 +676,7 @@ export async function deleteBusAssignment(
   period: string,
   studentId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("eleves", "full");
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
   if (!/^.+\|T[123]$/.test(period)) return { ok: false, error: "bad-period" };

@@ -7,7 +7,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Select } from "@/components/ui/input";
 import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
 import { db } from "@/lib/db";
-import { withTenantSession } from "@/lib/session";
+import { withModuleSession } from "@/lib/permissions";
 import { enrollStudent, unenrollStudent } from "../_actions";
 
 export default async function ClassDetailPage({
@@ -17,7 +17,7 @@ export default async function ClassDetailPage({
 }) {
   const { id } = await params;
 
-  return withTenantSession(async (user) => {
+  return withModuleSession("eleves", "read", async (user) => {
     const t = await getTranslations("classes");
     const tStudents = await getTranslations("students");
     const tCommon = await getTranslations("common");

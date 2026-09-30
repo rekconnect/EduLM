@@ -9,7 +9,7 @@ import { SortableTH, type SortDir } from "@/components/ui/sortable-th";
 import { FilterPill } from "@/components/ui/filter-pill";
 import { YearPicker } from "@/components/shell/year-picker";
 import { db } from "@/lib/db";
-import { withTenantSession } from "@/lib/session";
+import { withModuleSession } from "@/lib/permissions";
 import { sortLevels } from "@/lib/levels";
 
 const BASE = "/classes";
@@ -46,7 +46,7 @@ export default async function ClassesPage({
 }) {
   const { yearId: yearIdParam, level, sort, dir } = await searchParams;
 
-  return withTenantSession(async (user) => {
+  return withModuleSession("eleves", "read", async (user) => {
     const t = await getTranslations("classes");
 
     const years = await db.academicYear.findMany({

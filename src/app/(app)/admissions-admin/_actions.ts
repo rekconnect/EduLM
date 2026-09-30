@@ -580,7 +580,7 @@ export async function decideApplication(
   _prev: { error?: string } | undefined,
   formData: FormData,
 ): Promise<{ error?: string }> {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const { user } = await requireModuleAccess("admissions", "write");
   const tenantId = user.tenantId;
   if (!tenantId) return { error: "no-tenant" };
 

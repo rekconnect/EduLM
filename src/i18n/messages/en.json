@@ -1859,6 +1859,9 @@
     "module_formulaires": "Registration forms",
     "moduleDesc_formulaires": "Field and form configuration",
     "module_admissions": "Admissions, campaigns & years",
-    "moduleDesc_admissions": "Applications, campaigns, school years"
+    "moduleDesc_admissions": "Applications, campaigns, school years",
+    "levelHint_read": "view only",
+    "levelHint_write": "view + create / edit",
+    "levelHint_full": "everything, incl. delete and configure"
   }
 }

@@ -32,6 +32,8 @@ export type AccountRow = {
   email: string;
   role: "SCHOOL_ADMIN" | "TEACHER" | "STAFF" | "PARENT";
   status: "ACTIVE" | "INVITED" | "DISABLED";
+  /** Double profil: a PARENT who is also personnel. */
+  staffRole?: "TEACHER" | "STAFF" | null;
 };
 
 const STATUS_TONE: Record<AccountRow["status"], string> = {
@@ -90,6 +92,8 @@ function AccountEditor({ row }: { row: AccountRow }) {
       const res = await updateAccount(row.id, { email: email.trim(), role });
       if (res.error === "email-taken") toast.error(t("emailTaken"));
       else if (res.error === "bad-email") toast.error(t("badEmail"));
+      else if (res.error === "has-hat") toast.error(t("hasHat"));
+      else if (res.error === "parent-unverified") toast.error(t("parentUnverified"));
       else if (res.error) toast.error(t("actionError"));
       else toast.success(t("saved"));
     });
@@ -336,6 +340,7 @@ export function AccountsTable({ rows }: { rows: AccountRow[] }) {
                   <TD>
                     <span className="inline-flex rounded-full bg-[color:var(--color-brand-50)] px-2 py-0.5 text-xs font-medium text-[color:var(--color-brand-700)]">
                       {t(`role_${r.role}`)}
+                      {r.staffRole ? ` + ${t(`role_${r.staffRole}`)}` : ""}
                     </span>
                   </TD>
                   <TD>

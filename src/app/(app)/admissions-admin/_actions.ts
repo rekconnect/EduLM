@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db, unscopedDb } from "@/lib/db";
+import { PROVENANCE_SELECT, hasProvenance, isStaffDomainEmail, staffDomainsFor } from "@/lib/staff-identity";
 import { requireModuleAccess, type AccessLevel } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { decimalStringToCents } from "@/lib/money";
@@ -658,6 +659,22 @@ export async function decideApplication(
 
       // Now do all the writes in a single transaction. If anything throws,
       // Prisma rolls back — no orphan Student rows, no half-accepted apps.
+        // Accepting a NEW family links the submitter to a child — that link is
+        // the double-profil provenance signal, so for non-admin actors a
+        // submitter on a STAFF e-mail domain must already be verified.
+        if (!isRenewal && user.role !== "SCHOOL_ADMIN") {
+          const submitter = await db.user.findFirst({
+            where: { id: app.submittedByUserId },
+            select: { email: true, ...PROVENANCE_SELECT },
+          });
+          if (
+            submitter &&
+            !hasProvenance(submitter) &&
+            isStaffDomainEmail(submitter.email, await staffDomainsFor(tenantId))
+          ) {
+            return { error: "Le compte du parent utilise une adresse du personnel non vérifiée — un administrateur doit accepter ce dossier." };
+          }
+        }
       try {
         let newGuardianForFamily: string | null = null;
         let newStudentForFamily: string | null = null;

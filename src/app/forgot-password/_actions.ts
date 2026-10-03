@@ -126,7 +126,7 @@ export async function resetPasswordWithCode(
   const passwordHash = await bcrypt.hash(password, 10);
   await u.user.update({
     where: { id: account.id },
-    data: { passwordHash, status: "ACTIVE", mustChangePassword: false },
+    data: { passwordHash, status: "ACTIVE", mustChangePassword: false, sessionsInvalidBefore: new Date() },
   });
   return { ok: true };
 }

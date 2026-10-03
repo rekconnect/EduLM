@@ -4,7 +4,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { db, unscopedDb } from "@/lib/db";
-import { requireUser } from "@/lib/session";
+import { requireUser, requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
 import { redirect } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -111,8 +111,7 @@ export default async function DossierEditPage({
 
   // Actors: the OWNING PARENT — or a SCHOOL_ADMIN editing on the family's
   // behalf (secretariat). Other roles bounce to their portal.
-  const user = await requireUser();
-  if (user.role !== "PARENT" && user.role !== "SCHOOL_ADMIN") redirect("/dashboard");
+  const user = await requireRole(["PARENT", "SCHOOL_ADMIN"]);
   const tenantId = user.tenantId;
   if (!tenantId) redirect("/sign-in");
   return runWithTenant({ tenantId, slug: null }, async () => {

@@ -1,6 +1,12 @@
 import { redirect } from "next/navigation";
 import type { Role } from "@prisma/client";
-import { requireUser, type SessionUser } from "./session";
+import {
+  ACCOUNT_DISABLED_PATH,
+  effectiveStaffRole,
+  liveAccount,
+  requireUser,
+  type SessionUser,
+} from "./session";
 import { unscopedDb } from "./db";
 import { runWithTenant } from "./tenant-context";
 import { postSignInPath } from "./post-signin-redirect";
@@ -43,16 +49,24 @@ const ALWAYS_FULL: Role[] = ["SUPER_ADMIN", "SCHOOL_ADMIN"];
  * own tenantId + email — no cross-tenant surface).
  */
 export async function getAdminAccess(
-  user: Pick<SessionUser, "role" | "email" | "tenantId">,
+  user: Pick<SessionUser, "id" | "role" | "email" | "tenantId" | "issuedAt">,
 ): Promise<AdminAccess> {
-  if (ALWAYS_FULL.includes(user.role)) return FULL_ACCESS;
-  if (user.role === "PARENT") return NO_ACCESS;
-  if (!user.tenantId || !user.email) return NO_ACCESS;
+  // Everything below is decided on the LIVE account, never the JWT: a
+  // disabled/deleted/demoted admin loses FULL access on the next request,
+  // and grants follow the account's current e-mail.
+  const live = await liveAccount(user);
+  if (!live) return NO_ACCESS;
+  if (ALWAYS_FULL.includes(live.role)) return FULL_ACCESS;
+  if (!user.tenantId) return NO_ACCESS;
+  // TEACHER/STAFF by role, or a PARENT wearing a staff hat (double profil).
+  // A plain parent has no staff capability → never any module access.
+  const eff = await effectiveStaffRole(user);
+  if (!eff) return NO_ACCESS;
   const grant = await unscopedDb().adminGrant.findUnique({
     where: {
       tenantId_email: {
         tenantId: user.tenantId,
-        email: user.email.toLowerCase(),
+        email: live.email.toLowerCase(),
       },
     },
     select: { modules: true },
@@ -61,7 +75,7 @@ export async function getAdminAccess(
   // TEACHER baseline: teachers keep read access to Élèves/classes (their
   // daily surface pre-dates the permission system). A grant can only RAISE
   // this, never lower it; every other module stays grant-only.
-  if (user.role === "TEACHER" && !grants.eleves) grants.eleves = "read";
+  if (eff === "TEACHER" && !grants.eleves) grants.eleves = "read";
   if (Object.keys(grants).length === 0) return NO_ACCESS;
   return { all: false, grants };
 }
@@ -79,7 +93,11 @@ export async function requireModuleAccess(
   module: AdminModule,
   min: AccessLevel = "read",
 ): Promise<{ user: ModuleSessionUser; access: AdminAccess }> {
-  const user = await requireUser();
+  const jwtUser = await requireUser();
+  const live = await liveAccount(jwtUser);
+  if (!live) redirect(ACCOUNT_DISABLED_PATH);
+  // Pages read user.role for in-page admin checks: hand them the LIVE role.
+  const user = { ...jwtUser, role: live.role, email: live.email };
   if (!user.tenantId) redirect("/sign-in");
   const access = await getAdminAccess(user);
   if (!hasModule(access, module, min)) redirect(postSignInPath(user.role));

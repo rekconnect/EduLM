@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
-import { auth } from "@/lib/auth";
+import { ACCOUNT_DISABLED_PATH, liveAccount, requireUser } from "@/lib/session";
 import { signOutAction } from "@/lib/sign-out-action";
 import { ChangePasswordForm } from "./_form";
 
@@ -13,8 +13,8 @@ import { ChangePasswordForm } from "./_form";
  * they set their own password here.
  */
 export default async function ChangePasswordPage() {
-  const session = await auth();
-  if (!session?.user) redirect("/sign-in");
+  const user = await requireUser();
+  if (!(await liveAccount(user))) redirect(ACCOUNT_DISABLED_PATH);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[color:var(--color-background)] px-6 py-16">
@@ -37,7 +37,7 @@ export default async function ChangePasswordPage() {
         </div>
 
         <p className="mt-4 text-center text-sm text-[color:var(--color-foreground-muted)]">
-          Connecté en tant que {session.user.email}.{" "}
+          Connecté en tant que {user.email}.{" "}
           <form action={signOutAction} className="inline">
             <button
               type="submit"

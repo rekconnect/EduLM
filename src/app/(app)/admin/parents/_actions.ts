@@ -7,6 +7,15 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
+import {
+  PROVENANCE_SELECT,
+  deleteAdminGrantsForEmail,
+  hasProvenance,
+  isStaffDomainEmail,
+  moveAdminGrantEmail,
+  staffDomainsFor,
+  staffIdentityGuard,
+} from "@/lib/staff-identity";
 import { ensureFamilyForGuardian } from "@/lib/family";
 import { joinName } from "@/lib/names";
 import {
@@ -93,6 +102,13 @@ export async function updateParentIdentity(
     lebaneseValue === true ? parsed.data.passportLebanese || null : null;
 
   await runWithTenant({ tenantId, slug: null }, async () => {
+    // Same rule as every other PARENT-targeting write: PARENT accounts only,
+    // and never a hat-holder for non-admins (its Guardian row is staff identity).
+    const target = await db.user.findFirst({
+      where: { id: parentId, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
+      select: { id: true },
+    });
+    if (!target) return;
     // Guardian is the canonical store — admin can set identity here
     // even when the parent has no application yet. Upsert (create if
     // missing) so new parents work as expected.
@@ -158,6 +174,18 @@ export async function createParent(
   formData: FormData,
 ): Promise<ParentFormState> {
   const { user } = await requireModuleAccess("eleves", "write");
+  const tenantIdForDomain = user.tenantId;
+  {
+    const emailRaw = String(formData.get("email") ?? "").trim().toLowerCase();
+    if (
+      emailRaw &&
+      user.role !== "SCHOOL_ADMIN" &&
+      tenantIdForDomain &&
+      isStaffDomainEmail(emailRaw, await staffDomainsFor(tenantIdForDomain))
+    ) {
+      return { errors: { email: "staffDomain" } };
+    }
+  }
   const tenantId = user.tenantId;
   if (!tenantId) return { formError: "no-tenant" };
 
@@ -300,15 +328,26 @@ export async function updateParent(
 
   let conflict = false;
   let notParent = false;
+  let staffDomain = false;
+  let previousEmail: string | null = null;
   await runWithTenant({ tenantId, slug: null }, async () => {
     // Guard: only PARENT accounts — an admin must not edit a peer admin by id
     // (User is tenant-scoped but not role-scoped).
     const parent = await db.user.findFirst({
-      where: { id, role: "PARENT" },
-      select: { id: true },
+      where: { id, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
+      select: { id: true, email: true },
     });
     if (!parent) {
       notParent = true;
+      return;
+    }
+    // A school staff address on a parent record is an admin-only decision
+    // (it is the trust anchor for the double profil).
+    if (
+      user.role !== "SCHOOL_ADMIN" &&
+      isStaffDomainEmail(parsed.data.email, await staffDomainsFor(tenantId))
+    ) {
+      staffDomain = true;
       return;
     }
     // Ensure no other user in this tenant has the new email.
@@ -320,6 +359,7 @@ export async function updateParent(
       conflict = true;
       return;
     }
+    previousEmail = parent.email;
     await db.user.update({
       where: { id },
       data: {
@@ -349,7 +389,11 @@ export async function updateParent(
   });
 
   if (notParent) return { formError: "not-found" };
+  if (staffDomain) return { errors: { email: "staffDomain" } };
   if (conflict) return { errors: { email: "exists" } };
+  if (previousEmail && previousEmail !== parsed.data.email) {
+    await moveAdminGrantEmail(tenantId, previousEmail, parsed.data.email);
+  }
   revalidatePath("/admin/parents");
   revalidatePath(`/admin/parents/${id}`);
   return {};
@@ -364,7 +408,7 @@ export async function resetParentPassword(parentId: string): Promise<ParentFormS
     // Guard: only PARENT accounts — never let an admin reset a peer admin's
     // password by passing their id (User is tenant-scoped but not role-scoped).
     const parent = await db.user.findFirst({
-      where: { id: parentId, role: "PARENT" },
+      where: { id: parentId, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
       select: { id: true },
     });
     if (!parent) return { formError: "not-found" } satisfies ParentFormState;
@@ -373,7 +417,7 @@ export async function resetParentPassword(parentId: string): Promise<ParentFormS
       where: { id: parentId },
       // Temp password opens the door once — own password required at first
       // sign-in (same behavior as the /admin/accounts console).
-      data: { passwordHash, status: "ACTIVE", mustChangePassword: true },
+      data: { passwordHash, status: "ACTIVE", mustChangePassword: true, sessionsInvalidBefore: new Date() },
     });
     return { newPassword } satisfies ParentFormState;
   });
@@ -387,7 +431,7 @@ export async function toggleParentStatus(parentId: string) {
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
     const cur = await db.user.findFirst({
-      where: { id: parentId, role: "PARENT" },
+      where: { id: parentId, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
       select: { status: true },
     });
     if (!cur) return;
@@ -410,6 +454,25 @@ export async function linkGuardianToStudent(formData: FormData) {
   if (!studentId || !parentUserId) return;
 
   await runWithTenant({ tenantId, slug: null }, async () => {
+    // Only PARENT accounts carry a Guardian: never attach children to a
+    // staff or admin account by id. A child link is also the double-profil
+    // provenance signal, so for non-admins a parent on a STAFF e-mail domain
+    // must already be verified (Dars / Microsoft) before it can be linked.
+    // A child link is the double-profil provenance signal, so for non-admins a
+    // parent on a STAFF e-mail domain must already be verified by the shared
+    // rule (Dars, or Microsoft-linked AND password-less) before linking.
+    const target = await db.user.findFirst({
+      where: { id: parentUserId, role: "PARENT" },
+      select: { id: true, email: true, ...PROVENANCE_SELECT },
+    });
+    if (!target) return;
+    if (
+      user.role !== "SCHOOL_ADMIN" &&
+      !hasProvenance(target) &&
+      isStaffDomainEmail(target.email, await staffDomainsFor(tenantId))
+    ) {
+      return;
+    }
     // Ensure the parent has a Guardian row.
     let guardian = await db.guardian.findUnique({
       where: { userId: parentUserId },
@@ -444,6 +507,11 @@ export async function unlinkGuardianFromStudent(studentId: string, parentUserId:
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
+    const target = await db.user.findFirst({
+      where: { id: parentUserId, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
+      select: { id: true },
+    });
+    if (!target) return;
     const guardian = await db.guardian.findUnique({
       where: { userId: parentUserId },
       select: { id: true },
@@ -499,7 +567,7 @@ export async function updateParentCustomAnswers(
 
   const ok = await runWithTenant({ tenantId, slug: null }, async () => {
     const parent = await db.user.findFirst({
-      where: { id: parentUserId, role: "PARENT" },
+      where: { id: parentUserId, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
       select: { id: true },
     });
     if (!parent) return false;
@@ -535,7 +603,7 @@ export async function setParentArchived(
 
   return runWithTenant({ tenantId, slug: null }, async () => {
     const parent = await db.user.findFirst({
-      where: { id: parentUserId, role: "PARENT" },
+      where: { id: parentUserId, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
       select: { id: true },
     });
     if (!parent) return { ok: false, error: "not-found" };
@@ -568,7 +636,7 @@ export async function softDeleteParent(
 
   return runWithTenant({ tenantId, slug: null }, async () => {
     const parent = await db.user.findFirst({
-      where: { id: parentUserId, role: "PARENT" },
+      where: { id: parentUserId, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
       select: { id: true },
     });
     if (!parent) return { ok: false, error: "not-found" };
@@ -592,7 +660,7 @@ export async function restoreParent(
 
   return runWithTenant({ tenantId, slug: null }, async () => {
     const parent = await db.user.findFirst({
-      where: { id: parentUserId, role: "PARENT" },
+      where: { id: parentUserId, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
       select: { id: true },
     });
     if (!parent) return { ok: false, error: "not-found" };
@@ -621,7 +689,7 @@ export async function permanentlyDeleteParent(
 
   return runWithTenant({ tenantId, slug: null }, async () => {
     const parent = await db.user.findFirst({
-      where: { id: parentUserId, role: "PARENT" },
+      where: { id: parentUserId, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
       select: {
         id: true,
         guardianProfile: {
@@ -633,7 +701,8 @@ export async function permanentlyDeleteParent(
     if ((parent.guardianProfile?._count.childLinks ?? 0) > 0) {
       return { ok: false, error: "has-children" };
     }
-    await db.user.delete({ where: { id: parentUserId } });
+    const gone = await db.user.delete({ where: { id: parentUserId }, select: { email: true } });
+    await deleteAdminGrantsForEmail(tenantId, gone.email);
     revalidatePath("/admin/parents");
     return { ok: true };
   });
@@ -643,7 +712,7 @@ export async function permanentlyDeleteParent(
 
 async function withParentTenant<T>(
   ids: string[],
-  fn: (tenantId: string) => Promise<T>,
+  fn: (tenantId: string, user: { role: string }) => Promise<T>,
 ): Promise<T | { ok: false; processed: 0; skipped: 0 }> {
   if (ids.length === 0) {
     return { ok: false, processed: 0, skipped: 0 } as unknown as T;
@@ -653,16 +722,16 @@ async function withParentTenant<T>(
   if (!tenantId) {
     return { ok: false, processed: 0, skipped: 0 } as unknown as T;
   }
-  return runWithTenant({ tenantId, slug: null }, () => fn(tenantId));
+  return runWithTenant({ tenantId, slug: null }, () => fn(tenantId, user));
 }
 
 export async function bulkSetParentsArchived(
   ids: string[],
   archived: boolean,
 ): Promise<ParentBulkResult> {
-  return withParentTenant(ids, async () => {
+  return withParentTenant(ids, async (tenantId, user) => {
     const r = await db.user.updateMany({
-      where: { id: { in: ids }, role: "PARENT" },
+      where: { id: { in: ids }, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
       data: {
         archived,
         archivedAt: archived ? new Date() : null,
@@ -677,9 +746,9 @@ export async function bulkSetParentsArchived(
 export async function bulkSoftDeleteParents(
   ids: string[],
 ): Promise<ParentBulkResult> {
-  return withParentTenant(ids, async () => {
+  return withParentTenant(ids, async (tenantId, user) => {
     const r = await db.user.updateMany({
-      where: { id: { in: ids }, role: "PARENT" },
+      where: { id: { in: ids }, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
       data: { deletedAt: new Date() },
     });
     revalidatePath("/admin/parents");
@@ -690,9 +759,9 @@ export async function bulkSoftDeleteParents(
 export async function bulkRestoreParents(
   ids: string[],
 ): Promise<ParentBulkResult> {
-  return withParentTenant(ids, async () => {
+  return withParentTenant(ids, async (tenantId, user) => {
     const r = await db.user.updateMany({
-      where: { id: { in: ids }, role: "PARENT" },
+      where: { id: { in: ids }, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
       data: { deletedAt: null, archived: false, archivedAt: null },
     });
     revalidatePath("/admin/parents");
@@ -708,12 +777,13 @@ export async function bulkRestoreParents(
 export async function bulkPermanentlyDeleteParents(
   ids: string[],
 ): Promise<ParentBulkResult> {
-  return withParentTenant(ids, async () => {
+  return withParentTenant(ids, async (tenantId, user) => {
     // Pre-filter: keep only parents with no kids linked through Guardian.
     const purgeable = await db.user.findMany({
       where: {
         id: { in: ids },
         role: "PARENT",
+        ...(await staffIdentityGuard(user, tenantId)),
         OR: [
           { guardianProfile: null },
           { guardianProfile: { childLinks: { none: {} } } },
@@ -724,10 +794,14 @@ export async function bulkPermanentlyDeleteParents(
     const purgeableIds = purgeable.map((p) => p.id);
     let processed = 0;
     if (purgeableIds.length > 0) {
+      const emails = (
+        await db.user.findMany({ where: { id: { in: purgeableIds } }, select: { email: true } })
+      ).map((u) => u.email);
       const r = await db.user.deleteMany({
-        where: { id: { in: purgeableIds }, role: "PARENT" },
+        where: { id: { in: purgeableIds }, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
       });
       processed = r.count;
+      for (const e of emails) await deleteAdminGrantsForEmail(tenantId, e);
     }
     revalidatePath("/admin/parents");
     return { ok: true, processed, skipped: ids.length - processed };

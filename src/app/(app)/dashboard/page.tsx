@@ -2,12 +2,13 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { PageHeader } from "@/components/shell/page-header";
 import { db } from "@/lib/db";
-import { withTenantSession } from "@/lib/session";
+import { effectiveStaffRole, withTenantSession } from "@/lib/session";
 import { DashboardStats } from "./_stats";
 
 export default async function DashboardPage() {
   return withTenantSession(async (user) => {
-    if (user.role === "PARENT") redirect("/parent/dashboard");
+    // A parent with a teacher hat (double profil) IS a teacher here.
+    if (user.role === "PARENT" && !(await effectiveStaffRole(user))) redirect("/parent/dashboard");
     const t = await getTranslations("dashboard");
 
     // Everything below uses the auto-scoped `db` — Prisma extension injects
@@ -22,7 +23,10 @@ export default async function DashboardPage() {
       // Only the ACTIVE year's classes — each year carries its own Class
       // rows, so a bare count() sums all years (268 instead of ~67).
       db.class.count({ where: { academicYear: { isActive: true } } }),
-      db.user.count({ where: { role: "TEACHER" } }),
+      // Teachers by role + parents wearing a teacher hat (double profil).
+      db.user.count({
+        where: { deletedAt: null, OR: [{ role: "TEACHER" }, { role: "PARENT", staffRole: "TEACHER" }] },
+      }),
       // Parents of ACTIVE-year pupils — not every parent account ever created.
       // A bare role: "PARENT" count includes parents of graduated/departed
       // students, so it never changes with the year (2052 vs ~1240).

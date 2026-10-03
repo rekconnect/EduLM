@@ -411,7 +411,9 @@
     "accounts": "الحسابات والوصول",
     "permissions": "الصلاحيات",
     "sectionGranted": "الإدارة",
-    "myMessages": "الرسائل"
+    "myMessages": "الرسائل",
+    "sectionChildren": "أبنائي",
+    "childrenHome": "فضاء الأهل"
   },
   "forgotPassword": {
     "title": "نسيت كلمة المرور؟",
@@ -450,7 +452,8 @@
     "noAccountTitle": "التسجيل {year}",
     "noAccountTitleGeneric": "سجّل طفلك",
     "noAccountLead": "ليس لديك حساب بعد وترغب في تسجيل طفلك في المدرسة؟",
-    "createAccount": "إنشاء حساب"
+    "createAccount": "إنشاء حساب",
+    "errorAccountDisabled": "هذا الحساب معطّل. تواصل مع المدرسة إن كنت تظن أن ذلك خطأ."
   },
   "landing": {
     "heading": "EduLM",
@@ -1398,7 +1401,8 @@
     "typeRenewal": "إعادة التسجيل",
     "typeFratrie": "إخوة (طفل جديد)",
     "typeNewFamily": "عائلات جديدة",
-    "fratrieBadge": "إخوة"
+    "fratrieBadge": "إخوة",
+    "signUpEmailStaffDomain": "هذا العنوان يعود لموظفي المدرسة. يُرجى التسجيل ببريد إلكتروني شخصي."
   },
   "documents": {
     "title": "الوثائق",
@@ -1584,7 +1588,8 @@
     "addExistingGuardian": "ربط ولي أمر موجود",
     "createNewParent": "+ إنشاء ولي أمر جديد وربطه",
     "selectParent": "اختر ولي أمر…",
-    "makePrimary": "تعيين كولي أمر رئيسي"
+    "makePrimary": "تعيين كولي أمر رئيسي",
+    "staffAccountNotice": "حساب موظف (ملف مزدوج): كلمة المرور وتفعيل هذا الحساب يديرهما المدير."
   },
   "common": {
     "selectDate": "اختر تاريخاً",
@@ -1701,7 +1706,13 @@
     "kindPermanence": "مناوبة",
     "fieldStartTimeOptional": "من (اختياري)",
     "fieldEndTimeOptional": "إلى (اختياري)",
-    "daysCount": "{n, plural, zero {# يوم} one {يوم} two {يومان} few {# أيام} many {# يومًا} other {# يوم}}"
+    "daysCount": "{n, plural, zero {# يوم} one {يوم} two {يومان} few {# أيام} many {# يومًا} other {# يوم}}",
+    "mySpaces": "فضاءاتي",
+    "mySpacesHint": "الوحدات التي يمكنك الوصول إليها.",
+    "noSpaces": "لم يُسند إليك أي فضاء بعد. يمكن للإدارة منحك الوصول إلى الوحدات من صفحة الصلاحيات.",
+    "myChildren": "أبنائي",
+    "myChildrenHint": "{count, plural, one {أنت أيضًا وليّ أمر تلميذ في المدرسة.} other {أنت أيضًا وليّ أمر # تلاميذ في المدرسة.}}",
+    "openParentSpace": "فتح فضاء الأهل"
   },
   "notif": {
     "submitted": {
@@ -1817,7 +1828,9 @@
     "passwordTooShort": "٨ أحرف على الأقل.",
     "manualSet": "تم تعيين كلمة المرور.",
     "manualHint": "أنت تختار كلمة المرور وتسلّمها — لن يُطلب من الشخص تغييرها.",
-    "syncNote": "بريد الدخول موحّد: تغييره هنا يغيّره في كل مكان (ملف الأهل، النماذج، تسجيل الدخول)."
+    "syncNote": "بريد الدخول موحّد: تغييره هنا يغيّره في كل مكان (ملف الأهل، النماذج، تسجيل الدخول).",
+    "hasHat": "لحساب ولي الأمر هذا ملف موظف أيضًا: أزل صلاحياته من الصلاحيات قبل تغيير دوره.",
+    "parentUnverified": "حساب ولي الأمر هذا غير موثّق (ليس من Dars، ولا مرتبط بتلميذ، ولم يسجّل الدخول عبر Microsoft): لا يمكن تحويله إلى حساب موظف."
   },
   "adminPermissions": {
     "title": "الصلاحيات",
@@ -1865,7 +1878,12 @@
     "levelHint_write": "عرض + إنشاء / تعديل",
     "levelHint_full": "كل شيء بما فيه الحذف والإعداد",
     "module_communication": "التواصل",
-    "moduleDesc_communication": "المستندات والإعلانات ورسائل العائلات"
+    "moduleDesc_communication": "المستندات والإعلانات ورسائل العائلات",
+    "errParentUnverified": "حساب ولي الأمر هذا غير موثّق بعد (ليس مستوردًا من Dars، ولا مرتبطًا بتلميذ، ولم يسجّل الدخول عبر Microsoft). اطلب منه تسجيل الدخول مرة عبر Microsoft أو شغّل استيراد الموظفين.",
+    "errAccountDisabled": "هذا الحساب معطّل — أعد تفعيله من الحسابات قبل منحه صلاحيات.",
+    "errAccountDeleted": "هذا العنوان يعود لحساب محذوف — استعده أو احذفه نهائيًا من الأهل › المحذوفون أولًا.",
+    "errStaffDomainsUnset": "لم يُضبط أي نطاق بريد للموظفين في المدرسة — يتعذّر التحقق من حساب ولي الأمر هذا.",
+    "errStaffDomainRequired": "لا يمكن إنشاء حساب موظف جديد إلا على بريد إلكتروني مدرسي. استخدم العنوان المهني."
   },
   "messaging": {
     "picker": {

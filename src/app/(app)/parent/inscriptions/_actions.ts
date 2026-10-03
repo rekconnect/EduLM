@@ -162,11 +162,8 @@ function statusEditableFor(status: string, user: { role: string }): boolean {
 }
 
 async function requireDossierActor() {
-  const user = await requireUser();
-  if (user.role !== "PARENT" && user.role !== "SCHOOL_ADMIN") {
-    redirect("/dashboard");
-  }
-  return user;
+  // Live role + liveness (disabled/deleted/revoked tokens are refused).
+  return requireRole(["PARENT", "SCHOOL_ADMIN"]);
 }
 
 function dossierWhereFor(applicationId: string, user: { id: string; role: string }) {

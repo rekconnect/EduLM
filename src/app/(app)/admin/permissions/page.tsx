@@ -33,7 +33,7 @@ export default async function PermissionsPage() {
       const users = grants.length
         ? await db.user.findMany({
             where: { email: { in: grants.map((g) => g.email) } },
-            select: { email: true, name: true, role: true, status: true },
+            select: { email: true, name: true, role: true, status: true, staffRole: true },
           })
         : [];
       const byEmail = new Map(users.map((u) => [u.email.toLowerCase(), u]));
@@ -47,7 +47,7 @@ export default async function PermissionsPage() {
           account: account
             ? {
                 name: account.name,
-                role: account.role,
+                role: account.staffRole ? `${account.role} + ${account.staffRole}` : account.role,
                 status: account.status,
               }
             : null,

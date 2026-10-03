@@ -2,10 +2,11 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Sidebar } from "@/components/shell/sidebar";
 import {
+  childrenNavSections,
   grantedNavSections,
   navSectionsForRole,
 } from "@/components/shell/nav-sections";
-import { requireUser } from "@/lib/session";
+import { ACCOUNT_DISABLED_PATH, effectiveStaffRole, liveAccount, requireUser } from "@/lib/session";
 import { unscopedDb } from "@/lib/db";
 import { getStaffShellData } from "@/lib/staff-portal";
 import { getAdminAccess, hasModule, type AdminAccess } from "@/lib/permissions";
@@ -26,12 +27,21 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await requireUser();
+  const jwtUser = await requireUser();
+  // Disabled / deleted / revoked since sign-in → no shell at all.
+  const liveRow = await liveAccount(jwtUser);
+  if (!liveRow) redirect(ACCOUNT_DISABLED_PATH);
+  const user = { ...jwtUser, role: liveRow.role, email: liveRow.email };
+  // Double profil: a PARENT who is also personnel acts with their staff hat
+  // (TEACHER/STAFF) and keeps every parent surface under "Mes enfants".
+  const eff = await effectiveStaffRole(user);
+  const isStaffParent = user.role === "PARENT" && eff !== null;
+  const navRole = eff ?? user.role;
 
   // The three per-navigation reads are independent — run them together
   // instead of serially (this layout renders on every authenticated page):
   // the mustChangePassword flag, the tenant brand/shell data, and nav labels.
-  const [acct, tenant, tNav, years, staffShell, adminAccess, unreadMessages] = await Promise.all([
+  const [acct, tenant, tNav, years, staffShell, adminAccess, parentUnread, schoolUnread] = await Promise.all([
     unscopedDb().user.findUnique({
       where: { id: user.id },
       select: { mustChangePassword: true },
@@ -53,20 +63,18 @@ export default async function AppLayout({
         })
       : Promise.resolve([] as { id: string; label: string; isActive: boolean }[]),
     getStaffShellData(user),
-    // Module grants (permissions console): only TEACHER/STAFF can carry
-    // them — admins see everything via their role branch already.
-    user.role === "TEACHER" || user.role === "STAFF"
+    // Module grants (permissions console): TEACHER/STAFF by role or by hat —
+    // admins see everything via their role branch already.
+    eff === "TEACHER" || eff === "STAFF"
       ? getAdminAccess(user)
       : Promise.resolve(null as AdminAccess | null),
-    // Messagerie unread badge: a parent's own unread conversations, or the
-    // school inbox's unread count for staff (shown only if they can see it).
-    !user.tenantId
-      ? Promise.resolve(0)
-      : user.role === "PARENT"
-        ? parentUnreadCount(user.tenantId, user.id)
-        : user.role === "SCHOOL_ADMIN" || user.role === "TEACHER" || user.role === "STAFF"
-          ? schoolUnreadCount(user.tenantId)
-          : Promise.resolve(0),
+    // Messagerie unread badges: a parent's own conversations...
+    user.tenantId && user.role === "PARENT"
+      ? parentUnreadCount(user.tenantId, user.id)
+      : Promise.resolve(0),
+    // ...and the school inbox for anyone with a staff capability (shown only
+    // if they may see the inbox). A staff-parent gets both.
+    user.tenantId && eff ? schoolUnreadCount(user.tenantId) : Promise.resolve(0),
   ]);
 
   // Force users flagged for a password reset (e.g. bulk-onboarded parents
@@ -90,6 +98,8 @@ export default async function AppLayout({
     billing: tNav("billing"),
     contact: tNav("contact"),
     myMessages: tNav("myMessages"),
+    sectionChildren: tNav("sectionChildren"),
+    childrenHome: tNav("childrenHome"),
     settings: tNav("settings"),
     reports: tNav("reports"),
     transport: tNav("transport"),
@@ -118,7 +128,9 @@ export default async function AppLayout({
     sectionGranted: tNav("sectionGranted"),
     sectionSuperAdmin: tNav("sectionSuperAdmin"),
   };
-  let sections = navSectionsForRole(user.role, navLabels);
+  let sections = navSectionsForRole(navRole, navLabels, {
+    hasEmployee: staffShell?.hasEmployee ?? false,
+  });
   // Append the modules this TEACHER/STAFF was granted from the permissions
   // console (dedup against the role's own links, e.g. /students for profs).
   if (adminAccess && !adminAccess.all) {
@@ -130,6 +142,7 @@ export default async function AppLayout({
       ...grantedNavSections(adminAccess.grants, navLabels, existing),
     ];
   }
+  if (isStaffParent) sections = [...sections, ...childrenNavSections(navLabels)];
 
   // Decorate the nav with attendance-request state: hide "Team approvals" for
   // staff who supervise nobody, and badge the pending queues.
@@ -154,15 +167,16 @@ export default async function AppLayout({
     user.role === "SCHOOL_ADMIN" ||
     (adminAccess !== null && hasModule(adminAccess, "communication", "read"));
   const navSections =
-    unreadMessages > 0
+    parentUnread > 0 || schoolUnread > 0
       ? decoratedSections.map((section) => ({
           ...section,
-          items: section.items.map((item) =>
-            (item.href === "/parent/messages" && user.role === "PARENT") ||
-            (item.href === "/admin/messages" && canSeeInbox)
-              ? { ...item, badge: unreadMessages }
-              : item,
-          ),
+          items: section.items.map((item) => {
+            if (item.href === "/parent/messages" && user.role === "PARENT" && parentUnread > 0)
+              return { ...item, badge: parentUnread };
+            if (item.href === "/admin/messages" && canSeeInbox && schoolUnread > 0)
+              return { ...item, badge: schoolUnread };
+            return item;
+          }),
         }))
       : decoratedSections;
 
@@ -178,7 +192,7 @@ export default async function AppLayout({
   return (
     <div className="tenant-scope min-h-screen md:flex" style={brandStyle}>
       <Sidebar
-        role={user.role}
+        role={navRole}
         userLabel={user.name ?? user.email}
         tenantLabel={tenant?.name}
         sections={navSections}

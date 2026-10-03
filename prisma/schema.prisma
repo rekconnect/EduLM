@@ -30,6 +30,15 @@ enum Role {
   PARENT
 }
 
+// Secondary "hat" for a PARENT account that is also school personnel (double
+// profil): the account stays role PARENT — every parent surface, list, report
+// and the messagerie keep seeing them as the parent they are — and this adds
+// the staff capabilities (teacher surfaces, module grants, staff portal).
+enum StaffRole {
+  TEACHER
+  STAFF
+}
+
 enum UserStatus {
   INVITED
   ACTIVE
@@ -42,6 +51,10 @@ model Tenant {
   name           String
   defaultLocale  String     @default("fr")
   enabledLocales String[]   @default(["fr"])
+  // E-mail domains reserved to school personnel (e.g. ["lycee-montaigne.edu.lb"]).
+  // Parent self-registration refuses them: a staff address could otherwise be
+  // squatted as a "parent" and later receive staff access (double profil).
+  staffEmailDomains String[] @default([])
   plan           TenantPlan @default(TRIAL)
   // Per-tenant brand override. Stored as CSS color strings (hex or oklch()).
   // Threaded into the live app via .tenant-scope in globals.css. Nullable —
@@ -159,6 +172,15 @@ model User {
   email         String
   passwordHash  String?
   role          Role
+  // Double profil (see enum StaffRole). Only meaningful when role = PARENT;
+  // resolved per request (src/lib/session.ts getStaffRoleById), not in the JWT.
+  staffRole     StaffRole?
+  // "Fonction" from the staff list (e.g. "Professeur de maths") — display only.
+  staffTitle    String?
+  // Sessions (JWTs) issued before this instant are rejected — set when a
+  // password is stripped/reset by someone other than the holder, so a live
+  // token can't outlive the credentials it was minted with.
+  sessionsInvalidBefore DateTime?
   locale        String?
   status        UserStatus @default(INVITED)
   // When true, the user is forced to set a new password on next login

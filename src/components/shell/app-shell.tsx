@@ -33,6 +33,8 @@ export async function AppShell({
     billing: tNav("billing"),
     contact: tNav("contact"),
     myMessages: tNav("myMessages"),
+    sectionChildren: tNav("sectionChildren"),
+    childrenHome: tNav("childrenHome"),
     settings: tNav("settings"),
     reports: tNav("reports"),
     transport: tNav("transport"),

@@ -27,7 +27,11 @@ export function SignUpForm({ tenantSlug }: { tenantSlug: string }) {
         htmlFor="email"
         required
         error={
-          state.errors?.email === "exists" ? t("signUpEmailExists") : state.errors?.email
+          state.errors?.email === "exists"
+            ? t("signUpEmailExists")
+            : state.errors?.email === "staffDomain"
+              ? t("signUpEmailStaffDomain")
+              : state.errors?.email
         }
       >
         <Input id="email" name="email" type="email" required autoComplete="email" />

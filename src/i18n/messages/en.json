@@ -411,7 +411,9 @@
     "accounts": "Accounts & access",
     "permissions": "Permissions",
     "sectionGranted": "Administration",
-    "myMessages": "Messages"
+    "myMessages": "Messages",
+    "sectionChildren": "My children",
+    "childrenHome": "Parent space"
   },
   "forgotPassword": {
     "title": "Forgot your password?",
@@ -450,7 +452,8 @@
     "noAccountTitle": "Admissions {year}",
     "noAccountTitleGeneric": "Enrol your child",
     "noAccountLead": "Don't have an account yet and want to enrol your child?",
-    "createAccount": "Create an account"
+    "createAccount": "Create an account",
+    "errorAccountDisabled": "This account is disabled. Contact the school if you think this is a mistake."
   },
   "landing": {
     "heading": "EduLM",
@@ -1398,7 +1401,8 @@
     "typeRenewal": "Re-enrolments",
     "typeFratrie": "Sibling (new child)",
     "typeNewFamily": "New families",
-    "fratrieBadge": "Sibling"
+    "fratrieBadge": "Sibling",
+    "signUpEmailStaffDomain": "This address belongs to school staff. Please sign up with a personal e-mail address."
   },
   "documents": {
     "title": "Documents",
@@ -1584,7 +1588,8 @@
     "addExistingGuardian": "Link existing parent",
     "createNewParent": "+ Create new parent and link",
     "selectParent": "Select a parent…",
-    "makePrimary": "Set as primary parent"
+    "makePrimary": "Set as primary parent",
+    "staffAccountNotice": "Staff account (double profile): its password and activation are managed by the administrator."
   },
   "common": {
     "selectDate": "Select a date",
@@ -1701,7 +1706,13 @@
     "kindPermanence": "On-duty",
     "fieldStartTimeOptional": "From (optional)",
     "fieldEndTimeOptional": "To (optional)",
-    "daysCount": "{n, plural, one {# day} other {# days}}"
+    "daysCount": "{n, plural, one {# day} other {# days}}",
+    "mySpaces": "My spaces",
+    "mySpacesHint": "The modules you have access to.",
+    "noSpaces": "No space has been assigned to you yet. The administration can grant module access from Permissions.",
+    "myChildren": "My children",
+    "myChildrenHint": "{count, plural, one {You are also the parent of a pupil at the school.} other {You are also the parent of # pupils at the school.}}",
+    "openParentSpace": "Open the parent space"
   },
   "notif": {
     "submitted": {
@@ -1817,7 +1828,9 @@
     "passwordTooShort": "Minimum 8 characters.",
     "manualSet": "Password set.",
     "manualHint": "You choose the password and pass it on — the person won't be forced to change it.",
-    "syncNote": "The sign-in email is unique: changing it here changes it everywhere (parent fiche, forms, sign-in)."
+    "syncNote": "The sign-in email is unique: changing it here changes it everywhere (parent fiche, forms, sign-in).",
+    "hasHat": "This parent account also has a staff profile: remove its access in Permissions before changing its role.",
+    "parentUnverified": "This parent account isn't verified (not from Dars, no child linked, never signed in with Microsoft): it can't become a staff account."
   },
   "adminPermissions": {
     "title": "Permissions",
@@ -1865,7 +1878,12 @@
     "levelHint_write": "view + create / edit",
     "levelHint_full": "everything, incl. delete and configure",
     "module_communication": "Communication",
-    "moduleDesc_communication": "Documents, announcements, family messages"
+    "moduleDesc_communication": "Documents, announcements, family messages",
+    "errParentUnverified": "This parent account isn't verified yet (not imported from Dars, no child linked, never signed in with Microsoft). Have them sign in once with Microsoft, or run the staff import.",
+    "errAccountDisabled": "This account is disabled — re-enable it from Accounts before granting access.",
+    "errAccountDeleted": "This address belongs to a deleted account — restore or purge it from Parents › Deleted first.",
+    "errStaffDomainsUnset": "No staff e-mail domain is configured for the school — this parent account can't be verified.",
+    "errStaffDomainRequired": "A new staff account can only be created on a school e-mail address. Use the work address."
   },
   "messaging": {
     "picker": {

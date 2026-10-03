@@ -52,7 +52,7 @@ async function main() {
   const passwordHash = await bcrypt.hash(password, 10);
   await prisma.user.update({
     where: { id: u.id },
-    data: { passwordHash, status: "ACTIVE", mustChangePassword: false },
+    data: { passwordHash, sessionsInvalidBefore: new Date(), status: "ACTIVE", mustChangePassword: false },
   });
   console.log(`✓ Password updated for ${email} (${u.role}${u.tenant ? ` @ ${u.tenant.slug}` : ""}).`);
   await prisma.$disconnect();

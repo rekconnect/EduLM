@@ -78,6 +78,8 @@ type Labels = {
   myDocuments: string;
   myInvoices: string;
   myMessages: string;
+  sectionChildren: string;
+  childrenHome: string;
   tenants: string;
   sectionAdmissions: string;
   sectionDaily: string;
@@ -151,7 +153,31 @@ export function grantedNavSections(
   return items.length ? [{ title: l.sectionGranted, items }] : [];
 }
 
-export function navSectionsForRole(role: Role, l: Labels): NavSection[] {
+/**
+ * "Mes enfants" group appended to a staff nav for a PARENT who is also
+ * personnel (double profil): their parent surfaces, one click away.
+ */
+export function childrenNavSections(l: Labels): NavSection[] {
+  return [
+    {
+      title: l.sectionChildren,
+      items: [
+        { label: l.childrenHome, href: "/parent/dashboard", icon: "dashboard" },
+        { label: l.myApplications, href: "/parent/applications", icon: "admissions" },
+        { label: l.myInvoices, href: "/parent/invoices", icon: "billing" },
+        { label: l.myMessages, href: "/parent/messages", icon: "messages" },
+        { label: l.myAnnouncements, href: "/parent/announcements", icon: "announcements" },
+        { label: l.myDocuments, href: "/parent/documents", icon: "documents" },
+      ],
+    },
+  ];
+}
+
+export function navSectionsForRole(
+  role: Role,
+  l: Labels,
+  opts: { hasEmployee?: boolean } = {},
+): NavSection[] {
   switch (role) {
     case "SUPER_ADMIN":
       return [
@@ -237,6 +263,8 @@ export function navSectionsForRole(role: Role, l: Labels): NavSection[] {
       ];
 
     case "STAFF":
+      // Payroll-based items (payslips, requests, approvals) only once a
+      // PayrollEmployee is linked — until then they would all be empty.
       return [
         {
           items: [{ label: l.dashboard, href: "/staff", icon: "dashboard" }],
@@ -244,9 +272,14 @@ export function navSectionsForRole(role: Role, l: Labels): NavSection[] {
         {
           title: l.sectionAccount,
           items: [
-            { label: l.myRequests, href: "/staff/requests", icon: "requests" },
-            { label: l.teamApprovals, href: "/staff/approvals", icon: "approvals" },
-            { label: l.myPayslips, href: "/staff/payslips", icon: "payroll" },
+            ...(opts.hasEmployee
+              ? [
+                  { label: l.myRequests, href: "/staff/requests", icon: "requests" as const },
+                  { label: l.teamApprovals, href: "/staff/approvals", icon: "approvals" as const },
+                  { label: l.myPayslips, href: "/staff/payslips", icon: "payroll" as const },
+                ]
+              : []),
+            { label: l.settings, href: "/settings", icon: "settings" },
           ],
         },
       ];

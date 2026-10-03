@@ -4,11 +4,12 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { ACCOUNT_DISABLED_PATH, liveAccount, requireUser } from "@/lib/session";
 import { unscopedDb } from "@/lib/db";
 import { postSignInPath } from "@/lib/post-signin-redirect";
 
 const schema = z.object({
+  current: z.string().max(128).optional(),
   password: z.string().min(8).max(128),
   confirm: z.string().min(1),
 });
@@ -26,10 +27,13 @@ export async function changePassword(
   _prev: ChangePwState,
   formData: FormData,
 ): Promise<ChangePwState> {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/sign-in");
+  const sessionUser = await requireUser();
+  // A revoked / disabled token must not be able to set a new password.
+  if (!(await liveAccount(sessionUser))) redirect(ACCOUNT_DISABLED_PATH);
+  const session = { user: sessionUser };
 
   const parsed = schema.safeParse({
+    current: String(formData.get("current") ?? ""),
     password: String(formData.get("password") ?? ""),
     confirm: String(formData.get("confirm") ?? ""),
   });
@@ -39,16 +43,31 @@ export async function changePassword(
   const db = unscopedDb();
   const current = await db.user.findUnique({
     where: { id: session.user.id },
-    select: { passwordHash: true, role: true },
+    select: {
+      passwordHash: true,
+      role: true,
+      mustChangePassword: true,
+    },
   });
   if (!current) redirect("/sign-in");
 
-  // Don't let them re-use the initial / current password.
-  if (
-    current.passwordHash &&
-    (await bcrypt.compare(parsed.data.password, current.passwordHash))
-  ) {
-    return { error: "sameAsOld" };
+  if (current.passwordHash) {
+    // Proof of possession: a hijacked or shared session can't silently swap
+    // the password. (The forced first-login change knows the initial one.)
+    const ok =
+      !!parsed.data.current &&
+      (await bcrypt.compare(parsed.data.current, current.passwordHash));
+    if (!ok) return { error: "currentWrong" };
+    // Don't let them re-use the initial / current password.
+    if (await bcrypt.compare(parsed.data.password, current.passwordHash)) {
+      return { error: "sameAsOld" };
+    }
+  } else if (!current.mustChangePassword) {
+    // No password on this account and no pending admin reset: a password
+    // can't be added from a mere session (no proof of possession) — the
+    // directory is the credential; an admin reset or the e-mailed reset code
+    // is the way back.
+    return { error: "ssoOnly" };
   }
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);

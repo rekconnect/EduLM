@@ -17,7 +17,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
-import { requireUser } from "@/lib/session";
+import { redirect } from "next/navigation";
+import { ACCOUNT_DISABLED_PATH, liveAccount, requireUser } from "@/lib/session";
 import { unscopedDb } from "@/lib/db";
 import { AppearancePicker } from "./_appearance";
 import { GeneralForm } from "./_general";
@@ -79,7 +80,10 @@ export default async function SettingsPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { tab } = await searchParams;
-  const user = await requireUser();
+  const jwtUser = await requireUser();
+  const liveRow = await liveAccount(jwtUser);
+  if (!liveRow) redirect(ACCOUNT_DISABLED_PATH);
+  const user = { ...jwtUser, role: liveRow.role, email: liveRow.email };
   const t = await getTranslations("settings");
 
   let tenantName = "";

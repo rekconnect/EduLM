@@ -27,7 +27,7 @@ export default async function AccountsPage() {
     db.user.findMany({
       where: { role: { in: ["SCHOOL_ADMIN", "TEACHER", "STAFF", "PARENT"] } },
       orderBy: [{ role: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, email: true, role: true, status: true },
+      select: { id: true, name: true, email: true, role: true, status: true, staffRole: true },
     }),
   );
 

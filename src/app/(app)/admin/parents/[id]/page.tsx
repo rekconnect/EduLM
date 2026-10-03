@@ -208,6 +208,10 @@ export default async function ParentDetailPage({
         }),
       ]);
     if (!parent || parent.role !== "PARENT") notFound();
+    // Double profil: a staff hat makes this a staff identity — its login
+    // (password, status) is managed by SCHOOL_ADMIN only.
+    const hat = await db.user.findFirst({ where: { id: parent.id }, select: { staffRole: true } });
+    const staffLocked = !!hat?.staffRole && user.role !== "SCHOOL_ADMIN";
 
     // Levels feed the cascading establishment_with_niveau renderer in edit mode.
     const establishmentsForRenderer = establishmentsRaw
@@ -571,6 +575,11 @@ export default async function ParentDetailPage({
             );
           })()}
 
+          {staffLocked ? (
+            <div className="rounded-lg border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-sunken)] px-4 py-3 text-sm text-[color:var(--color-foreground-muted)]">
+              {t("staffAccountNotice")}
+            </div>
+          ) : (
           <Card>
             <CardHeader
               title={t("resetPassword")}
@@ -580,7 +589,9 @@ export default async function ParentDetailPage({
               <ResetPasswordButton parentId={parent.id} />
             </CardBody>
           </Card>
+          )}
 
+          {!staffLocked ? (
           <div className="flex justify-end">
             <form action={boundToggle}>
               <Button
@@ -594,6 +605,7 @@ export default async function ParentDetailPage({
               </Button>
             </form>
           </div>
+          ) : null}
 
           {/* unused vars get tree-shaken; keep for type checks */}
           {tCommon("save")[0] === "" ? null : null}

@@ -6,6 +6,8 @@ import { Card, CardBody } from "@/components/ui/card";
 import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
 import { db } from "@/lib/db";
 import { withStaffSession } from "@/lib/session";
+import { getAdminAccess } from "@/lib/permissions";
+import { StaffNeutralHome } from "./_home";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +34,14 @@ export default async function StaffHomePage() {
     const slipCount = employee ? await db.payslip.count({ where: visibleWhere }) : 0;
     const latest = slips[0];
     const firstName = (user.name ?? "").split(" ")[0] || null;
+    // No payroll record (the Dars payroll is obsolete, so today: everyone) →
+    // neutral home: granted modules + "Mes enfants" for staff who are parents.
+    const [access, childrenCount] = employee
+      ? [null, 0]
+      : await Promise.all([
+          getAdminAccess(user),
+          db.studentGuardian.count({ where: { guardian: { userId: user.id } } }),
+        ]);
     const period = (m: { month: number; year: number }) => `${monthLabel(locale, m.month)} ${m.year}`;
 
     return (
@@ -41,7 +51,9 @@ export default async function StaffHomePage() {
           description={t("portalTitle")}
         />
 
-        {!employee ? (
+        {!employee && access ? (
+          <StaffNeutralHome access={access} childrenCount={childrenCount} />
+        ) : !employee ? (
           <div className="flex items-start gap-3 rounded-lg border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-sunken)] px-4 py-3">
             <Info className="mt-0.5 size-4 shrink-0 text-[color:var(--color-foreground-muted)]" aria-hidden />
             <p className="text-sm text-[color:var(--color-foreground-muted)]">{t("notLinked")}</p>

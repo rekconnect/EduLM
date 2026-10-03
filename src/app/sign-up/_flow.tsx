@@ -113,6 +113,7 @@ function NewFamilyForm({
   const errText = (code?: string): string | undefined => {
     if (!code) return undefined;
     if (code === "exists") return t("signUpEmailExists");
+    if (code === "staffDomain") return t("signUpEmailStaffDomain");
     if (code === "mismatch") return t("signUpPasswordMismatch");
     if (code === "same") return t("signUpEmailSame");
     return code;

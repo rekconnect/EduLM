@@ -1,5 +1,5 @@
 import { unscopedDb } from "./db";
-import type { SessionUser } from "./session";
+import { effectiveStaffRole, type SessionUser } from "./session";
 import type { BellItem } from "@/components/shell/notification-bell";
 
 export type StaffShellData = {
@@ -8,6 +8,10 @@ export type StaffShellData = {
   supervisorPending: number; // requests awaiting me as supervisor
   isSupervisor: boolean; // do I supervise anyone?
   financePending: number; // admin: requests awaiting finance
+  /** Linked PayrollEmployee → the payroll-based staff pages (payslips,
+   *  requests, approvals) have something to show. Obsolete Dars payroll data
+   *  is NOT linked to anyone, so these stay hidden until a payroll exists. */
+  hasEmployee: boolean;
 };
 
 /**
@@ -19,11 +23,10 @@ export type StaffShellData = {
 export async function getStaffShellData(user: SessionUser): Promise<StaffShellData | null> {
   const tenantId = user.tenantId;
   if (!tenantId) return null;
-  if (user.role !== "STAFF" && user.role !== "TEACHER" && user.role !== "SCHOOL_ADMIN") {
-    return null;
-  }
+  const eff = await effectiveStaffRole(user);
+  if (!eff) return null;
   const db = unscopedDb();
-  const [rawNotifs, unreadCount, supervisorPending, reportsCount, financePending] = await Promise.all([
+  const [rawNotifs, unreadCount, supervisorPending, reportsCount, financePending, employeeCount] = await Promise.all([
     db.staffNotification.findMany({
       where: { tenantId, userId: user.id },
       orderBy: { createdAt: "desc" },
@@ -37,6 +40,7 @@ export async function getStaffShellData(user: SessionUser): Promise<StaffShellDa
     user.role === "SCHOOL_ADMIN"
       ? db.attendanceRequest.count({ where: { tenantId, status: "PENDING_FINANCE" } })
       : Promise.resolve(0),
+    db.payrollEmployee.count({ where: { tenantId, userId: user.id } }),
   ]);
 
   return {
@@ -56,5 +60,6 @@ export async function getStaffShellData(user: SessionUser): Promise<StaffShellDa
     // live report link.
     isSupervisor: reportsCount > 0 || supervisorPending > 0,
     financePending,
+    hasEmployee: employeeCount > 0,
   };
 }

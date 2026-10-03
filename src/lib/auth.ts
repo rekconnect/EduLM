@@ -17,6 +17,8 @@ declare module "next-auth" {
       role: Role;
       tenantId: string | null;
       locale: string | null;
+      /** Sign-in instant (ms) — compared with User.sessionsInvalidBefore. */
+      issuedAt: number | null;
     } & DefaultSession["user"];
   }
 }
@@ -26,6 +28,9 @@ declare module "@auth/core/jwt" {
     role?: Role;
     tenantId?: string | null;
     locale?: string | null;
+    /** Our own sign-in instant (ms). Auth.js re-stamps `iat` on every session
+     *  read, so revocation checks must use a claim set only at sign-in. */
+    signedInAt?: number;
   }
 }
 
@@ -220,13 +225,60 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // belong to an EduLM user (staff accounts are created from /payroll when
       // the admin sets the employee's email). Unknown address → friendly error.
       const existing = await findOAuthUser(user.email);
-      return existing ? true : "/sign-in?error=NoAccount";
+      if (!existing) return "/sign-in?error=NoAccount";
+      // Squat defence: /sign-up is public, so a staff address may already be
+      // held by a self-registered "parent" with a password nobody vetted.
+      // When the school directory authenticates that address, the directory
+      // owns the account: an unverified parent account (not from Dars, no
+      // child linked) loses its password and becomes Microsoft-only.
+      if (existing.role === "PARENT" && existing.passwordHash) {
+        const children =
+          existing.darsParentId === null
+            ? await prisma.studentGuardian.count({ where: { guardian: { userId: existing.id } } })
+            : 1;
+        const unverified = existing.darsParentId === null && children === 0;
+        // A Microsoft Account row already attached = the directory owner has
+        // signed in before; a password set since then came from an admin
+        // reset for that same person, not from a squatter → leave it.
+        const alreadyLinked =
+          unverified &&
+          (await prisma.account.count({
+            where: { userId: existing.id, provider: "microsoft-entra-id" },
+          })) > 0;
+        if (unverified && !alreadyLinked) {
+          // First directory sign-in on a self-registered address: whoever
+          // registered it is logged out everywhere and loses the password —
+          // the directory owner takes over. (Hats are never touched here:
+          // they are only ever granted after a provenance check.)
+          await prisma.user.update({
+            where: { id: existing.id },
+            data: {
+              passwordHash: null,
+              mustChangePassword: false,
+              sessionsInvalidBefore: new Date(),
+            },
+          });
+        } else if (existing.mustChangePassword) {
+          // A vetted parent still on the SHARED import password: the directory
+          // just proved who they are — drop the never-personalised password
+          // (and any session minted with it) instead of forcing them to
+          // "change" a password they never chose.
+          await prisma.user.update({
+            where: { id: existing.id },
+            data: { passwordHash: null, mustChangePassword: false, sessionsInvalidBefore: new Date() },
+          });
+        }
+      }
+      // This request's own token is stamped in the jwt callback AFTER this
+      // point (signedInAt = Date.now() ≥ the revocation), so the owner is in.
+      return true;
     },
     async jwt({ token, user }) {
       if (user) {
         token.role = (user as { role: Role }).role;
         token.tenantId = (user as { tenantId: string | null }).tenantId;
         token.locale = (user as { locale: string | null }).locale;
+        token.signedInAt = Date.now();
       }
       return token;
     },
@@ -236,6 +288,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.role = token.role!;
         session.user.tenantId = token.tenantId ?? null;
         session.user.locale = token.locale ?? null;
+        session.user.issuedAt = typeof token.signedInAt === "number" ? token.signedInAt : null;
       }
       return session;
     },

@@ -5,6 +5,7 @@ import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { db } from "@/lib/db";
 import { joinName } from "@/lib/names";
+import { isStaffDomainEmail, moveAdminGrantEmail, staffDomainsFor, staffIdentityGuard } from "@/lib/staff-identity";
 import { loadEntityFieldsConfig } from "../../../settings/_actions";
 
 /**
@@ -25,9 +26,12 @@ export async function saveGuardianFiche(
 
   return runWithTenant({ tenantId, slug: null }, async () => {
     const config = await loadEntityFieldsConfig("parent");
-    const user = await db.user.findUnique({
-      where: { id: userId },
+    // PARENT accounts only — and, for non-admins, never a parent wearing a
+    // staff hat (re-mailing it would re-key a staff identity).
+    const user = await db.user.findFirst({
+      where: { id: userId, role: "PARENT", ...(await staffIdentityGuard(admin, tenantId)) },
       select: {
+        email: true,
         firstName: true,
         lastName: true,
         customAnswers: true,
@@ -72,6 +76,22 @@ export async function saveGuardianFiche(
       else answers[f.key] = v;
     }
 
+    // E-mail is the login identifier: same-tenant uniqueness, and a staff
+    // address is an admin-only decision (double-profil trust anchor).
+    if (typeof userData.email === "string" && userData.email !== user.email) {
+      if (
+        admin.role !== "SCHOOL_ADMIN" &&
+        isStaffDomainEmail(userData.email, await staffDomainsFor(tenantId))
+      ) {
+        return { ok: false, error: "staff-domain" };
+      }
+      const clash = await db.user.findFirst({
+        where: { email: userData.email, NOT: { id: userId } },
+        select: { id: true },
+      });
+      if (clash) return { ok: false, error: "email-taken" };
+    }
+
     // Recompute display name from the final first/last.
     if (userData.firstName !== undefined || userData.lastName !== undefined) {
       const first = (userData.firstName as string | null) ?? user.firstName;
@@ -83,6 +103,9 @@ export async function saveGuardianFiche(
       where: { id: userId },
       data: { ...userData, customAnswers: answers },
     });
+    if (typeof userData.email === "string" && userData.email !== user.email) {
+      await moveAdminGrantEmail(tenantId, user.email, userData.email);
+    }
     if (Object.keys(guardianData).length && user.guardianProfile) {
       await db.guardian.update({
         where: { id: user.guardianProfile.id },

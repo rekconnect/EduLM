@@ -11,6 +11,8 @@ const ERRORS: Record<string, string> = {
   tooShort: "Le mot de passe doit contenir au moins 8 caractères.",
   mismatch: "Les deux mots de passe ne correspondent pas.",
   sameAsOld: "Choisissez un mot de passe différent du mot de passe initial.",
+  currentWrong: "Le mot de passe actuel est incorrect.",
+  ssoOnly: "Ce compte se connecte avec Microsoft : il n'a pas de mot de passe à changer.",
 };
 
 export function ChangePasswordForm() {
@@ -21,6 +23,16 @@ export function ChangePasswordForm() {
 
   return (
     <form action={action} className="space-y-4">
+      <Field label="Mot de passe actuel" htmlFor="current" required>
+        <Input
+          id="current"
+          name="current"
+          type="password"
+          required
+          autoFocus
+          autoComplete="current-password"
+        />
+      </Field>
       <Field label="Nouveau mot de passe" htmlFor="password" required>
         <Input
           id="password"
@@ -28,7 +40,6 @@ export function ChangePasswordForm() {
           type="password"
           required
           minLength={8}
-          autoFocus
           autoComplete="new-password"
         />
       </Field>

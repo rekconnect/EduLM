@@ -411,7 +411,9 @@
     "accounts": "Comptes & accès",
     "permissions": "Permissions",
     "sectionGranted": "Administration",
-    "myMessages": "Messages"
+    "myMessages": "Messages",
+    "sectionChildren": "Mes enfants",
+    "childrenHome": "Espace parents"
   },
   "forgotPassword": {
     "title": "Mot de passe oublié ?",
@@ -450,7 +452,8 @@
     "noAccountTitle": "Inscription {year}",
     "noAccountTitleGeneric": "Inscrire votre enfant",
     "noAccountLead": "Vous n'avez pas encore de compte et souhaitez inscrire votre enfant à l'école ?",
-    "createAccount": "Créer un compte"
+    "createAccount": "Créer un compte",
+    "errorAccountDisabled": "Ce compte est désactivé. Contactez l'école si vous pensez qu'il s'agit d'une erreur."
   },
   "landing": {
     "heading": "EduLM",
@@ -1398,7 +1401,8 @@
     "typeRenewal": "Réinscriptions",
     "typeFratrie": "Fratrie (nouvel enfant)",
     "typeNewFamily": "Nouvelles familles",
-    "fratrieBadge": "Fratrie"
+    "fratrieBadge": "Fratrie",
+    "signUpEmailStaffDomain": "Cette adresse appartient au personnel de l'école. Inscrivez-vous avec une adresse personnelle."
   },
   "documents": {
     "title": "Documents",
@@ -1584,7 +1588,8 @@
     "addExistingGuardian": "Lier un parent existant",
     "createNewParent": "+ Créer un parent et le lier",
     "selectParent": "Sélectionnez un parent…",
-    "makePrimary": "Définir comme parent principal"
+    "makePrimary": "Définir comme parent principal",
+    "staffAccountNotice": "Compte du personnel (double profil) : le mot de passe et l'activation de ce compte sont gérés par l'administrateur."
   },
   "common": {
     "selectDate": "Sélectionner une date",
@@ -1701,7 +1706,13 @@
     "kindPermanence": "Permanence",
     "fieldStartTimeOptional": "De (facultatif)",
     "fieldEndTimeOptional": "À (facultatif)",
-    "daysCount": "{n, plural, one {# jour} other {# jours}}"
+    "daysCount": "{n, plural, one {# jour} other {# jours}}",
+    "mySpaces": "Mes espaces",
+    "mySpacesHint": "Les modules auxquels vous avez accès.",
+    "noSpaces": "Aucun espace ne vous a encore été attribué. L'administration peut vous donner accès aux modules depuis Permissions.",
+    "myChildren": "Mes enfants",
+    "myChildrenHint": "{count, plural, one {Vous êtes aussi parent d'un élève de l'école.} other {Vous êtes aussi parent de # élèves de l'école.}}",
+    "openParentSpace": "Ouvrir l'espace parents"
   },
   "notif": {
     "submitted": {
@@ -1817,7 +1828,9 @@
     "passwordTooShort": "8 caractères minimum.",
     "manualSet": "Mot de passe défini.",
     "manualHint": "Vous choisissez le mot de passe et le transmettez — la personne n'aura pas à le changer.",
-    "syncNote": "L'e-mail de connexion est unique : le changer ici le change partout (fiche parent, formulaires, connexion)."
+    "syncNote": "L'e-mail de connexion est unique : le changer ici le change partout (fiche parent, formulaires, connexion).",
+    "hasHat": "Ce compte parent a aussi un profil personnel : retirez d'abord ses accès dans Permissions avant de changer son rôle.",
+    "parentUnverified": "Ce compte parent n'est pas vérifié (ni importé de Dars, ni lié à un élève, ni connecté avec Microsoft) : impossible d'en faire un compte personnel."
   },
   "adminPermissions": {
     "title": "Permissions",
@@ -1865,7 +1878,12 @@
     "levelHint_write": "consulter + créer / modifier",
     "levelHint_full": "tout, y compris supprimer et configurer",
     "module_communication": "Communication",
-    "moduleDesc_communication": "Documents, annonces, messages des familles"
+    "moduleDesc_communication": "Documents, annonces, messages des familles",
+    "errParentUnverified": "Ce compte parent n'est pas encore vérifié (ni importé de Dars, ni lié à un élève, ni connecté avec Microsoft). Faites-le se connecter une fois avec Microsoft, ou lancez l'import du personnel.",
+    "errAccountDisabled": "Ce compte est désactivé — réactivez-le depuis Comptes avant de lui donner des accès.",
+    "errAccountDeleted": "Cette adresse appartient à un compte supprimé — restaurez-le ou purgez-le depuis Parents › Supprimés d'abord.",
+    "errStaffDomainsUnset": "Aucun domaine e-mail du personnel n'est configuré pour l'école — impossible de vérifier ce compte parent.",
+    "errStaffDomainRequired": "Un nouveau compte personnel ne peut être créé que sur une adresse e-mail de l'école. Utilisez l'adresse professionnelle."
   },
   "messaging": {
     "picker": {

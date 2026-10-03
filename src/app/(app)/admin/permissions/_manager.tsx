@@ -125,6 +125,16 @@ function errorKey(err: string | undefined): string {
       return "errParentEmail";
     case "admin-email":
       return "errAdminEmail";
+    case "parent-unverified":
+      return "errParentUnverified";
+    case "account-disabled":
+      return "errAccountDisabled";
+    case "account-deleted":
+      return "errAccountDeleted";
+    case "staff-domains-unset":
+      return "errStaffDomainsUnset";
+    case "staff-domain-required":
+      return "errStaffDomainRequired";
     default:
       return "errGeneric";
   }

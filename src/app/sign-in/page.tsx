@@ -18,12 +18,13 @@ export default async function SignInPage({
 }: {
   searchParams: Promise<{ tenant?: string; error?: string }>;
 }) {
+  const { tenant, error } = await searchParams;
   const session = await auth();
-  if (session?.user) {
+  // A disabled/deleted account still holds a valid token for a while:
+  // show the message instead of redirecting it home (which bounces back here).
+  if (session?.user && error !== "AccountDisabled") {
     redirect(postSignInPath(session.user.role));
   }
-
-  const { tenant, error } = await searchParams;
   const t = await getTranslations("signIn");
   const tCommon = await getTranslations("common");
   const tApp = await getTranslations("app");
@@ -229,7 +230,11 @@ export default async function SignInPage({
                     role="alert"
                     className="rounded-md border border-[color:var(--color-danger)]/30 bg-[color:var(--color-danger-soft)] px-3 py-2 text-sm text-[color:var(--color-danger-soft-fg)]"
                   >
-                    {error === "NoAccount" ? t("errorNoAccount") : t("errorInvalid")}
+                    {error === "NoAccount"
+                      ? t("errorNoAccount")
+                      : error === "AccountDisabled"
+                        ? t("errorAccountDisabled")
+                        : t("errorInvalid")}
                   </div>
                 ) : null}
 

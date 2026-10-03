@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { unscopedDb } from "@/lib/db";
-import { requireRole, requireUser } from "@/lib/session";
+import { requireLiveUser, requireRole } from "@/lib/session";
 import { LOCALES, type Locale } from "@/i18n/config";
 import { getLocale } from "next-intl/server";
 import {
@@ -249,7 +249,7 @@ export async function updateEmailDefaults(
 // ─── Loader ───────────────────────────────────────────────────
 
 export async function loadTenantSettings() {
-  const user = await requireUser();
+  const user = await requireLiveUser();
   if (!user.tenantId) return null;
   return unscopedDb().tenant.findUnique({
     where: { id: user.tenantId },
@@ -326,7 +326,7 @@ export async function loadInscriptionRegistry(): Promise<{
   config: TenantInscriptionFormConfig;
   locale: DossierLocale;
 }> {
-  const user = await requireUser();
+  const user = await requireLiveUser();
   const emptyConfig: TenantInscriptionFormConfig = { version: 1, fields: {} };
   if (!user.tenantId) {
     return { fieldsByTab: {}, config: emptyConfig, locale: "fr" };
@@ -348,7 +348,7 @@ export async function loadDossierStateDefaults(): Promise<{
   inscription: string;
   renewal: string;
 }> {
-  const user = await requireUser();
+  const user = await requireLiveUser();
   if (!user.tenantId) return { inscription: "open", renewal: "services_hidden" };
   const t = await unscopedDb().tenant.findUnique({
     where: { id: user.tenantId },
@@ -516,7 +516,7 @@ const fieldsConfigSchema = z.object({
 });
 
 export async function loadEntityFieldsConfig(entity: EntityType) {
-  const user = await requireUser();
+  const user = await requireLiveUser();
   if (!user.tenantId) return { categories: [], fields: [] };
   const tenant = await unscopedDb().tenant.findUnique({
     where: { id: user.tenantId },
@@ -556,7 +556,7 @@ const parentCreateConfigSchema = z.object({
 });
 
 export async function loadParentCreateConfig() {
-  const user = await requireUser();
+  const user = await requireLiveUser();
   if (!user.tenantId) {
     const { DEFAULT_PARENT_CREATE_CONFIG } = await import(
       "@/lib/parent-create-config"
@@ -647,7 +647,7 @@ const studentCreateConfigSchema = z.object({
 export async function loadStudentCreateConfig() {
   const { parseStudentCreateConfig, DEFAULT_STUDENT_CREATE_CONFIG } =
     await import("@/lib/student-create-config");
-  const user = await requireUser();
+  const user = await requireLiveUser();
   if (!user.tenantId) return DEFAULT_STUDENT_CREATE_CONFIG;
   const tenant = await unscopedDb().tenant.findUnique({
     where: { id: user.tenantId },
@@ -767,7 +767,7 @@ const establishmentSchema = z.object({
 });
 
 export async function listEstablishments() {
-  const user = await requireUser();
+  const user = await requireLiveUser();
   if (!user.tenantId) return [];
   return unscopedDb().establishment.findMany({
     where: { tenantId: user.tenantId },

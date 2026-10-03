@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/session";
+import { effectiveStaffRole, requireUser } from "@/lib/session";
 import { db } from "@/lib/db";
 import { runWithTenant } from "@/lib/tenant-context";
 
@@ -23,7 +23,8 @@ export async function GET(req: Request) {
   // People/class search is for school admins and teachers ONLY. Everyone else
   // (STAFF, PARENT, SUPER_ADMIN) gets nothing — a staff/parent user must never
   // receive student, parent, or class records from the palette.
-  if (user.role !== "SCHOOL_ADMIN" && user.role !== "TEACHER") {
+  const eff = await effectiveStaffRole(user);
+  if (eff !== "SCHOOL_ADMIN" && eff !== "TEACHER") {
     return NextResponse.json(EMPTY);
   }
 

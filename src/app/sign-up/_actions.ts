@@ -20,6 +20,8 @@ export type SignUpFormState = {
   formError?: string;
 };
 
+import { isStaffDomainEmail as isStaffDomain } from "@/lib/staff-identity";
+
 export async function signUpParent(
   _prev: SignUpFormState,
   formData: FormData,
@@ -48,10 +50,15 @@ export async function signUpParent(
   const db = unscopedDb();
       const tenant = await db.tenant.findUnique({
       where: { slug: parsed.data.tenantSlug },
-      select: { id: true, defaultLocale: true },
+      select: { id: true, defaultLocale: true, staffEmailDomains: true },
     });
     if (!tenant) return { formError: "Unknown tenant" };
 
+    // Staff addresses can't be self-registered as parents: a squatted staff
+    // address could later be handed staff access (double profil).
+    if (isStaffDomain(parsed.data.email, tenant.staffEmailDomains)) {
+      return { errors: { email: "staffDomain" } };
+    }
     const existing = await db.user.findFirst({
       where: { email: parsed.data.email, tenantId: tenant.id },
       select: { id: true },
@@ -157,7 +164,7 @@ export async function signUpFamily(
   const db = unscopedDb();
   const tenant = await db.tenant.findUnique({
     where: { slug: tenantSlug },
-    select: { id: true, defaultLocale: true },
+    select: { id: true, defaultLocale: true, staffEmailDomains: true },
   });
   if (!tenant) return { formError: "Unknown tenant" };
 
@@ -170,6 +177,8 @@ export async function signUpFamily(
   const takenSet = new Set(taken.map((u) => u.email));
   if (takenSet.has(r1d.email)) errors["r1.email"] = "exists";
   if (r2 && takenSet.has(r2.email)) errors["r2.email"] = "exists";
+  if (isStaffDomain(r1d.email, tenant.staffEmailDomains)) errors["r1.email"] = "staffDomain";
+  if (r2 && isStaffDomain(r2.email, tenant.staffEmailDomains)) errors["r2.email"] = "staffDomain";
   if (Object.keys(errors).length > 0) return { errors };
 
   // Shared family, then a User + Guardian per responsable.

@@ -320,15 +320,26 @@ export function notifySchoolOfParentPost(args: {
           deletedAt: null,
           archived: false,
         },
-        select: { email: true, role: true, tenantId: true },
+        select: { id: true, email: true, role: true, tenantId: true },
       });
-      if (sender && hasModule(await getAdminAccess(sender), "communication", "read")) {
+      // Background eligibility check — no token here, so "now" stands in for
+      // the issue time (status/deletion still decide; revocation is moot).
+      if (
+        sender &&
+        hasModule(
+          await getAdminAccess({ ...sender, issuedAt: Date.now() }),
+          "communication",
+          "read",
+        )
+      ) {
         staff.push({ email: sender.email });
       }
     }
     const school = await tenantName(args.tenantId);
     await sendEach(
-      [...new Set(staff.map((s) => s.email))],
+      [...new Set(staff.map((s) => s.email))].filter(
+        (e) => e.toLowerCase() !== args.fromEmail.toLowerCase(),
+      ),
       (to) => ({
         to,
         replyTo: args.fromEmail,

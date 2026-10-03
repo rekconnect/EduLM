@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { isStaffDomainEmail, staffDomainsFor } from "@/lib/staff-identity";
 import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { decimalStringToCents } from "@/lib/money";
@@ -102,10 +103,20 @@ async function linkStaffUser(
   // refuses deleted/disabled accounts). Linking to a tombstoned parent would
   // create a dead link that locks the staff member out with no way to repair.
   const existing = await db.user.findFirst({
-    where: { email, deletedAt: null, status: { not: "DISABLED" } },
+    where: { email: { equals: email, mode: "insensitive" }, deletedAt: null, status: { not: "DISABLED" } },
   });
   let account = existing;
   if (!account) {
+    // A brand-new STAFF login is only ever minted on the school's own staff
+    // e-mail domain(s) — an arbitrary address could be anyone's mailbox.
+    if (!isStaffDomainEmail(email, await staffDomainsFor(tenantId))) {
+      await db.payrollEmployee.update({ where: { id: employeeId }, data: { userId: null } });
+      return {
+        ok: false,
+        error:
+          "Un compte personnel ne peut être créé que sur une adresse e-mail de l'école. Utilisez l'adresse professionnelle de l'employé.",
+      };
+    }
     try {
       account = await db.user.create({
         data: { tenantId, email, role: "STAFF", status: "ACTIVE", name: displayName, locale: "fr" },

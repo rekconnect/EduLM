@@ -5,6 +5,12 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
+import {
+  PROVENANCE_SELECT,
+  hasProvenance,
+  moveAdminGrantEmail,
+  staffDomainsFor,
+} from "@/lib/staff-identity";
 
 /** Roles this console may manage. SCHOOL_ADMIN rows are view-only — an admin
  *  must never be able to take over a peer admin from here (owner/script only). */
@@ -65,9 +71,21 @@ export async function updateAccount(
   const state = await runWithTenant({ tenantId, slug: null }, async () => {
     const target = await db.user.findFirst({
       where: { id: userId, role: { in: [...MANAGED_ROLES] } },
-      select: { id: true, email: true },
+      select: { id: true, email: true, role: true, staffRole: true, ...PROVENANCE_SELECT },
     });
     if (!target) return { error: "not-found" } satisfies AccountActionState;
+    // A double profil (parent + staff hat) must stay a PARENT: switching the
+    // role would orphan the parent side. Remove the hat first (Permissions).
+    if (role && target.staffRole && role !== "PARENT") {
+      return { error: "has-hat" } satisfies AccountActionState;
+    }
+    // Turning a parent account into a staff account = the same trust decision
+    // as a hat: only for an account that is provably the person's own.
+    if (role && target.role === "PARENT" && role !== "PARENT") {
+      if (!(await staffDomainsFor(tenantId)).length || !hasProvenance(target)) {
+        return { error: "parent-unverified" } satisfies AccountActionState;
+      }
+    }
     if (email && email !== target.email) {
       const clash = await db.user.findFirst({ where: { email }, select: { id: true } });
       if (clash) return { error: "email-taken" } satisfies AccountActionState;
@@ -76,9 +94,14 @@ export async function updateAccount(
       where: { id: userId },
       data: {
         ...(email ? { email } : {}),
-        ...(role ? { role: role as "TEACHER" | "STAFF" | "PARENT" } : {}),
+        // The JWT carries the role: a re-roled account must sign in again.
+        ...(role && role !== target.role
+          ? { role: role as "TEACHER" | "STAFF" | "PARENT", sessionsInvalidBefore: new Date() }
+          : {}),
       },
     });
+    // Module grants are keyed by e-mail — keep them with the account.
+    if (email && email !== target.email) await moveAdminGrantEmail(tenantId, target.email, email);
     return {} satisfies AccountActionState;
   });
   revalidatePath("/admin/accounts");
@@ -106,7 +129,7 @@ export async function setAccountPassword(
     const passwordHash = await bcrypt.hash(password, 10);
     await db.user.update({
       where: { id: userId },
-      data: { passwordHash, status: "ACTIVE", mustChangePassword: false },
+      data: { passwordHash, status: "ACTIVE", mustChangePassword: false, sessionsInvalidBefore: new Date() },
     });
     return {} satisfies AccountActionState;
   });
@@ -130,7 +153,7 @@ export async function resetAccountPassword(userId: string): Promise<AccountActio
       where: { id: userId },
       // mustChangePassword: the temp password only opens the door once — the
       // account holder must pick their own on first sign-in.
-      data: { passwordHash, status: "ACTIVE", mustChangePassword: true },
+      data: { passwordHash, status: "ACTIVE", mustChangePassword: true, sessionsInvalidBefore: new Date() },
     });
     return { newPassword } satisfies AccountActionState;
   });

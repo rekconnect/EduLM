@@ -7,90 +7,25 @@ import { headers } from "next/headers";
 import { unscopedDb } from "@/lib/db";
 import { signIn } from "@/lib/auth";
 import { createFamily } from "@/lib/family";
-
-const schema = z.object({
-  name: z.string().trim().min(2).max(120),
-  email: z.string().min(3).max(200),
-  password: z.string().min(8).max(128),
-  tenantSlug: z.string().min(1),
-});
-
-export type SignUpFormState = {
-  errors?: Record<string, string>;
-  formError?: string;
-};
-
 import { isStaffDomainEmail as isStaffDomain } from "@/lib/staff-identity";
+import { clientIp, consumeRateLimit, limitByIp } from "@/lib/rate-limit";
+import { verifyTurnstile } from "@/lib/turnstile";
+import { TURNSTILE_ACTIONS } from "@/lib/turnstile-actions";
 
-export async function signUpParent(
-  _prev: SignUpFormState,
-  formData: FormData,
-): Promise<SignUpFormState> {
-  // Tenant slug must come from the request (middleware-set header) so a
-  // signed-up parent always belongs to the tenant whose subdomain they used.
-  // Fall back to a hidden form field for path-based dev.
-  const h = await headers();
-  const slugFromHeader = h.get("x-tenant-slug");
-  const slugFromForm = String(formData.get("tenantSlug") ?? "");
-  const tenantSlug = (slugFromHeader || slugFromForm).toLowerCase().trim();
-
-  const parsed = schema.safeParse({
-    name: String(formData.get("name") ?? ""),
-    email: String(formData.get("email") ?? "").toLowerCase().trim(),
-    password: String(formData.get("password") ?? ""),
-    tenantSlug,
-  });
-  if (!parsed.success) {
-    const flat = z.flattenError(parsed.error).fieldErrors as Record<string, string[] | undefined>;
-    const errors: Record<string, string> = {};
-    for (const [k, v] of Object.entries(flat)) if (v?.[0]) errors[k] = v[0];
-    return { errors };
-  }
-
-  const db = unscopedDb();
-      const tenant = await db.tenant.findUnique({
-      where: { slug: parsed.data.tenantSlug },
-      select: { id: true, defaultLocale: true, staffEmailDomains: true },
-    });
-    if (!tenant) return { formError: "Unknown tenant" };
-
-    // Staff addresses can't be self-registered as parents: a squatted staff
-    // address could later be handed staff access (double profil).
-    if (isStaffDomain(parsed.data.email, tenant.staffEmailDomains)) {
-      return { errors: { email: "staffDomain" } };
-    }
-    const existing = await db.user.findFirst({
-      where: { email: parsed.data.email, tenantId: tenant.id },
-      select: { id: true },
-    });
-    if (existing) {
-      return { errors: { email: "exists" } };
-    }
-
-    const passwordHash = await bcrypt.hash(parsed.data.password, 10);
-    await db.user.create({
-      data: {
-        tenantId: tenant.id,
-        email: parsed.data.email,
-        name: parsed.data.name,
-        passwordHash,
-        role: "PARENT",
-        status: "ACTIVE", // TODO: switch to INVITED + email verify once Resend is wired
-        locale: tenant.defaultLocale,
-        emailVerified: new Date(),
-      },
-    });
-  // Sign the new parent in straight away.
-  await signIn("credentials", {
-    email: parsed.data.email,
-    password: parsed.data.password,
-    tenantSlug: parsed.data.tenantSlug,
-    redirectTo: "/parent/applications",
-  });
-
-  // Unreachable; signIn throws redirect.
-  redirect("/parent/applications");
-}
+// ── Abuse controls on the public sign-up ────────────────────────────────────
+// Anyone on the internet can reach this action, so before a row is written:
+//  - honeypot      : bots that fill every input are dropped silently;
+//  - per-IP limit  : SIGNUP_IP_LIMIT well-formed attempts per hour per address;
+//  - Turnstile     : enforced when the tenant configured the keys (lib/turnstile);
+//  - per-tenant cap: SIGNUP_TENANT_LIMIT per hour for the whole school — the
+//                    ceiling a distributed bot run hits (per-IP limits can't
+//                    see it) while staying generous for a real campaign day.
+// Email verification before activation is the next layer (needs Resend).
+const SIGNUP_IP_LIMIT = 5;
+const SIGNUP_TENANT_LIMIT = 100;
+const SIGNUP_WINDOW_SEC = 60 * 60;
+/** Visually hidden form field — real browsers leave it empty. */
+const HONEYPOT_FIELD = "company_url";
 
 // ── New-family sign-up: Responsable 1 (required) + Responsable 2 (optional) ──
 // Creates a shared Family + a Guardian per responsable so both can access the
@@ -105,9 +40,17 @@ const respSchema = z.object({
   password2: z.string().min(1),
 });
 
+/** `formError` codes — translated in _flow.tsx. */
+export type SignUpFormErrorCode =
+  | "unknownTenant"
+  | "tooMany"
+  | "captcha"
+  | "captchaUnavailable"
+  | "unavailable";
+
 export type SignUpFamilyState = {
   errors?: Record<string, string>; // keys like "r1.email", "r2.password"
-  formError?: string;
+  formError?: SignUpFormErrorCode;
 };
 
 function readResp(fd: FormData, prefix: "r1" | "r2") {
@@ -124,11 +67,19 @@ export async function signUpFamily(
   _prev: SignUpFamilyState,
   formData: FormData,
 ): Promise<SignUpFamilyState> {
+  // Tenant slug must come from the request (middleware-set header) so a
+  // signed-up parent always belongs to the tenant whose subdomain they used.
+  // Fall back to a hidden form field for path-based dev.
   const h = await headers();
   const slugFromHeader = h.get("x-tenant-slug");
   const slugFromForm = String(formData.get("tenantSlug") ?? "");
   const tenantSlug = (slugFromHeader || slugFromForm).toLowerCase().trim();
-  if (!tenantSlug) return { formError: "Unknown tenant" };
+  if (!tenantSlug) return { formError: "unknownTenant" };
+
+  // Honeypot: a filled hidden field is a bot. Generic answer, nothing written.
+  if (String(formData.get(HONEYPOT_FIELD) ?? "").trim()) {
+    return { formError: "unavailable" };
+  }
 
   const r1raw = readResp(formData, "r1");
   const r2raw = readResp(formData, "r2");
@@ -161,12 +112,34 @@ export async function signUpFamily(
   const r1d = r1.success ? r1.data : null;
   if (!r1d) return { errors };
 
+  // Count the attempt once the form is well-formed (typos don't burn quota),
+  // and BEFORE anything that touches the DB or reveals whether an email exists.
+  const ipGate = await limitByIp("sign-up", SIGNUP_IP_LIMIT, SIGNUP_WINDOW_SEC);
+  if (!ipGate.ok) return { formError: "tooMany" };
+
   const db = unscopedDb();
   const tenant = await db.tenant.findUnique({
     where: { slug: tenantSlug },
     select: { id: true, defaultLocale: true, staffEmailDomains: true },
   });
-  if (!tenant) return { formError: "Unknown tenant" };
+  if (!tenant) return { formError: "unknownTenant" };
+
+  // Bot check before the per-tenant counter, so failed bot traffic can't
+  // exhaust the school's hourly quota for real families.
+  const bot = await verifyTurnstile(String(formData.get("cf-turnstile-response") ?? ""), {
+    remoteIp: await clientIp(),
+    expectedAction: TURNSTILE_ACTIONS.signUp,
+  });
+  if (!bot.ok) {
+    return { formError: bot.reason === "unavailable" ? "captchaUnavailable" : "captcha" };
+  }
+
+  const tenantGate = await consumeRateLimit({
+    key: `sign-up:tenant:${tenant.id}`,
+    limit: SIGNUP_TENANT_LIMIT,
+    windowSec: SIGNUP_WINDOW_SEC,
+  });
+  if (!tenantGate.ok) return { formError: "tooMany" };
 
   // Email uniqueness within the tenant.
   const emails = [r1d.email, ...(r2 ? [r2.email] : [])];
@@ -177,6 +150,8 @@ export async function signUpFamily(
   const takenSet = new Set(taken.map((u) => u.email));
   if (takenSet.has(r1d.email)) errors["r1.email"] = "exists";
   if (r2 && takenSet.has(r2.email)) errors["r2.email"] = "exists";
+  // Staff addresses can't be self-registered as parents: a squatted staff
+  // address could later be handed staff access (double profil).
   if (isStaffDomain(r1d.email, tenant.staffEmailDomains)) errors["r1.email"] = "staffDomain";
   if (r2 && isStaffDomain(r2.email, tenant.staffEmailDomains)) errors["r2.email"] = "staffDomain";
   if (Object.keys(errors).length > 0) return { errors };
@@ -197,9 +172,13 @@ export async function signUpFamily(
         name: `${d.firstName} ${d.lastName}`.trim(),
         passwordHash,
         role: "PARENT",
+        // Self-registered: nobody has verified this address yet, so
+        // `emailVerified` stays null (it is set when the address is confirmed
+        // or when an admin creates the account). The account can sign in and
+        // start a dossier, but the Parents console lists it under
+        // "Comptes en attente" until a child is linked by the school.
         status: "ACTIVE",
         locale: tenant!.defaultLocale,
-        emailVerified: new Date(),
       },
       select: { id: true },
     });

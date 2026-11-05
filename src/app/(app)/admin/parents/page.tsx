@@ -22,8 +22,22 @@ import { displayName } from "@/lib/names";
 import { ParentsSearchBox } from "./_search-box";
 import { ParentRowActions } from "./_row-actions";
 import { ParentsBulkToolbar } from "./_bulk-toolbar";
+import { ACTIVE_PARENT_WHERE, PENDING_PARENT_WHERE } from "./_pending";
 
 const BASE = "/admin/parents";
+
+// ApplicationStatus → key in the `admissions` namespace (same explicit map as
+// /admissions-admin — the enum name and the key don't always line up).
+const APP_STATUS_KEY: Record<string, string> = {
+  DRAFT: "statusDraft",
+  SUBMITTED: "statusSubmitted",
+  UNDER_REVIEW: "statusUnderReview",
+  INTERVIEW_SCHEDULED: "statusInterview",
+  ACCEPTED: "statusAccepted",
+  WAITLISTED: "statusWaitlisted",
+  DECLINED: "statusDeclined",
+  WITHDRAWN: "statusWithdrawn",
+};
 
 const STATUS_KEY: Record<string, string> = {
   ACTIVE: "statusActive",
@@ -46,6 +60,7 @@ const SORTABLE_COLUMNS = [
   "name",
   "email",
   "children",
+  "dossiers",
   "status",
   "createdAt",
 ] as const;
@@ -64,13 +79,18 @@ function orderByFor(
       return { createdAt: dir };
     case "children":
       return { guardianProfile: { childLinks: { _count: dir } } };
+    case "dossiers":
+      return { submittedApps: { _count: dir } };
     case "name":
     default:
       return { name: dir };
   }
 }
 
-const VIEWS = ["active", "archived", "deleted"] as const;
+// Four mutually-exclusive buckets. "pending" = live account the school has
+// not confirmed yet (no Dars id, no child linked — see ./_pending.ts);
+// "active" is the confirmed remainder. Archived / deleted keep everything.
+const VIEWS = ["active", "pending", "archived", "deleted"] as const;
 type View = (typeof VIEWS)[number];
 
 function parseView(raw: string | undefined): View {
@@ -110,7 +130,9 @@ export default async function ParentsListPage({
 
   return runWithTenant({ tenantId, slug: null }, async () => {
     const t = await getTranslations("parents");
+    const tAdm = await getTranslations("admissions");
     const query = q.trim();
+    const isPendingView = currentView === "pending";
 
     const sortKey: SortKey = (SORTABLE_COLUMNS as readonly string[]).includes(
       sort ?? "",
@@ -137,64 +159,86 @@ export default async function ParentsListPage({
         ? yearIdParam
         : activeYear?.id;
     const selectedYear = years.find((y) => y.id === selectedYearId);
-    const restrictToYear = scope !== "all" && years.length > 0;
+    // Pending accounts have no child by definition, so the "families of the
+    // year" scope can never match them — it is neither shown nor applied there.
+    const restrictToYear = !isPendingView && scope !== "all" && years.length > 0;
 
-    // Three mutually-exclusive lifecycle buckets. Status filter still
+    // Four mutually-exclusive lifecycle buckets. Status filter still
     // applies on top — e.g. "Archived parents who are also DISABLED".
-    // Typed as a loose record because `archived` / `deletedAt` are new
-    // columns the generated Prisma types only learn about after
-    // `npx prisma generate` runs.
-    const lifecycleWhere =
+    // Active / pending carry an OR (confirmed vs not), so the year scope
+    // and the search go through AND to avoid clobbering it.
+    const lifecycleWhere: Prisma.UserWhereInput =
       currentView === "active"
-        ? { archived: false, deletedAt: null }
-        : currentView === "archived"
-          ? { archived: true, deletedAt: null }
-          : { deletedAt: { not: null } as const };
+        ? ACTIVE_PARENT_WHERE
+        : currentView === "pending"
+          ? PENDING_PARENT_WHERE
+          : currentView === "archived"
+            ? { role: "PARENT", archived: true, deletedAt: null }
+            : { role: "PARENT", deletedAt: { not: null } };
 
     const whereClause: Prisma.UserWhereInput = {
-      role: "PARENT",
       ...lifecycleWhere,
       ...(statusFilter ? { status: statusFilter } : {}),
-      ...(restrictToYear && selectedYearId
-        ? {
-            guardianProfile: {
-              childLinks: {
-                some: {
-                  student: {
-                    enrollments: { some: { academicYearId: selectedYearId } },
-                  },
-                },
-              },
-            },
-          }
-        : {}),
-      ...(query
-        ? {
-            OR: [
-              { email: { contains: query, mode: "insensitive" } },
-              { name: { contains: query, mode: "insensitive" } },
+      AND: [
+        ...(restrictToYear && selectedYearId
+          ? [
               {
                 guardianProfile: {
                   childLinks: {
                     some: {
                       student: {
-                        OR: [
-                          { firstName: { contains: query, mode: "insensitive" } },
-                          { lastName: { contains: query, mode: "insensitive" } },
-                        ],
+                        enrollments: {
+                          some: { academicYearId: selectedYearId },
+                        },
                       },
                     },
                   },
                 },
-              },
+              } satisfies Prisma.UserWhereInput,
+            ]
+          : []),
+        ...(query
+          ? [
               {
-                guardianProfile: {
-                  relation: { contains: query, mode: "insensitive" },
-                },
-              },
-            ],
-          }
-        : {}),
+                OR: [
+                  { email: { contains: query, mode: "insensitive" } },
+                  { name: { contains: query, mode: "insensitive" } },
+                  { firstName: { contains: query, mode: "insensitive" } },
+                  { lastName: { contains: query, mode: "insensitive" } },
+                  {
+                    guardianProfile: {
+                      childLinks: {
+                        some: {
+                          student: {
+                            OR: [
+                              {
+                                firstName: {
+                                  contains: query,
+                                  mode: "insensitive",
+                                },
+                              },
+                              {
+                                lastName: {
+                                  contains: query,
+                                  mode: "insensitive",
+                                },
+                              },
+                            ],
+                          },
+                        },
+                      },
+                    },
+                  },
+                  {
+                    guardianProfile: {
+                      relation: { contains: query, mode: "insensitive" },
+                    },
+                  },
+                ],
+              } satisfies Prisma.UserWhereInput,
+            ]
+          : []),
+      ],
     };
 
     // Pagination — 50 rows per page, the rest spill onto next pages.
@@ -217,6 +261,7 @@ export default async function ParentsListPage({
         firstName: true,
         lastName: true,
         email: true,
+        emailVerified: true,
         status: true,
         createdAt: true,
         archived: true,
@@ -231,6 +276,14 @@ export default async function ParentsListPage({
             },
           },
         },
+        // Dossiers column of the pending view: total + latest status, pulled
+        // with the page query (one batched relation load, no per-row query).
+        _count: { select: { submittedApps: true } },
+        submittedApps: {
+          select: { status: true },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
       },
     });
 
@@ -238,17 +291,17 @@ export default async function ParentsListPage({
     // ignored so each tab shows the lifecycle-bucket total, not the
     // intersection — otherwise an admin filtering by query sees "0" on
     // every tab and can't tell where their search target lives.
-    const [activeCount, archivedCount, deletedCount] = await Promise.all([
-      db.user.count({
-        where: { role: "PARENT", archived: false, deletedAt: null },
-      }),
-      db.user.count({
-        where: { role: "PARENT", archived: true, deletedAt: null },
-      }),
-      db.user.count({
-        where: { role: "PARENT", deletedAt: { not: null } },
-      }),
-    ]);
+    const [activeCount, pendingCount, archivedCount, deletedCount] =
+      await Promise.all([
+        db.user.count({ where: ACTIVE_PARENT_WHERE }),
+        db.user.count({ where: PENDING_PARENT_WHERE }),
+        db.user.count({
+          where: { role: "PARENT", archived: true, deletedAt: null },
+        }),
+        db.user.count({
+          where: { role: "PARENT", deletedAt: { not: null } },
+        }),
+      ]);
 
     const count = totalMatching;
     const countLabel = query
@@ -309,13 +362,19 @@ export default async function ParentsListPage({
             }
           />
 
-          {/* View tabs — Active / Archived / Deleted */}
+          {/* View tabs — Active / Pending / Archived / Deleted */}
           <div className="flex flex-wrap items-center gap-2 border-b border-[color:var(--color-border-subtle)] pb-3">
             <ViewTab
               href={hrefWith(BASE, { ...viewPreserve, view: undefined })}
               label={t("viewActive")}
               count={activeCount}
               active={currentView === "active"}
+            />
+            <ViewTab
+              href={hrefWith(BASE, { ...viewPreserve, view: "pending" })}
+              label={t("viewPending")}
+              count={pendingCount}
+              active={isPendingView}
             />
             <ViewTab
               href={hrefWith(BASE, { ...viewPreserve, view: "archived" })}
@@ -331,10 +390,16 @@ export default async function ParentsListPage({
             />
           </div>
 
+          {isPendingView ? (
+            <p className="max-w-3xl text-sm text-[color:var(--color-foreground-muted)]">
+              {t("pendingLead")}
+            </p>
+          ) : null}
+
           {/* Search + filters on one row — same layout as /students. */}
           <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto]">
             <ParentsSearchBox />
-            {years.length > 0 ? (
+            {years.length > 0 && !isPendingView ? (
               <>
                 <YearPicker years={years} selectedId={selectedYearId ?? ""} />
                 <UrlSelect
@@ -391,11 +456,13 @@ export default async function ParentsListPage({
               <p className="max-w-xs text-sm text-[color:var(--color-foreground-muted)]">
                 {query || statusFilter
                   ? t("emptySearch")
-                  : currentView === "archived"
-                    ? t("emptyArchived")
-                    : currentView === "deleted"
-                      ? t("emptyDeleted")
-                      : t("empty")}
+                  : isPendingView
+                    ? t("emptyPending")
+                    : currentView === "archived"
+                      ? t("emptyArchived")
+                      : currentView === "deleted"
+                        ? t("emptyDeleted")
+                        : t("empty")}
               </p>
               {!query && !statusFilter && currentView === "active" ? (
                 <div className="mt-5">
@@ -431,23 +498,37 @@ export default async function ParentsListPage({
                     baseUrl={BASE}
                     preserve={preserve}
                   />
-                  <SortableTH
-                    label={t("colChildren")}
-                    column="children"
-                    currentSort={sortKey}
-                    currentDir={sortDir}
-                    baseUrl={BASE}
-                    preserve={preserve}
-                    align="end"
-                  />
-                  <SortableTH
-                    label={t("colStatus")}
-                    column="status"
-                    currentSort={sortKey}
-                    currentDir={sortDir}
-                    baseUrl={BASE}
-                    preserve={preserve}
-                  />
+                  {isPendingView ? (
+                    <SortableTH
+                      label={t("colDossiers")}
+                      column="dossiers"
+                      currentSort={sortKey}
+                      currentDir={sortDir}
+                      baseUrl={BASE}
+                      preserve={preserve}
+                      align="end"
+                    />
+                  ) : (
+                    <>
+                      <SortableTH
+                        label={t("colChildren")}
+                        column="children"
+                        currentSort={sortKey}
+                        currentDir={sortDir}
+                        baseUrl={BASE}
+                        preserve={preserve}
+                        align="end"
+                      />
+                      <SortableTH
+                        label={t("colStatus")}
+                        column="status"
+                        currentSort={sortKey}
+                        currentDir={sortDir}
+                        baseUrl={BASE}
+                        preserve={preserve}
+                      />
+                    </>
+                  )}
                   <SortableTH
                     label={t("colCreated")}
                     column="createdAt"
@@ -468,6 +549,16 @@ export default async function ParentsListPage({
                   const shownKids = p.guardianProfile?.childLinks.length ?? 0;
                   const isDeleted = p.deletedAt !== null;
                   const isArchived = p.archived;
+                  const totalApps = p._count.submittedApps;
+                  const latestStatus = p.submittedApps[0]?.status;
+                  const latestStatusKey = latestStatus
+                    ? APP_STATUS_KEY[latestStatus]
+                    : undefined;
+                  const latestStatusLabel = latestStatus
+                    ? latestStatusKey
+                      ? tAdm(latestStatusKey)
+                      : latestStatus
+                    : null;
                   return (
                     <TR
                       key={p.id}
@@ -528,29 +619,59 @@ export default async function ParentsListPage({
                         </Link>
                       </TD>
                       <TD className="text-[color:var(--color-foreground-muted)]">
-                        {p.email}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span>{p.email}</span>
+                          {isPendingView && p.emailVerified === null ? (
+                            <span className="inline-flex shrink-0 items-center rounded-full bg-[color:var(--color-surface-sunken)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[color:var(--color-foreground-muted)]">
+                              {t("emailUnverified")}
+                            </span>
+                          ) : null}
+                        </div>
                       </TD>
-                      <TD className="text-end tabular-nums">
-                        {totalKids > 0 ? (
-                          <span className="inline-flex min-w-[24px] items-center justify-center rounded-full bg-[color:var(--color-brand-50)] px-2 py-0.5 text-xs font-semibold text-[color:var(--color-brand-700)]">
-                            {totalKids}
-                          </span>
-                        ) : (
-                          <span className="text-[color:var(--color-foreground-subtle)]">
-                            0
-                          </span>
-                        )}
-                      </TD>
-                      <TD>
-                        <span
-                          className={cn(
-                            "inline-flex rounded-full px-2 py-0.5 text-xs font-medium",
-                            STATUS_TONE[p.status],
-                          )}
-                        >
-                          {t(STATUS_KEY[p.status] ?? "statusActive")}
-                        </span>
-                      </TD>
+                      {isPendingView ? (
+                        <TD className="text-end tabular-nums">
+                          <div className="flex flex-col items-end gap-0.5">
+                            {totalApps > 0 ? (
+                              <span className="inline-flex min-w-[24px] items-center justify-center rounded-full bg-[color:var(--color-brand-50)] px-2 py-0.5 text-xs font-semibold text-[color:var(--color-brand-700)]">
+                                {totalApps}
+                              </span>
+                            ) : (
+                              <span className="text-[color:var(--color-foreground-subtle)]">
+                                0
+                              </span>
+                            )}
+                            {latestStatusLabel ? (
+                              <span className="text-[11px] text-[color:var(--color-foreground-muted)]">
+                                {latestStatusLabel}
+                              </span>
+                            ) : null}
+                          </div>
+                        </TD>
+                      ) : (
+                        <>
+                          <TD className="text-end tabular-nums">
+                            {totalKids > 0 ? (
+                              <span className="inline-flex min-w-[24px] items-center justify-center rounded-full bg-[color:var(--color-brand-50)] px-2 py-0.5 text-xs font-semibold text-[color:var(--color-brand-700)]">
+                                {totalKids}
+                              </span>
+                            ) : (
+                              <span className="text-[color:var(--color-foreground-subtle)]">
+                                0
+                              </span>
+                            )}
+                          </TD>
+                          <TD>
+                            <span
+                              className={cn(
+                                "inline-flex rounded-full px-2 py-0.5 text-xs font-medium",
+                                STATUS_TONE[p.status],
+                              )}
+                            >
+                              {t(STATUS_KEY[p.status] ?? "statusActive")}
+                            </span>
+                          </TD>
+                        </>
+                      )}
                       <TD className="tabular-nums text-[color:var(--color-foreground-muted)]">
                         {p.createdAt.toISOString().slice(0, 10)}
                       </TD>
@@ -560,6 +681,7 @@ export default async function ParentsListPage({
                           parentLabel={displayName(p) || p.email}
                           archived={isArchived}
                           deleted={isDeleted}
+                          pendingAccount={isPendingView}
                         />
                       </TD>
                     </TR>

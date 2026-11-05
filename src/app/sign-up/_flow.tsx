@@ -7,7 +7,9 @@ import { ArrowRight, Loader2, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
-import { signUpFamily, type SignUpFamilyState } from "./_actions";
+import { TurnstileWidget } from "@/components/turnstile-widget";
+import { TURNSTILE_ACTIONS } from "@/lib/turnstile-actions";
+import { signUpFamily, type SignUpFamilyState, type SignUpFormErrorCode } from "./_actions";
 
 type Situation = "" | "current" | "past" | "new";
 
@@ -15,10 +17,13 @@ export function SignUpFlow({
   tenantSlug,
   signInHref,
   forgotHref,
+  turnstileSiteKey,
 }: {
   tenantSlug: string;
   signInHref: string;
   forgotHref: string;
+  /** Null when the bot check is not configured for this deployment. */
+  turnstileSiteKey: string | null;
 }) {
   const t = useTranslations("admissions");
   const tSignIn = useTranslations("signIn");
@@ -90,7 +95,11 @@ export function SignUpFlow({
       ) : null}
 
       {situation === "new" ? (
-        <NewFamilyForm tenantSlug={tenantSlug} signInHref={signInHref} />
+        <NewFamilyForm
+          tenantSlug={tenantSlug}
+          signInHref={signInHref}
+          turnstileSiteKey={turnstileSiteKey}
+        />
       ) : null}
     </div>
   );
@@ -99,9 +108,11 @@ export function SignUpFlow({
 function NewFamilyForm({
   tenantSlug,
   signInHref,
+  turnstileSiteKey,
 }: {
   tenantSlug: string;
   signInHref: string;
+  turnstileSiteKey: string | null;
 }) {
   const t = useTranslations("admissions");
   const tCommon = useTranslations("common");
@@ -117,6 +128,23 @@ function NewFamilyForm({
     if (code === "mismatch") return t("signUpPasswordMismatch");
     if (code === "same") return t("signUpEmailSame");
     return code;
+  };
+
+  const formErrText = (code?: SignUpFormErrorCode): string | undefined => {
+    switch (code) {
+      case undefined:
+        return undefined;
+      case "unknownTenant":
+        return t("signUpErrorUnknownTenant");
+      case "tooMany":
+        return t("signUpTooMany");
+      case "captcha":
+        return t("signUpCaptchaFailed");
+      case "captchaUnavailable":
+        return t("signUpCaptchaUnavailable");
+      case "unavailable":
+        return t("signUpUnavailable");
+    }
   };
 
   function Responsable({ prefix, title, required }: { prefix: "r1" | "r2"; title: string; required: boolean }) {
@@ -151,9 +179,23 @@ function NewFamilyForm({
         <Responsable prefix="r2" title={t("signUpResp2")} required={false} />
       </div>
 
+      {/* Honeypot: off-screen, unfocusable, never autofilled by real browsers.
+          The server drops any submission that fills it. */}
+      <div aria-hidden="true" className="absolute -start-[10000px] top-auto h-px w-px overflow-hidden">
+        <input name="company_url" type="text" tabIndex={-1} autoComplete="off" defaultValue="" />
+      </div>
+
+      {turnstileSiteKey ? (
+        <TurnstileWidget
+          siteKey={turnstileSiteKey}
+          action={TURNSTILE_ACTIONS.signUp}
+          resetKey={state}
+        />
+      ) : null}
+
       {state.formError ? (
         <div role="alert" className="rounded-md border border-[color:var(--color-danger)]/30 bg-[color:var(--color-danger-soft)] px-3 py-2 text-sm text-[color:var(--color-danger-soft-fg)]">
-          {state.formError}
+          {formErrText(state.formError)}
         </div>
       ) : null}
 

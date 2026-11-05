@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { extractTenantSlugFromHost } from "@/lib/tenant-resolve";
+import { turnstileSiteKey } from "@/lib/turnstile";
 import { SignUpFlow } from "./_flow";
 
 export default async function SignUpPage() {
@@ -32,7 +33,12 @@ export default async function SignUpPage() {
         </div>
 
         <div className="rounded-[0.75rem] border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] p-6 shadow-card">
-          <SignUpFlow tenantSlug={slug} signInHref={signInHref} forgotHref={forgotHref} />
+          <SignUpFlow
+            tenantSlug={slug}
+            signInHref={signInHref}
+            forgotHref={forgotHref}
+            turnstileSiteKey={turnstileSiteKey()}
+          />
         </div>
       </div>
     </main>

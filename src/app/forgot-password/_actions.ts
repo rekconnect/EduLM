@@ -4,6 +4,7 @@ import { createHash, randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { unscopedDb } from "@/lib/db";
 import { htmlLayout, isMailerConfigured, sendMail } from "@/lib/mailer";
+import { limitByIp } from "@/lib/rate-limit";
 
 /**
  * Self-service password reset by emailed code (public actions — no session).
@@ -59,6 +60,11 @@ export async function requestPasswordReset(emailRaw: string): Promise<ForgotStat
   const email = String(emailRaw ?? "").toLowerCase().trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: true };
 
+  // Per-IP: 5 reset requests per 15 min. Same uniform answer when exceeded,
+  // so the limiter can't be used to probe which addresses have accounts.
+  const gate = await limitByIp("forgot-password:request", 5, 15 * 60);
+  if (!gate.ok) return { ok: true };
+
   const account = await resolveAccount(email);
   if (!account) return { ok: true };
 
@@ -110,6 +116,11 @@ export async function resetPasswordWithCode(
   if (typeof password !== "string" || password.length < 8) {
     return { ok: false, error: "password-too-short" };
   }
+  // Per-IP: 10 code attempts per 15 min (a code is 8 chars from a 31-char
+  // alphabet, so guessing is hopeless anyway; this keeps the DB quiet).
+  const gate = await limitByIp("forgot-password:verify", 10, 15 * 60);
+  if (!gate.ok) return { ok: false, error: "invalid-code" };
+
   const account = await resolveAccount(email);
   if (!account) return { ok: false, error: "invalid-code" };
 

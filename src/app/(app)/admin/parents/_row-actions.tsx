@@ -29,6 +29,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   permanentlyDeleteParent,
+  purgePendingParents,
   restoreParent,
   setParentArchived,
   softDeleteParent,
@@ -38,23 +39,30 @@ import {
  * Per-row menu for the parents list. Mirrors the admissions version —
  * available actions depend on which section the row currently lives in.
  * Permanent delete refuses if the parent still has linked kids.
+ *
+ * `pendingAccount` rows (the "En attente" view: no Dars id, no child) get
+ * Archive + a hard "Supprimer le compte" instead of the soft delete — a
+ * tombstone would keep the e-mail reserved and block the real family.
  */
 export function ParentRowActions({
   parentUserId,
   parentLabel,
   archived,
   deleted,
+  pendingAccount = false,
 }: {
   parentUserId: string;
   parentLabel: string;
   archived: boolean;
   deleted: boolean;
+  pendingAccount?: boolean;
 }) {
   const t = useTranslations("parents");
   const tCommon = useTranslations("common");
   const [pending, startTransition] = useTransition();
   const [confirmSoftOpen, setConfirmSoftOpen] = useState(false);
   const [confirmHardOpen, setConfirmHardOpen] = useState(false);
+  const [confirmPurgeOpen, setConfirmPurgeOpen] = useState(false);
 
   function onToggleArchive() {
     startTransition(async () => {
@@ -98,6 +106,21 @@ export function ParentRowActions({
     });
   }
 
+  function onConfirmPurge() {
+    startTransition(async () => {
+      const r = await purgePendingParents([parentUserId]);
+      if (r.ok && r.processed === 1) {
+        toast.success(t("purgeDone"));
+        setConfirmPurgeOpen(false);
+      } else if (r.skippedHasDossier > 0) {
+        toast.error(t("purgeRefusedHasDossier"));
+        setConfirmPurgeOpen(false);
+      } else {
+        toast.error(t("purgeError"));
+      }
+    });
+  }
+
   return (
     <>
       <DropdownMenu>
@@ -130,6 +153,22 @@ export function ParentRowActions({
               >
                 <Trash2 className="me-2 size-4" aria-hidden />
                 {t("deletePermanent")}
+              </DropdownMenuItem>
+            </>
+          ) : pendingAccount ? (
+            <>
+              <DropdownMenuItem onClick={onToggleArchive} disabled={pending}>
+                <EyeOff className="me-2 size-4" aria-hidden />
+                {t("archive")}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setConfirmPurgeOpen(true)}
+                disabled={pending}
+                className="text-[color:var(--color-danger)] focus:text-[color:var(--color-danger)]"
+              >
+                <Trash2 className="me-2 size-4" aria-hidden />
+                {t("purgeRow")}
               </DropdownMenuItem>
             </>
           ) : (
@@ -220,6 +259,38 @@ export function ParentRowActions({
                 <Loader2 className="me-2 size-4 animate-spin" aria-hidden />
               ) : null}
               {pending ? tCommon("loading") : t("deletePermanentConfirmCta")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmPurgeOpen} onOpenChange={setConfirmPurgeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("purgeConfirmTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("purgeConfirmDesc", { name: parentLabel })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setConfirmPurgeOpen(false)}
+              disabled={pending}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              type="button"
+              onClick={onConfirmPurge}
+              disabled={pending}
+              className="bg-[color:var(--color-danger)] text-white hover:bg-[color:var(--color-danger)]/90"
+            >
+              {pending ? (
+                <Loader2 className="me-2 size-4 animate-spin" aria-hidden />
+              ) : null}
+              {pending ? tCommon("loading") : t("purgeConfirmCta")}
             </Button>
           </DialogFooter>
         </DialogContent>

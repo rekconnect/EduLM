@@ -299,6 +299,17 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+// Fixed-window counters for public endpoints (sign-up, password reset) — see
+// src/lib/rate-limit.ts. Keyed by scope + salted IP hash, never a raw IP.
+// Deliberately has NO tenantId so it stays outside the tenant auto-scoping.
+model RateLimitBucket {
+  key     String   @id
+  count   Int      @default(0)
+  resetAt DateTime
+
+  @@index([resetAt])
+}
+
 // ───────────────────────── Academic structure ─────────────────────────
 
 model AcademicYear {

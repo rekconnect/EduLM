@@ -26,9 +26,11 @@ import {
   bulkRestoreParents,
   bulkSetParentsArchived,
   bulkSoftDeleteParents,
+  purgePendingParents,
+  type ParentPurgeResult,
 } from "./_actions";
 
-type View = "active" | "archived" | "deleted";
+type View = "active" | "pending" | "archived" | "deleted";
 
 export function ParentsBulkToolbar({ view }: { view: View }) {
   const t = useTranslations("parents");
@@ -37,6 +39,7 @@ export function ParentsBulkToolbar({ view }: { view: View }) {
     useBulkSelection();
   const [pending, startTransition] = useTransition();
   const [confirmPurge, setConfirmPurge] = useState(false);
+  const [confirmPurgePending, setConfirmPurgePending] = useState(false);
 
   if (count === 0) return null;
   const ids = [...selected];
@@ -53,6 +56,27 @@ export function ParentsBulkToolbar({ view }: { view: View }) {
     } else {
       toast.success(t("bulkDone", { processed: r.processed }));
     }
+    clear();
+  }
+
+  // Purge toast: how many accounts went, and why the rest stayed — the
+  // "dossier en cours" reason is the one the admin can act on (admissions).
+  function announcePurge(r: ParentPurgeResult) {
+    if (!r.ok) {
+      toast.error(t("bulkError"));
+      return;
+    }
+    const otherSkipped = r.skipped - r.skippedHasDossier;
+    const reasons = [
+      r.skippedHasDossier > 0
+        ? t("bulkPurgeSkippedDossier", { count: r.skippedHasDossier })
+        : null,
+      otherSkipped > 0 ? t("bulkPurgeSkippedOther", { count: otherSkipped }) : null,
+    ].filter((s): s is string => s !== null);
+    const headline = t("bulkPurgeDone", { processed: r.processed });
+    const description = reasons.length > 0 ? reasons.join(" ") : undefined;
+    if (r.processed > 0) toast.success(headline, { description });
+    else toast.error(headline, { description });
     clear();
   }
 
@@ -73,6 +97,13 @@ export function ParentsBulkToolbar({ view }: { view: View }) {
       const r = await bulkPermanentlyDeleteParents(ids);
       announce(r);
       setConfirmPurge(false);
+    });
+  }
+  function onPurgePending() {
+    startTransition(async () => {
+      const r = await purgePendingParents(ids);
+      announcePurge(r);
+      setConfirmPurgePending(false);
     });
   }
 
@@ -111,6 +142,19 @@ export function ParentsBulkToolbar({ view }: { view: View }) {
             <>
               <BulkBtn onClick={onArchive} icon={EyeOff} label={t("bulkArchive")} pending={pending} />
               <BulkBtn onClick={onSoftDelete} icon={Trash2} label={t("bulkDelete")} pending={pending} danger />
+            </>
+          ) : null}
+
+          {view === "pending" ? (
+            <>
+              <BulkBtn onClick={onArchive} icon={EyeOff} label={t("bulkArchive")} pending={pending} />
+              <BulkBtn
+                onClick={() => setConfirmPurgePending(true)}
+                icon={Trash2}
+                label={t("bulkPurge")}
+                pending={pending}
+                danger
+              />
             </>
           ) : null}
 
@@ -163,6 +207,36 @@ export function ParentsBulkToolbar({ view }: { view: View }) {
                 <Loader2 className="me-2 size-4 animate-spin" aria-hidden />
               ) : null}
               {pending ? tCommon("loading") : t("bulkDeletePermanentCta")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmPurgePending} onOpenChange={setConfirmPurgePending}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("bulkPurgeConfirmTitle", { count })}</DialogTitle>
+            <DialogDescription>{t("bulkPurgeConfirmDesc")}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setConfirmPurgePending(false)}
+              disabled={pending}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              type="button"
+              onClick={onPurgePending}
+              disabled={pending}
+              className="bg-[color:var(--color-danger)] text-white hover:bg-[color:var(--color-danger)]/90"
+            >
+              {pending ? (
+                <Loader2 className="me-2 size-4 animate-spin" aria-hidden />
+              ) : null}
+              {pending ? tCommon("loading") : t("bulkPurgeCta")}
             </Button>
           </DialogFooter>
         </DialogContent>

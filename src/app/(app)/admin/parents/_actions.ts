@@ -683,11 +683,141 @@ export async function restoreParent(
   });
 }
 
+// ── Hard delete core ───────────────────────────────────────
+
+type HardDeleteOutcome = {
+  processed: number;
+  skippedHasChildren: number;
+  skippedHasDossier: number;
+  skippedOther: number;
+};
+
 /**
- * Permanently delete — removes the User row. FK cascades take care of
- * Guardian, sessions, submitted apps (when no resultingStudent), etc.
- * Refuses if the parent still has any linked Student that is not also
- * being deleted, since that would orphan the kid.
+ * Hard-delete parent accounts that have no linked child. Shared by the
+ * trash's "Supprimer définitivement" (single + bulk) and the pending-accounts
+ * purge, so every hard delete follows the same rules:
+ *  - caller holds `eleves:full` and a tenant context; the staff-identity
+ *    guard is applied to every select (non-admins never reach a staff hat /
+ *    staff-domain account);
+ *  - `pendingOnly` additionally requires the PENDING predicate (purge view);
+ *  - an account with a linked child is skipped (orphaning a Student loses data);
+ *  - an account with ANY non-DRAFT application is skipped — admissions owns it;
+ *  - otherwise its DRAFT applications are deleted (documents cascade; files are
+ *    removed from storage best-effort), then the User (Guardian, sessions,
+ *    message threads cascade), then its admin grants; the Family created at
+ *    sign-up is removed when nothing references it any more;
+ *  - each account runs in its own transaction with a re-check, and a FK
+ *    refusal (legacy rows) counts as skipped instead of aborting the batch.
+ */
+async function hardDeleteParentAccounts(
+  ids: string[],
+  tenantId: string,
+  user: { role: string },
+  opts: { pendingOnly: boolean },
+): Promise<HardDeleteOutcome> {
+  const out: HardDeleteOutcome = {
+    processed: 0,
+    skippedHasChildren: 0,
+    skippedHasDossier: 0,
+    skippedOther: 0,
+  };
+  if (ids.length === 0) return out;
+
+  const guard = (await staffIdentityGuard(user, tenantId)) as Prisma.UserWhereInput;
+  const scope: Prisma.UserWhereInput[] = [{ role: "PARENT" }, guard];
+  if (opts.pendingOnly) scope.push(PENDING_PARENT_WHERE);
+  const childless: Prisma.UserWhereInput = {
+    OR: [{ guardianProfile: null }, { guardianProfile: { childLinks: { none: {} } } }],
+  };
+
+  const candidates = await db.user.findMany({
+    where: { id: { in: ids }, AND: scope },
+    select: {
+      id: true,
+      email: true,
+      guardianProfile: {
+        select: { familyId: true, _count: { select: { childLinks: true } } },
+      },
+      submittedApps: {
+        select: { status: true, documents: { select: { storagePath: true } } },
+      },
+    },
+  });
+  out.skippedOther += ids.length - candidates.length;
+
+  const purgedEmails: string[] = [];
+  const orphanedPaths: string[] = [];
+
+  for (const c of candidates) {
+    if ((c.guardianProfile?._count.childLinks ?? 0) > 0) {
+      out.skippedHasChildren++;
+      continue;
+    }
+    if (c.submittedApps.some((a) => a.status !== "DRAFT")) {
+      out.skippedHasDossier++;
+      continue;
+    }
+    const familyId = c.guardianProfile?.familyId ?? null;
+    const paths = c.submittedApps.flatMap((a) => a.documents.map((d) => d.storagePath));
+    try {
+      await db.$transaction(async (tx) => {
+        // Re-check inside the transaction: a child link, a Dars id or a
+        // submitted dossier may have appeared since the candidate select.
+        const still = await tx.user.findFirst({
+          where: { id: c.id, AND: [...scope, childless] },
+          select: { id: true },
+        });
+        if (!still) throw new Error("state-changed");
+        // Only DRAFT dossiers are ours to remove. One submitted in the
+        // meantime survives this deleteMany and the RESTRICT FK on
+        // Application.submittedBy makes the user delete fail → rollback.
+        if (c.submittedApps.length > 0) {
+          await tx.application.deleteMany({
+            where: { submittedByUserId: c.id, status: "DRAFT" },
+          });
+        }
+        await tx.user.delete({ where: { id: c.id } });
+        if (familyId) {
+          const guardians = await tx.guardian.count({ where: { familyId } });
+          const students = await tx.student.count({ where: { familyId } });
+          if (guardians === 0 && students === 0) {
+            await tx.family.delete({ where: { id: familyId } });
+          }
+        }
+      });
+    } catch (e) {
+      console.error(
+        `[parents] hard delete skipped ${c.id}:`,
+        e instanceof Error ? e.message : e,
+      );
+      out.skippedOther++;
+      continue;
+    }
+    out.processed++;
+    purgedEmails.push(c.email);
+    orphanedPaths.push(...paths);
+  }
+
+  for (const email of purgedEmails) await deleteAdminGrantsForEmail(tenantId, email);
+  // Storage cleanup is best-effort: the rows are already gone, an orphan
+  // object in the bucket is acceptable, a failed toast is not.
+  await Promise.all(
+    orphanedPaths.map((p) =>
+      deleteFromStorage(p).catch((e) => {
+        console.error(
+          `[parents] storage delete failed for ${p}:`,
+          e instanceof Error ? e.message : e,
+        );
+      }),
+    ),
+  );
+  return out;
+}
+
+/**
+ * Permanently delete one parent (trash view). Refuses while the parent still
+ * has a linked child (would orphan the kid) or a non-draft dossier
+ * (admissions owns it); draft dossiers are removed with the account.
  */
 export async function permanentlyDeleteParent(
   parentUserId: string,
@@ -697,23 +827,14 @@ export async function permanentlyDeleteParent(
   if (!tenantId) return { ok: false, error: "no-tenant" };
 
   return runWithTenant({ tenantId, slug: null }, async () => {
-    const parent = await db.user.findFirst({
-      where: { id: parentUserId, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
-      select: {
-        id: true,
-        guardianProfile: {
-          select: { _count: { select: { childLinks: true } } },
-        },
-      },
+    const r = await hardDeleteParentAccounts([parentUserId], tenantId, user, {
+      pendingOnly: false,
     });
-    if (!parent) return { ok: false, error: "not-found" };
-    if ((parent.guardianProfile?._count.childLinks ?? 0) > 0) {
-      return { ok: false, error: "has-children" };
-    }
-    const gone = await db.user.delete({ where: { id: parentUserId }, select: { email: true } });
-    await deleteAdminGrantsForEmail(tenantId, gone.email);
     revalidatePath("/admin/parents");
-    return { ok: true };
+    if (r.processed === 1) return { ok: true };
+    if (r.skippedHasChildren > 0) return { ok: false, error: "has-children" };
+    if (r.skippedHasDossier > 0) return { ok: false, error: "has-dossier" };
+    return { ok: false, error: "not-found" };
   });
 }
 
@@ -779,41 +900,17 @@ export async function bulkRestoreParents(
 }
 
 /**
- * Bulk permanent delete: only purges parents who have zero linked kids
- * (since orphaning a Student would lose data). Others are skipped and
- * counted in the toast — admin can clean those up by-hand.
+ * Bulk permanent delete (trash view): same rules as the single action, one
+ * account at a time so a refused row never aborts the others. Skipped rows
+ * are counted in the toast — admin can clean those up by hand.
  */
 export async function bulkPermanentlyDeleteParents(
   ids: string[],
 ): Promise<ParentBulkResult> {
   return withParentTenant(ids, async (tenantId, user) => {
-    // Pre-filter: keep only parents with no kids linked through Guardian.
-    const purgeable = await db.user.findMany({
-      where: {
-        id: { in: ids },
-        role: "PARENT",
-        ...(await staffIdentityGuard(user, tenantId)),
-        OR: [
-          { guardianProfile: null },
-          { guardianProfile: { childLinks: { none: {} } } },
-        ],
-      },
-      select: { id: true },
-    });
-    const purgeableIds = purgeable.map((p) => p.id);
-    let processed = 0;
-    if (purgeableIds.length > 0) {
-      const emails = (
-        await db.user.findMany({ where: { id: { in: purgeableIds } }, select: { email: true } })
-      ).map((u) => u.email);
-      const r = await db.user.deleteMany({
-        where: { id: { in: purgeableIds }, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
-      });
-      processed = r.count;
-      for (const e of emails) await deleteAdminGrantsForEmail(tenantId, e);
-    }
+    const r = await hardDeleteParentAccounts(ids, tenantId, user, { pendingOnly: false });
     revalidatePath("/admin/parents");
-    return { ok: true, processed, skipped: ids.length - processed };
+    return { ok: true, processed: r.processed, skipped: ids.length - r.processed };
   }) as Promise<ParentBulkResult>;
 }
 
@@ -826,21 +923,11 @@ export async function bulkPermanentlyDeleteParents(
 // from ever registering with it.
 
 /**
- * Purge pending parent accounts. Server-side rules, whatever the UI sent:
- *  - `eleves:full`, tenant-scoped, staff-identity guard (non-admins never
- *    reach a staff hat / staff-domain account);
- *  - only ids that still satisfy the PENDING predicate are considered;
- *  - an account with ANY application whose status is not DRAFT is skipped
- *    (counted in `skippedHasDossier`) — admissions decides those dossiers;
- *  - otherwise: its DRAFT applications are deleted (documents cascade, their
- *    files are removed from storage best-effort), then the User (Guardian +
- *    child links + sessions cascade), then its admin grants; the family
- *    created at sign-up is removed too when nothing else references it.
- *  - each account runs in its own transaction + try/catch: a FK refusal
- *    (legacy ContactMessage, …) counts as skipped and never aborts the batch.
- *
- * `skipped` = ids that were not deleted for any reason (not pending, guarded,
- * has dossier, FK error) — same semantics as the other bulk actions.
+ * Purge pending parent accounts (the "En attente" view). Same core as the
+ * trash's permanent delete, with the PENDING predicate enforced server-side
+ * whatever the UI sent. `skipped` = ids not deleted for any reason (not
+ * pending, guarded, has dossier, FK error); `skippedHasDossier` is the part
+ * of it that admissions must decide first.
  */
 export async function purgePendingParents(
   ids: string[],
@@ -857,101 +944,13 @@ export async function purgePendingParents(
   if (!tenantId) return nothing;
 
   return runWithTenant({ tenantId, slug: null }, async () => {
-    const guard = (await staffIdentityGuard(
-      user,
-      tenantId,
-    )) as Prisma.UserWhereInput;
-    const candidates = await db.user.findMany({
-      where: { id: { in: ids }, AND: [PENDING_PARENT_WHERE, guard] },
-      select: {
-        id: true,
-        email: true,
-        guardianProfile: { select: { familyId: true } },
-        submittedApps: {
-          select: {
-            id: true,
-            status: true,
-            documents: { select: { storagePath: true } },
-          },
-        },
-      },
-    });
-
-    let processed = 0;
-    let skippedHasDossier = 0;
-    const purgedEmails: string[] = [];
-    const orphanedPaths: string[] = [];
-
-    for (const c of candidates) {
-      if (c.submittedApps.some((a) => a.status !== "DRAFT")) {
-        skippedHasDossier++;
-        continue;
-      }
-      const familyId = c.guardianProfile?.familyId ?? null;
-      const paths = c.submittedApps.flatMap((a) =>
-        a.documents.map((d) => d.storagePath),
-      );
-      try {
-        await db.$transaction(async (tx) => {
-          // Re-check inside the transaction: a child link or a Dars id may
-          // have appeared since the candidate select.
-          const still = await tx.user.findFirst({
-            where: { id: c.id, AND: [PENDING_PARENT_WHERE, guard] },
-            select: { id: true },
-          });
-          if (!still) throw new Error("no-longer-pending");
-          // Only DRAFT dossiers are ours to remove. If one was submitted in
-          // the meantime it survives this deleteMany and the RESTRICT FK on
-          // Application.submittedBy makes the user delete below fail → the
-          // whole transaction rolls back and the account is skipped.
-          if (c.submittedApps.length > 0) {
-            await tx.application.deleteMany({
-              where: { submittedByUserId: c.id, status: "DRAFT" },
-            });
-          }
-          await tx.user.delete({ where: { id: c.id } });
-          if (familyId) {
-            const guardians = await tx.guardian.count({ where: { familyId } });
-            const students = await tx.student.count({ where: { familyId } });
-            if (guardians === 0 && students === 0) {
-              await tx.family.delete({ where: { id: familyId } });
-            }
-          }
-        });
-      } catch (e) {
-        console.error(
-          `[parents] purgePendingParents: skipped ${c.id}`,
-          e instanceof Error ? e.message : e,
-        );
-        continue;
-      }
-      processed++;
-      purgedEmails.push(c.email);
-      orphanedPaths.push(...paths);
-    }
-
-    for (const email of purgedEmails) {
-      await deleteAdminGrantsForEmail(tenantId, email);
-    }
-    // Storage cleanup is best-effort: the rows are already gone, an orphan
-    // object in the bucket is acceptable, a failed purge toast is not.
-    await Promise.all(
-      orphanedPaths.map((p) =>
-        deleteFromStorage(p).catch((e) => {
-          console.error(
-            `[parents] purgePendingParents: storage delete failed for ${p}`,
-            e instanceof Error ? e.message : e,
-          );
-        }),
-      ),
-    );
-
+    const r = await hardDeleteParentAccounts(ids, tenantId, user, { pendingOnly: true });
     revalidatePath("/admin/parents");
     return {
       ok: true,
-      processed,
-      skipped: ids.length - processed,
-      skippedHasDossier,
+      processed: r.processed,
+      skipped: ids.length - r.processed,
+      skippedHasDossier: r.skippedHasDossier,
     };
   });
 }

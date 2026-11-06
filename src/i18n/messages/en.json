@@ -1407,7 +1407,9 @@
     "signUpTooMany": "Too many attempts from your connection. Please try again in an hour.",
     "signUpCaptchaFailed": "The anti-bot check failed. Reload the page and try again.",
     "signUpCaptchaUnavailable": "The anti-bot check is temporarily unavailable. Please try again in a few minutes.",
-    "signUpUnavailable": "The account could not be created right now. Please try again later."
+    "signUpUnavailable": "The account could not be created right now. Please try again later.",
+    "signUpCaptchaWaiting": "Anti-bot check in progress…",
+    "signUpCaptchaBlocked": "The anti-bot check could not load. Disable your ad blocker or reload the page."
   },
   "documents": {
     "title": "Documents",

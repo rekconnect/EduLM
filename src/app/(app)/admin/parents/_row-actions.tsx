@@ -100,6 +100,8 @@ export function ParentRowActions({
         setConfirmHardOpen(false);
       } else if (r.error === "has-children") {
         toast.error(t("deleteRefusedHasChildren"));
+      } else if (r.error === "has-dossier") {
+        toast.error(t("purgeRefusedHasDossier"));
       } else {
         toast.error(t("deletePermanentError"));
       }

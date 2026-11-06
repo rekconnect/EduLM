@@ -1407,7 +1407,9 @@
     "signUpTooMany": "Trop de tentatives depuis votre connexion. Réessayez dans une heure.",
     "signUpCaptchaFailed": "La vérification anti-robot a échoué. Rechargez la page et réessayez.",
     "signUpCaptchaUnavailable": "La vérification anti-robot est momentanément indisponible. Réessayez dans quelques minutes.",
-    "signUpUnavailable": "Impossible de créer le compte pour le moment. Réessayez plus tard."
+    "signUpUnavailable": "Impossible de créer le compte pour le moment. Réessayez plus tard.",
+    "signUpCaptchaWaiting": "Vérification anti-robot en cours…",
+    "signUpCaptchaBlocked": "La vérification anti-robot n'a pas pu se charger. Désactivez votre bloqueur de publicités ou rechargez la page."
   },
   "documents": {
     "title": "Documents",

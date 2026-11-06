@@ -26,6 +26,12 @@ if ((SITE_KEY && !SECRET_KEY) || (!SITE_KEY && SECRET_KEY)) {
   );
 }
 
+if (SITE_KEY && SECRET_KEY && /^[123]x0000/.test(SITE_KEY) && process.env.NODE_ENV === "production") {
+  console.warn(
+    "[turnstile] Cloudflare TEST keys are configured in production — the bot check is a no-op. Replace them with the real widget keys.",
+  );
+}
+
 export function turnstileEnabled(): boolean {
   return Boolean(SITE_KEY && SECRET_KEY);
 }

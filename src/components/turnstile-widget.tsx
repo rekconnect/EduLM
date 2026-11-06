@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useLocale } from "next-intl";
+import { useTheme } from "next-themes";
 
 /**
  * Cloudflare Turnstile widget (explicit render).
@@ -11,9 +12,14 @@ import { useLocale } from "next-intl";
  *   (the server reads that exact name).
  * - A token is single-use: pass the server action's `state` as `resetKey` so
  *   every round-trip that returns an error gets a fresh token on the next try.
- * - `theme: "auto"` follows the OS/light-dark setting; `size: "flexible"`
- *   fills the form width; language follows the app locale (fr/en/ar).
+ * - `onStatus` lets the form hold its submit button until a token exists
+ *   ("ready") and explain itself when the script could not load ("blocked").
+ * - Theme follows the app (next-themes), not the OS; language follows the
+ *   app locale (fr/en/ar); narrow phones get the compact layout because the
+ *   flexible one needs at least 300px.
  */
+
+export type TurnstileStatus = "loading" | "ready" | "expired" | "error" | "blocked";
 
 type TurnstileApi = {
   render: (el: HTMLElement, opts: Record<string, unknown>) => string;
@@ -53,34 +59,50 @@ export function TurnstileWidget({
   siteKey,
   action,
   resetKey,
+  onStatus,
 }: {
   siteKey: string;
   /** Must match the `expectedAction` the server verifies with. */
   action: string;
   /** Any value that changes after each server round-trip (e.g. form state). */
   resetKey?: unknown;
+  onStatus?: (status: TurnstileStatus) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const widgetId = useRef<string | null>(null);
   const locale = useLocale();
+  const { resolvedTheme } = useTheme();
+  const theme = resolvedTheme === "dark" ? "dark" : "light";
+  // Latest callback without re-running the render effect on every parent render.
+  const statusRef = useRef(onStatus);
+  statusRef.current = onStatus;
 
   useEffect(() => {
     let cancelled = false;
+    statusRef.current?.("loading");
     loadTurnstile()
       .then((api) => {
         if (cancelled || !host.current) return;
+        const size = window.matchMedia("(max-width: 420px)").matches ? "compact" : "flexible";
         widgetId.current = api.render(host.current, {
           sitekey: siteKey,
           action,
-          theme: "auto",
-          size: "flexible",
+          theme,
+          size,
           language: locale,
           "response-field-name": "cf-turnstile-response",
+          callback: () => statusRef.current?.("ready"),
+          "expired-callback": () => statusRef.current?.("expired"),
+          "timeout-callback": () => statusRef.current?.("expired"),
+          "error-callback": () => {
+            statusRef.current?.("error");
+          },
         });
       })
       .catch(() => {
-        // Script blocked (extension, network). The form then submits without a
-        // token and the server answers with a clear "verification required".
+        // Script blocked (extension, network): the form shows a hint instead
+        // of submitting without a token.
+        if (!cancelled) statusRef.current?.("blocked");
       });
     return () => {
       cancelled = true;
@@ -93,7 +115,7 @@ export function TurnstileWidget({
         widgetId.current = null;
       }
     };
-  }, [siteKey, action, locale]);
+  }, [siteKey, action, locale, theme]);
 
   const isFirst = useRef(true);
   useEffect(() => {
@@ -103,6 +125,7 @@ export function TurnstileWidget({
     }
     if (widgetId.current && window.turnstile) {
       try {
+        statusRef.current?.("loading");
         window.turnstile.reset(widgetId.current);
       } catch {
         /* widget not ready yet */
@@ -110,5 +133,5 @@ export function TurnstileWidget({
     }
   }, [resetKey]);
 
-  return <div ref={host} className="min-h-[65px]" />;
+  return <div ref={host} className="flex min-h-[65px] justify-center" />;
 }

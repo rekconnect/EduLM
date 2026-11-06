@@ -94,6 +94,33 @@ export async function clientIp(): Promise<string> {
   return "unknown";
 }
 
+/**
+ * Collapse an address to the unit a client cannot cheaply rotate: the full
+ * IPv4 address, or the /64 prefix of an IPv6 address (ISPs hand every
+ * subscriber a whole /64, so keying on all 128 bits would give one host
+ * unlimited fresh buckets). Ports, brackets and zone ids are stripped;
+ * IPv4-mapped IPv6 collapses to the IPv4.
+ */
+export function normalizeIp(raw: string): string {
+  const ip = raw.trim().replace(/^\[|\]$/g, "").replace(/%.*$/, "");
+  if (!ip) return "unknown";
+  const v4 = ip.match(/^(\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?$/);
+  if (v4) return v4[1]!;
+  const mapped = ip.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
+  if (mapped) return mapped[1]!;
+  if (!ip.includes(":")) return ip;
+  const [head = "", tail = ""] = ip.split("::");
+  const h = head ? head.split(":") : [];
+  const t = tail ? tail.split(":") : [];
+  const groups = [...h, ...Array<string>(Math.max(0, 8 - h.length - t.length)).fill("0"), ...t];
+  if (groups.length < 4) return ip;
+  return groups
+    .slice(0, 4)
+    .map((g) => g.toLowerCase().padStart(4, "0"))
+    .join(":")
+    .concat("::/64");
+}
+
 /** Salted hash so raw IP addresses never land in the table. */
 export function rateLimitKeyHash(...parts: string[]): string {
   return createHash("sha256")
@@ -102,13 +129,13 @@ export function rateLimitKeyHash(...parts: string[]): string {
     .slice(0, 40);
 }
 
-/** `limit` requests per `windowSec` per client IP for a given scope. */
+/** `limit` requests per `windowSec` per client (IPv4 address / IPv6 /64). */
 export async function limitByIp(
   scope: string,
   limit: number,
   windowSec: number,
 ): Promise<RateLimitResult> {
-  const ip = await clientIp();
+  const ip = normalizeIp(await clientIp());
   return consumeRateLimit({
     key: `${scope}:ip:${rateLimitKeyHash(ip)}`,
     limit,

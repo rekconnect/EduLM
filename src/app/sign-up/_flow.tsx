@@ -1,14 +1,14 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition, type FormEvent } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { ArrowRight, Loader2, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
-import { TurnstileWidget } from "@/components/turnstile-widget";
-import { TURNSTILE_ACTIONS } from "@/lib/turnstile-actions";
+import { TurnstileWidget, type TurnstileStatus } from "@/components/turnstile-widget";
+import { SIGNUP_HONEYPOT_FIELD, TURNSTILE_ACTIONS } from "@/lib/turnstile-actions";
 import { signUpFamily, type SignUpFamilyState, type SignUpFormErrorCode } from "./_actions";
 
 type Situation = "" | "current" | "past" | "new";
@@ -120,6 +120,24 @@ function NewFamilyForm({
     signUpFamily,
     {},
   );
+  const [, startTransition] = useTransition();
+  // With the bot check on, the submit button waits for a token so a click
+  // before the challenge finished can't burn one of the per-IP attempts.
+  const [captcha, setCaptcha] = useState<TurnstileStatus>(turnstileSiteKey ? "loading" : "ready");
+  const captchaReady = !turnstileSiteKey || captcha === "ready";
+  const captchaBlocked = !!turnstileSiteKey && (captcha === "blocked" || captcha === "error");
+
+  // Submit through a transition instead of <form action>: React resets an
+  // action-driven form after every round-trip, which would wipe ten fields
+  // (four of them passwords) each time the server answers with an error.
+  function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (pending || !captchaReady) return;
+    const fd = new FormData(e.currentTarget);
+    startTransition(() => {
+      formAction(fd);
+    });
+  }
 
   const errText = (code?: string): string | undefined => {
     if (!code) return undefined;
@@ -172,17 +190,17 @@ function NewFamilyForm({
   }
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-4">
       <input type="hidden" name="tenantSlug" value={tenantSlug} />
       <div className="grid gap-4 sm:grid-cols-2">
         <Responsable prefix="r1" title={t("signUpResp1")} required />
         <Responsable prefix="r2" title={t("signUpResp2")} required={false} />
       </div>
 
-      {/* Honeypot: off-screen, unfocusable, never autofilled by real browsers.
-          The server drops any submission that fills it. */}
+      {/* Honeypot: off-screen, unfocusable, with a name no autofill heuristic
+          recognises. The server drops any submission that fills it. */}
       <div aria-hidden="true" className="absolute -start-[10000px] top-auto h-px w-px overflow-hidden">
-        <input name="company_url" type="text" tabIndex={-1} autoComplete="off" defaultValue="" />
+        <input name={SIGNUP_HONEYPOT_FIELD} type="text" tabIndex={-1} autoComplete="off" defaultValue="" />
       </div>
 
       {turnstileSiteKey ? (
@@ -190,7 +208,14 @@ function NewFamilyForm({
           siteKey={turnstileSiteKey}
           action={TURNSTILE_ACTIONS.signUp}
           resetKey={state}
+          onStatus={setCaptcha}
         />
+      ) : null}
+
+      {captchaBlocked ? (
+        <p role="status" className="text-center text-xs text-[color:var(--color-foreground-muted)]">
+          {t("signUpCaptchaBlocked")}
+        </p>
       ) : null}
 
       {state.formError ? (
@@ -199,9 +224,22 @@ function NewFamilyForm({
         </div>
       ) : null}
 
-      <Button type="submit" className="w-full gap-2" disabled={pending} aria-busy={pending}>
-        {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <ArrowRight className="size-4 rtl:rotate-180" aria-hidden />}
-        {pending ? tCommon("loading") : t("signUpSubmit")}
+      <Button
+        type="submit"
+        className="w-full gap-2"
+        disabled={pending || !captchaReady}
+        aria-busy={pending}
+      >
+        {pending || !captchaReady ? (
+          <Loader2 className="size-4 animate-spin" aria-hidden />
+        ) : (
+          <ArrowRight className="size-4 rtl:rotate-180" aria-hidden />
+        )}
+        {pending
+          ? tCommon("loading")
+          : !captchaReady
+            ? t("signUpCaptchaWaiting")
+            : t("signUpSubmit")}
       </Button>
 
       <p className="text-center text-xs text-[color:var(--color-foreground-muted)]">

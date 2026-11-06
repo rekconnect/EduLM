@@ -9,23 +9,28 @@ import { signIn } from "@/lib/auth";
 import { createFamily } from "@/lib/family";
 import { isStaffDomainEmail as isStaffDomain } from "@/lib/staff-identity";
 import { clientIp, consumeRateLimit, limitByIp } from "@/lib/rate-limit";
-import { verifyTurnstile } from "@/lib/turnstile";
-import { TURNSTILE_ACTIONS } from "@/lib/turnstile-actions";
+import { turnstileEnabled, verifyTurnstile } from "@/lib/turnstile";
+import { SIGNUP_HONEYPOT_FIELD, TURNSTILE_ACTIONS } from "@/lib/turnstile-actions";
 
 // ── Abuse controls on the public sign-up ────────────────────────────────────
 // Anyone on the internet can reach this action, so before a row is written:
 //  - honeypot      : bots that fill every input are dropped silently;
-//  - per-IP limit  : SIGNUP_IP_LIMIT well-formed attempts per hour per address;
+//  - per-client    : SIGNUP_IP_LIMIT well-formed attempts per hour per IPv4
+//                    address / IPv6 /64. Sized for shared addresses (school
+//                    Wi-Fi, mobile carrier NAT), not for one household;
 //  - Turnstile     : enforced when the tenant configured the keys (lib/turnstile);
-//  - per-tenant cap: SIGNUP_TENANT_LIMIT per hour for the whole school — the
-//                    ceiling a distributed bot run hits (per-IP limits can't
-//                    see it) while staying generous for a real campaign day.
+//                    a submit without a token is refused BEFORE it counts;
+//  - per-tenant cap: SIGNUP_TENANT_LIMIT account CREATIONS per hour for the
+//                    whole school. It bounds the damage of a distributed bot
+//                    run (per-client limits can't see one); counting only
+//                    creations — never failed attempts — means an attacker
+//                    must actually leave 200 visible, purgeable accounts in
+//                    "Comptes en attente" to reach it. Still generous for a
+//                    real campaign day.
 // Email verification before activation is the next layer (needs Resend).
-const SIGNUP_IP_LIMIT = 5;
-const SIGNUP_TENANT_LIMIT = 100;
+const SIGNUP_IP_LIMIT = 20;
+const SIGNUP_TENANT_LIMIT = 200;
 const SIGNUP_WINDOW_SEC = 60 * 60;
-/** Visually hidden form field — real browsers leave it empty. */
-const HONEYPOT_FIELD = "company_url";
 
 // ── New-family sign-up: Responsable 1 (required) + Responsable 2 (optional) ──
 // Creates a shared Family + a Guardian per responsable so both can access the
@@ -77,7 +82,7 @@ export async function signUpFamily(
   if (!tenantSlug) return { formError: "unknownTenant" };
 
   // Honeypot: a filled hidden field is a bot. Generic answer, nothing written.
-  if (String(formData.get(HONEYPOT_FIELD) ?? "").trim()) {
+  if (String(formData.get(SIGNUP_HONEYPOT_FIELD) ?? "").trim()) {
     return { formError: "unavailable" };
   }
 
@@ -112,6 +117,11 @@ export async function signUpFamily(
   const r1d = r1.success ? r1.data : null;
   if (!r1d) return { errors };
 
+  // A submit with no bot-check token at all (challenge not finished, script
+  // blocked) is refused before it costs the client an attempt.
+  const captchaToken = String(formData.get("cf-turnstile-response") ?? "").trim();
+  if (turnstileEnabled() && !captchaToken) return { formError: "captcha" };
+
   // Count the attempt once the form is well-formed (typos don't burn quota),
   // and BEFORE anything that touches the DB or reveals whether an email exists.
   const ipGate = await limitByIp("sign-up", SIGNUP_IP_LIMIT, SIGNUP_WINDOW_SEC);
@@ -124,22 +134,13 @@ export async function signUpFamily(
   });
   if (!tenant) return { formError: "unknownTenant" };
 
-  // Bot check before the per-tenant counter, so failed bot traffic can't
-  // exhaust the school's hourly quota for real families.
-  const bot = await verifyTurnstile(String(formData.get("cf-turnstile-response") ?? ""), {
+  const bot = await verifyTurnstile(captchaToken, {
     remoteIp: await clientIp(),
     expectedAction: TURNSTILE_ACTIONS.signUp,
   });
   if (!bot.ok) {
     return { formError: bot.reason === "unavailable" ? "captchaUnavailable" : "captcha" };
   }
-
-  const tenantGate = await consumeRateLimit({
-    key: `sign-up:tenant:${tenant.id}`,
-    limit: SIGNUP_TENANT_LIMIT,
-    windowSec: SIGNUP_WINDOW_SEC,
-  });
-  if (!tenantGate.ok) return { formError: "tooMany" };
 
   // Email uniqueness within the tenant.
   const emails = [r1d.email, ...(r2 ? [r2.email] : [])];
@@ -155,6 +156,15 @@ export async function signUpFamily(
   if (isStaffDomain(r1d.email, tenant.staffEmailDomains)) errors["r1.email"] = "staffDomain";
   if (r2 && isStaffDomain(r2.email, tenant.staffEmailDomains)) errors["r2.email"] = "staffDomain";
   if (Object.keys(errors).length > 0) return { errors };
+
+  // Everything validated: this attempt WILL create accounts → count it
+  // against the school's hourly ceiling (creations only, see header).
+  const tenantGate = await consumeRateLimit({
+    key: `sign-up:tenant:${tenant.id}`,
+    limit: SIGNUP_TENANT_LIMIT,
+    windowSec: SIGNUP_WINDOW_SEC,
+  });
+  if (!tenantGate.ok) return { formError: "tooMany" };
 
   // Shared family, then a User + Guardian per responsable.
   const family = await createFamily(tenant.id, {

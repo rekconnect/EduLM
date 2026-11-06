@@ -2,6 +2,7 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
+import { headers } from "next/headers";
 import { unscopedDb } from "@/lib/db";
 import { htmlLayout, isMailerConfigured, sendMail } from "@/lib/mailer";
 import { limitByIp } from "@/lib/rate-limit";
@@ -36,18 +37,33 @@ function genCode(): string {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Resolve the ONE eligible account for an email, or null (0 or ambiguous). */
+/**
+ * Resolve the ONE eligible account for an email, or null.
+ *
+ * Tenant-aware first: the page runs on the school's own host, and `User.email`
+ * is unique only per (tenantId, email). Without the tenant, a same-address
+ * account at ANOTHER tenant — a sibling school, or a pending self-sign-up
+ * squatting the address — would make the lookup "ambiguous" and silently
+ * disable the reset for the real account. The global single-match rule is
+ * kept only for requests that carry no tenant (root host).
+ */
 async function resolveAccount(email: string) {
   const u = unscopedDb();
-  const matches = await u.user.findMany({
-    where: {
-      email: email.toLowerCase().trim(),
-      role: { not: "SUPER_ADMIN" },
-      status: { not: "DISABLED" },
-    },
-    select: { id: true, email: true, name: true, tenantId: true },
-    take: 2,
-  });
+  const where = {
+    email: email.toLowerCase().trim(),
+    role: { not: "SUPER_ADMIN" as const },
+    status: { not: "DISABLED" as const },
+    deletedAt: null,
+  };
+  const select = { id: true, email: true, name: true, tenantId: true };
+
+  const slug = (await headers()).get("x-tenant-slug")?.trim().toLowerCase();
+  if (slug) {
+    const tenant = await u.tenant.findUnique({ where: { slug }, select: { id: true } });
+    if (!tenant) return null;
+    return u.user.findFirst({ where: { ...where, tenantId: tenant.id }, select });
+  }
+  const matches = await u.user.findMany({ where, select, take: 2 });
   return matches.length === 1 ? matches[0]! : null;
 }
 
@@ -60,9 +76,10 @@ export async function requestPasswordReset(emailRaw: string): Promise<ForgotStat
   const email = String(emailRaw ?? "").toLowerCase().trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: true };
 
-  // Per-IP: 5 reset requests per 15 min. Same uniform answer when exceeded,
-  // so the limiter can't be used to probe which addresses have accounts.
-  const gate = await limitByIp("forgot-password:request", 5, 15 * 60);
+  // Per client (IPv4 / IPv6 /64): 20 reset requests per 15 min — sized for a
+  // shared school or carrier address. Same uniform answer when exceeded, so
+  // the limiter can't be used to probe which addresses have accounts.
+  const gate = await limitByIp("forgot-password:request", 20, 15 * 60);
   if (!gate.ok) return { ok: true };
 
   const account = await resolveAccount(email);
@@ -116,9 +133,9 @@ export async function resetPasswordWithCode(
   if (typeof password !== "string" || password.length < 8) {
     return { ok: false, error: "password-too-short" };
   }
-  // Per-IP: 10 code attempts per 15 min (a code is 8 chars from a 31-char
+  // Per client: 30 code attempts per 15 min (a code is 8 chars from a 31-char
   // alphabet, so guessing is hopeless anyway; this keeps the DB quiet).
-  const gate = await limitByIp("forgot-password:verify", 10, 15 * 60);
+  const gate = await limitByIp("forgot-password:verify", 30, 15 * 60);
   if (!gate.ok) return { ok: false, error: "invalid-code" };
 
   const account = await resolveAccount(email);

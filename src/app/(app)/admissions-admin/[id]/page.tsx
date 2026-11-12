@@ -41,7 +41,9 @@ import {
 import { DossierTabStrip } from "@/components/dossier/tab-strip";
 import { getSignedDownloadUrl } from "@/lib/storage";
 import { AppStatusBadge } from "@/app/(app)/parent/applications/_status-badge";
+import { UNVERIFIED_PENDING_PARENT_WHERE } from "@/app/(app)/admin/parents/_pending";
 import { Button, LinkButton } from "@/components/ui/button";
+import { UnverifiedEmailBadge } from "@/components/ui/unverified-email-badge";
 import { DecideForm } from "./_decide";
 import { revertDecision } from "../_actions";
 
@@ -165,6 +167,7 @@ export default async function AdmissionsAdminDetailPage({
 
   return runWithTenant({ tenantId, slug: null }, async () => {
     const t = await getTranslations("admissions");
+    const tPar = await getTranslations("parents");
 
     const app = await db.application.findUnique({
       where: { id },
@@ -272,6 +275,17 @@ export default async function AdmissionsAdminDetailPage({
     const existingChildren =
       app.submittedBy.guardianProfile?.childLinks ?? [];
     const isExistingFamily = existingChildren.length > 0;
+
+    // Self-registered submitter whose address nobody confirmed (pending
+    // accounts only — same rule as the list, see admin/parents/_pending.ts).
+    // Shown next to the status so the reviewer sees it before deciding.
+    const submitterEmailUnverified =
+      (await db.user.count({
+        where: {
+          ...UNVERIFIED_PENDING_PARENT_WHERE,
+          id: app.submittedByUserId,
+        },
+      })) > 0;
 
     const targetYear = await db.academicYear.findUnique({
       where: { tenantId_label: { tenantId, label: app.cycle.targetYearLabel } },
@@ -487,6 +501,15 @@ export default async function AdmissionsAdminDetailPage({
               <RefreshCw className="size-3" aria-hidden />
               {t("renewalBadge")}
             </span>
+          ) : null}
+          {submitterEmailUnverified ? (
+            <UnverifiedEmailBadge
+              size="md"
+              label={tPar("emailUnverified")}
+              title={tPar("emailUnverifiedHint", {
+                email: app.submittedBy.email,
+              })}
+            />
           ) : null}
           <span className="ms-auto inline-flex items-center gap-1 text-xs text-[color:var(--color-foreground-muted)]">
             {app.submittedAt ? (

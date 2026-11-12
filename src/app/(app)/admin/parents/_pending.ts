@@ -1,7 +1,8 @@
 import type { Prisma } from "@prisma/client";
 
 /**
- * Shared "pending vs confirmed" split for the admin Parents console.
+ * Shared "pending vs confirmed" split for the admin Parents console (and the
+ * Admissions list, which shows pending accounts next to the dossiers).
  *
  * A PARENT account is CONFIRMED when the school — or a source the school
  * trusts — vouches for it:
@@ -67,4 +68,56 @@ export const ACTIVE_PARENT_WHERE = {
   archived: false,
   deletedAt: null,
   ...CONFIRMED_PARENT_WHERE,
+} satisfies Prisma.UserWhereInput;
+
+// ── Views shared with /admissions-admin ─────────────────────────────────────
+// Admissions lists DOSSIERS, so an account only shows up there once a dossier
+// exists. The two predicates below surface what a dossier list cannot: the
+// families that registered and stopped there, and the submitters whose address
+// nobody confirmed.
+
+/**
+ * A dossier the school still sees in Admissions (active or archived tab). One
+ * in the trash no longer counts as "this family has a dossier".
+ */
+const LIVE_DOSSIER = { deletedAt: null } satisfies Prisma.ApplicationWhereInput;
+
+/**
+ * Pending account whose FAMILY has no live dossier: a public sign-up that
+ * never started an application (or whose only dossiers were deleted), or an
+ * account the school created with no child yet. This is the step before
+ * "Brouillon" in the admissions pipeline.
+ *
+ * Family-aware on purpose: a dossier belongs to its submitter, so the second
+ * responsable of a family sign-up owns none while the family's dossier is in
+ * progress — that account must not be listed as "without a dossier".
+ */
+export const PENDING_WITHOUT_DOSSIER_WHERE = {
+  AND: [
+    PENDING_PARENT_WHERE,
+    { submittedApps: { none: LIVE_DOSSIER } },
+    {
+      NOT: {
+        guardianProfile: {
+          family: {
+            guardians: {
+              some: { user: { submittedApps: { some: LIVE_DOSSIER } } },
+            },
+          },
+        },
+      },
+    },
+  ],
+} satisfies Prisma.UserWhereInput;
+
+/**
+ * Pending account whose e-mail address was never confirmed (`emailVerified`
+ * stays null on a public sign-up until the address is verified). Restricted
+ * to PENDING accounts: once the school has linked a child, it vouches for the
+ * family and the flag is no longer a signal — imported and admin-created
+ * parents would otherwise all carry it.
+ */
+export const UNVERIFIED_PENDING_PARENT_WHERE = {
+  ...PENDING_PARENT_WHERE,
+  emailVerified: null,
 } satisfies Prisma.UserWhereInput;

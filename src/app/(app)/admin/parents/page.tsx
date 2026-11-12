@@ -8,6 +8,7 @@ import { Table, THead, TR, TH, TD } from "@/components/ui/table";
 import { SortableTH, type SortDir } from "@/components/ui/sortable-th";
 import { FilterPill } from "@/components/ui/filter-pill";
 import { Pagination } from "@/components/ui/pagination";
+import { UnverifiedEmailBadge } from "@/components/ui/unverified-email-badge";
 import { YearPicker, UrlSelect } from "@/components/shell/year-picker";
 import {
   BulkHeaderCheckbox,
@@ -622,9 +623,10 @@ export default async function ParentsListPage({
                         <div className="flex flex-wrap items-center gap-2">
                           <span>{p.email}</span>
                           {isPendingView && p.emailVerified === null ? (
-                            <span className="inline-flex shrink-0 items-center rounded-full bg-[color:var(--color-surface-sunken)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[color:var(--color-foreground-muted)]">
-                              {t("emailUnverified")}
-                            </span>
+                            <UnverifiedEmailBadge
+                              label={t("emailUnverified")}
+                              title={t("emailUnverifiedHint", { email: p.email })}
+                            />
                           ) : null}
                         </div>
                       </TD>

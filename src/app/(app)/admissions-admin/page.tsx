@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { ApplicationStatus, Prisma } from "@prisma/client";
-import { ArrowRight, RefreshCw, Sparkles, Users } from "lucide-react";
+import { ArrowRight, RefreshCw, Sparkles, UserPlus, Users } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -9,11 +9,17 @@ import { Card } from "@/components/ui/card";
 import { Table, THead, TR, TH, TD, EmptyRow } from "@/components/ui/table";
 import { SortableTH, type SortDir } from "@/components/ui/sortable-th";
 import { FilterPill } from "@/components/ui/filter-pill";
+import { UnverifiedEmailBadge } from "@/components/ui/unverified-email-badge";
 import { UrlSelect } from "@/components/shell/year-picker";
 import { db } from "@/lib/db";
-import { requireModuleAccess } from "@/lib/permissions";
+import { displayName } from "@/lib/names";
+import { hasModule, requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { AppStatusBadge } from "@/app/(app)/parent/applications/_status-badge";
+import {
+  PENDING_WITHOUT_DOSSIER_WHERE,
+  UNVERIFIED_PENDING_PARENT_WHERE,
+} from "@/app/(app)/admin/parents/_pending";
 import {
   BulkHeaderCheckbox,
   BulkRowCheckbox,
@@ -77,9 +83,33 @@ type AdminApp = {
   archived: boolean;
   deleted: boolean;
   cycle: { id: string; label: string };
-  submittedBy: { id: string; email: string; name: string | null };
+  submittedBy: {
+    id: string;
+    email: string;
+    name: string | null;
+    /** Self-registered account whose address nobody confirmed yet. */
+    emailUnverified: boolean;
+  };
   existingChildren: number;
 };
+
+/** A pending parent account whose family has no dossier yet. */
+type NoDossierAccount = {
+  id: string;
+  name: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+  emailVerified: Date | null;
+  createdAt: Date;
+  /** Dossiers this account submitted — all in the trash, by definition. */
+  _count: { submittedApps: number };
+};
+
+// "Comptes sans dossier" block: the most recent accounts by default, the
+// whole list (up to a hard cap) behind `?accounts=all`.
+const NO_DOSSIER_PREVIEW = 5;
+const NO_DOSSIER_MAX = 200;
 
 const VIEWS = ["active", "archived", "deleted"] as const;
 type View = (typeof VIEWS)[number];
@@ -110,16 +140,22 @@ export default async function AdmissionsAdminListPage({
     dir?: string;
     view?: string;
     type?: string;
+    accounts?: string;
   }>;
 }) {
-  const { status, cycleId, sort, dir, view, type } = await searchParams;
+  const { status, cycleId, sort, dir, view, type, accounts } =
+    await searchParams;
   const currentView: View = parseView(view);
-  const { user } = await requireModuleAccess("admissions", "read");
+  const { user, access } = await requireModuleAccess("admissions", "read");
   const tenantId = user.tenantId;
   if (!tenantId) return null;
+  // The parent fiche and the pending-accounts console live in the Élèves /
+  // parents module: only link to them for someone who can open them.
+  const canOpenParents = hasModule(access, "eleves", "read");
 
   return runWithTenant({ tenantId, slug: null }, async () => {
     const t = await getTranslations("admissions");
+    const tPar = await getTranslations("parents");
 
     const statusFilter: ApplicationStatus | undefined = (
       ALL_STATUSES as string[]
@@ -164,8 +200,28 @@ export default async function AdmissionsAdminListPage({
     if (statusFilter) countBase.status = statusFilter;
     if (cycleFilter) countBase.cycleId = cycleFilter;
 
-    const [apps, cycles, activeCount, archivedCount, deletedCount] =
-      await Promise.all([
+    // "Comptes sans dossier": families that have an account (public sign-up,
+    // or created by the school with no child yet) but no dossier — the step
+    // before "Brouillon". An account has no campaign and no dossier status,
+    // so the block belongs to the plain pipeline only: active view, no status
+    // pill, and no dossier type other than "new family" (these accounts are
+    // new families by definition).
+    const showNoDossier =
+      currentView === "active" &&
+      !statusFilter &&
+      (!typeFilter || typeFilter === "newFamily");
+    const accountsExpanded = accounts === "all";
+
+    const [
+      apps,
+      cycles,
+      activeCount,
+      archivedCount,
+      deletedCount,
+      noDossierAccounts,
+      noDossierTotal,
+      unverifiedSubmitters,
+    ] = await Promise.all([
         db.application.findMany({
           where,
           orderBy: orderByFor(sortKey, sortDir),
@@ -209,7 +265,39 @@ export default async function AdmissionsAdminListPage({
         db.application.count({
           where: { ...countBase, deletedAt: { not: null } },
         }),
+        showNoDossier
+          ? db.user.findMany({
+              where: PENDING_WITHOUT_DOSSIER_WHERE,
+              // Newest first: the accounts to follow up on are the recent ones.
+              orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+              take: accountsExpanded ? NO_DOSSIER_MAX : NO_DOSSIER_PREVIEW,
+              select: {
+                id: true,
+                name: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                emailVerified: true,
+                createdAt: true,
+                _count: { select: { submittedApps: true } },
+              },
+            })
+          : Promise.resolve<NoDossierAccount[]>([]),
+        showNoDossier
+          ? db.user.count({ where: PENDING_WITHOUT_DOSSIER_WHERE })
+          : Promise.resolve(0),
+        // Submitters whose address was never confirmed — flagged next to
+        // their dossiers. Pending accounts only (see ./_pending.ts): once a
+        // child is linked the school vouches for the family.
+        db.user.findMany({
+          where: {
+            ...UNVERIFIED_PENDING_PARENT_WHERE,
+            submittedApps: { some: {} },
+          },
+          select: { id: true },
+        }),
       ]);
+    const unverifiedSubmitterIds = new Set(unverifiedSubmitters.map((u) => u.id));
 
     const newFamilyApps: AdminApp[] = [];
     const existingFamilyApps: AdminApp[] = [];
@@ -236,6 +324,7 @@ export default async function AdmissionsAdminListPage({
           id: a.submittedBy.id,
           email: a.submittedBy.email,
           name: a.submittedBy.name,
+          emailUnverified: unverifiedSubmitterIds.has(a.submittedBy.id),
         },
         existingChildren: childCount,
       };
@@ -247,6 +336,9 @@ export default async function AdmissionsAdminListPage({
     }
 
     const viewParam = currentView === "active" ? undefined : currentView;
+    // Keeps the "Comptes sans dossier" block expanded across sort / filter
+    // clicks; dropped on a view change (the block only exists on "active").
+    const accountsParam = accountsExpanded ? "all" : undefined;
     const preserve: Record<string, string | undefined> = {
       status: statusFilter,
       cycleId: cycleFilter,
@@ -254,6 +346,7 @@ export default async function AdmissionsAdminListPage({
       dir: sortDir,
       view: viewParam,
       type: typeFilter,
+      accounts: accountsParam,
     };
     const filterPreserve: Record<string, string | undefined> = {
       cycleId: preserve.cycleId,
@@ -261,6 +354,7 @@ export default async function AdmissionsAdminListPage({
       dir: preserve.dir,
       view: preserve.view,
       type: preserve.type,
+      accounts: accountsParam,
     };
     // For the type pills: preserve everything except type itself.
     const typePreserve: Record<string, string | undefined> = {
@@ -269,6 +363,7 @@ export default async function AdmissionsAdminListPage({
       sort: preserve.sort,
       dir: preserve.dir,
       view: preserve.view,
+      accounts: accountsParam,
     };
     // For the view-tab links: drop the status pill so a "Deleted" tab
     // doesn't get an unhelpful status filter inherited from elsewhere.
@@ -376,6 +471,22 @@ export default async function AdmissionsAdminListPage({
             />
           </div>
 
+          {/* Step before a dossier exists: families that have an account but
+              have not started one. Read-only here — accounts are managed
+              (and deleted) in the Parents console. Hidden when there are none. */}
+          {showNoDossier && noDossierTotal > 0 ? (
+            <NoDossierAccounts
+              accounts={noDossierAccounts}
+              total={noDossierTotal}
+              expanded={accountsExpanded}
+              canOpenParents={canOpenParents}
+              expandHref={hrefWith(BASE, { ...preserve, accounts: "all" })}
+              collapseHref={hrefWith(BASE, { ...preserve, accounts: undefined })}
+              t={t}
+              tPar={tPar}
+            />
+          ) : null}
+
           {/* Bulk selection context wraps both groups, so the toolbar can
               act across new- and existing-family selections at once. */}
           <BulkSelectionProvider allIds={allVisibleIds}>
@@ -389,6 +500,7 @@ export default async function AdmissionsAdminListPage({
               apps={newFamilyApps}
               emptyLabel={t("groupEmpty")}
               t={t}
+              tPar={tPar}
               sortKey={sortKey}
               sortDir={sortDir}
               preserve={preserve}
@@ -402,6 +514,7 @@ export default async function AdmissionsAdminListPage({
               apps={existingFamilyApps}
               emptyLabel={t("groupEmpty")}
               t={t}
+              tPar={tPar}
               sortKey={sortKey}
               sortDir={sortDir}
               preserve={preserve}
@@ -421,6 +534,7 @@ function ApplicationGroup({
   apps,
   emptyLabel,
   t,
+  tPar,
   showChildCount,
   sortKey,
   sortDir,
@@ -432,7 +546,9 @@ function ApplicationGroup({
   iconTone: string;
   apps: AdminApp[];
   emptyLabel: string;
-  t: (key: string, opts?: Record<string, string | number | Date>) => string;
+  t: Translator;
+  /** `parents` namespace — owns the "e-mail non vérifié" wording. */
+  tPar: Translator;
   showChildCount?: boolean;
   sortKey: SortKey;
   sortDir: SortDir;
@@ -562,6 +678,22 @@ function ApplicationGroup({
                   <div className="text-[color:var(--color-foreground)]">
                     {a.submittedBy.name ?? a.submittedBy.email}
                   </div>
+                  {a.submittedBy.emailUnverified ? (
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      {/* Show WHICH address is unconfirmed without relying on
+                          the tooltip (touch, keyboard). Skipped when the
+                          address already is the label above. */}
+                      {a.submittedBy.name ? (
+                        <span className="text-xs">{a.submittedBy.email}</span>
+                      ) : null}
+                      <UnverifiedEmailBadge
+                        label={tPar("emailUnverified")}
+                        title={tPar("emailUnverifiedHint", {
+                          email: a.submittedBy.email,
+                        })}
+                      />
+                    </div>
+                  ) : null}
                   {showChildCount ? (
                     <div className="mt-0.5 text-xs">
                       {t("existingChildrenCount", { n: a.existingChildren })}
@@ -599,6 +731,157 @@ function ApplicationGroup({
           )}
         </tbody>
       </Table>
+    </Card>
+  );
+}
+
+type Translator = (
+  key: string,
+  opts?: Record<string, string | number | Date>,
+) => string;
+
+/**
+ * "Comptes sans dossier" — pending parent accounts whose family has not
+ * started a dossier. Deliberately read-only: the Parents console stays
+ * the one place where an account is archived or deleted.
+ */
+function NoDossierAccounts({
+  accounts,
+  total,
+  expanded,
+  canOpenParents,
+  expandHref,
+  collapseHref,
+  t,
+  tPar,
+}: {
+  accounts: NoDossierAccount[];
+  total: number;
+  expanded: boolean;
+  canOpenParents: boolean;
+  expandHref: string;
+  collapseHref: string;
+  t: Translator;
+  tPar: Translator;
+}) {
+  const hidden = total - accounts.length;
+  // Nothing to expand or collapse while the preview already shows everything.
+  const canToggle = total > NO_DOSSIER_PREVIEW;
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center gap-3 border-b border-[color:var(--color-border-subtle)] px-6 py-4">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[color:var(--color-warning-soft)] text-[color:var(--color-warning-soft-fg)]">
+          <UserPlus className="size-4" aria-hidden />
+        </div>
+        {/* min-w-40 lets the "manage" link wrap below the title on phones
+            instead of crushing it into a narrow column. */}
+        <div className="min-w-40 flex-1">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-[color:var(--color-foreground)]">
+            {t("groupNoDossier")}
+            <span className="inline-flex min-w-[24px] items-center justify-center rounded-full bg-[color:var(--color-surface-sunken)] px-2 py-0.5 text-xs font-medium tabular-nums text-[color:var(--color-foreground-muted)]">
+              {total}
+            </span>
+          </h2>
+          <p className="mt-0.5 text-xs text-[color:var(--color-foreground-muted)]">
+            {t("groupNoDossierHint")}
+          </p>
+        </div>
+        {canOpenParents ? (
+          <Link
+            href="/admin/parents?view=pending"
+            className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-[color:var(--color-brand-600)] transition-colors duration-150 ease-out hover:text-[color:var(--color-brand-700)] hover:underline"
+          >
+            {t("noDossierManage")}
+            <ArrowRight className="size-3 rtl:rotate-180" aria-hidden />
+          </Link>
+        ) : null}
+      </div>
+      <Table>
+        <THead>
+          <tr>
+            <TH>{tPar("colName")}</TH>
+            <TH>{tPar("colEmail")}</TH>
+            <TH>{tPar("colCreated")}</TH>
+          </tr>
+        </THead>
+        <tbody>
+          {accounts.map((a) => {
+            const label = displayName(a) || a.email;
+            return (
+              <TR key={a.id}>
+                <TD>
+                  {canOpenParents ? (
+                    <Link
+                      href={`/admin/parents/${a.id}`}
+                      className="font-medium text-[color:var(--color-foreground)] transition-colors duration-150 ease-out hover:text-[color:var(--color-brand-600)]"
+                    >
+                      {label}
+                    </Link>
+                  ) : (
+                    <span className="font-medium text-[color:var(--color-foreground)]">
+                      {label}
+                    </span>
+                  )}
+                  {/* The predicate ignores dossiers in the trash, so every
+                      dossier this account still owns is a deleted one: say
+                      so rather than imply it never started. */}
+                  {a._count.submittedApps > 0 ? (
+                    <div className="mt-0.5 text-xs text-[color:var(--color-foreground-muted)]">
+                      {t("noDossierDeleted", { count: a._count.submittedApps })}
+                    </div>
+                  ) : null}
+                </TD>
+                <TD className="text-[color:var(--color-foreground-muted)]">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span>{a.email}</span>
+                    {a.emailVerified === null ? (
+                      <UnverifiedEmailBadge
+                        label={tPar("emailUnverified")}
+                        title={tPar("emailUnverifiedHint", { email: a.email })}
+                      />
+                    ) : null}
+                  </div>
+                </TD>
+                <TD className="tabular-nums text-[color:var(--color-foreground-muted)]">
+                  {a.createdAt.toISOString().slice(0, 10)}
+                </TD>
+              </TR>
+            );
+          })}
+        </tbody>
+      </Table>
+      {canToggle ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[color:var(--color-border-subtle)] px-6 py-3 text-xs text-[color:var(--color-foreground-muted)]">
+          {/* Never a silent cut: say how many of the total are on screen. */}
+          <span>
+            {hidden > 0
+              ? t("noDossierShown", { shown: accounts.length, count: total })
+              : null}
+          </span>
+          {/* scroll={false}: expand / collapse in place, like the filter
+              pills and sort headers — no jump back to the top of the page. */}
+          {expanded ? (
+            <Link
+              href={collapseHref}
+              scroll={false}
+              className="font-medium text-[color:var(--color-brand-600)] transition-colors duration-150 ease-out hover:text-[color:var(--color-brand-700)] hover:underline"
+            >
+              {t("noDossierShowLess")}
+            </Link>
+          ) : (
+            <Link
+              href={expandHref}
+              scroll={false}
+              className="font-medium text-[color:var(--color-brand-600)] transition-colors duration-150 ease-out hover:text-[color:var(--color-brand-700)] hover:underline"
+            >
+              {/* Above the cap "show all" would be a lie: name the cap. */}
+              {total > NO_DOSSIER_MAX
+                ? t("noDossierShowMax", { max: NO_DOSSIER_MAX })
+                : t("noDossierShowAll")}
+            </Link>
+          )}
+        </div>
+      ) : null}
     </Card>
   );
 }

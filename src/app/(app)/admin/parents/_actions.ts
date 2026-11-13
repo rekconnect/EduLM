@@ -4,13 +4,11 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import {
   PROVENANCE_SELECT,
-  deleteAdminGrantsForEmail,
   hasProvenance,
   isStaffDomainEmail,
   moveAdminGrantEmail,
@@ -18,9 +16,8 @@ import {
   staffIdentityGuard,
 } from "@/lib/staff-identity";
 import { ensureFamilyForGuardian } from "@/lib/family";
-import { deleteFromStorage } from "@/lib/storage";
+import { hardDeleteParentAccounts } from "@/lib/parent-hard-delete";
 import { joinName } from "@/lib/names";
-import { PENDING_PARENT_WHERE } from "./_pending";
 import {
   parseEntityFieldsConfig,
   type EntityFieldsConfig,
@@ -683,136 +680,10 @@ export async function restoreParent(
   });
 }
 
-// ── Hard delete core ───────────────────────────────────────
-
-type HardDeleteOutcome = {
-  processed: number;
-  skippedHasChildren: number;
-  skippedHasDossier: number;
-  skippedOther: number;
-};
-
-/**
- * Hard-delete parent accounts that have no linked child. Shared by the
- * trash's "Supprimer définitivement" (single + bulk) and the pending-accounts
- * purge, so every hard delete follows the same rules:
- *  - caller holds `eleves:full` and a tenant context; the staff-identity
- *    guard is applied to every select (non-admins never reach a staff hat /
- *    staff-domain account);
- *  - `pendingOnly` additionally requires the PENDING predicate (purge view);
- *  - an account with a linked child is skipped (orphaning a Student loses data);
- *  - an account with ANY non-DRAFT application is skipped — admissions owns it;
- *  - otherwise its DRAFT applications are deleted (documents cascade; files are
- *    removed from storage best-effort), then the User (Guardian, sessions,
- *    message threads cascade), then its admin grants; the Family created at
- *    sign-up is removed when nothing references it any more;
- *  - each account runs in its own transaction with a re-check, and a FK
- *    refusal (legacy rows) counts as skipped instead of aborting the batch.
- */
-async function hardDeleteParentAccounts(
-  ids: string[],
-  tenantId: string,
-  user: { role: string },
-  opts: { pendingOnly: boolean },
-): Promise<HardDeleteOutcome> {
-  const out: HardDeleteOutcome = {
-    processed: 0,
-    skippedHasChildren: 0,
-    skippedHasDossier: 0,
-    skippedOther: 0,
-  };
-  if (ids.length === 0) return out;
-
-  const guard = (await staffIdentityGuard(user, tenantId)) as Prisma.UserWhereInput;
-  const scope: Prisma.UserWhereInput[] = [{ role: "PARENT" }, guard];
-  if (opts.pendingOnly) scope.push(PENDING_PARENT_WHERE);
-  const childless: Prisma.UserWhereInput = {
-    OR: [{ guardianProfile: null }, { guardianProfile: { childLinks: { none: {} } } }],
-  };
-
-  const candidates = await db.user.findMany({
-    where: { id: { in: ids }, AND: scope },
-    select: {
-      id: true,
-      email: true,
-      guardianProfile: {
-        select: { familyId: true, _count: { select: { childLinks: true } } },
-      },
-      submittedApps: {
-        select: { status: true, documents: { select: { storagePath: true } } },
-      },
-    },
-  });
-  out.skippedOther += ids.length - candidates.length;
-
-  const purgedEmails: string[] = [];
-  const orphanedPaths: string[] = [];
-
-  for (const c of candidates) {
-    if ((c.guardianProfile?._count.childLinks ?? 0) > 0) {
-      out.skippedHasChildren++;
-      continue;
-    }
-    if (c.submittedApps.some((a) => a.status !== "DRAFT")) {
-      out.skippedHasDossier++;
-      continue;
-    }
-    const familyId = c.guardianProfile?.familyId ?? null;
-    const paths = c.submittedApps.flatMap((a) => a.documents.map((d) => d.storagePath));
-    try {
-      await db.$transaction(async (tx) => {
-        // Re-check inside the transaction: a child link, a Dars id or a
-        // submitted dossier may have appeared since the candidate select.
-        const still = await tx.user.findFirst({
-          where: { id: c.id, AND: [...scope, childless] },
-          select: { id: true },
-        });
-        if (!still) throw new Error("state-changed");
-        // Only DRAFT dossiers are ours to remove. One submitted in the
-        // meantime survives this deleteMany and the RESTRICT FK on
-        // Application.submittedBy makes the user delete fail → rollback.
-        if (c.submittedApps.length > 0) {
-          await tx.application.deleteMany({
-            where: { submittedByUserId: c.id, status: "DRAFT" },
-          });
-        }
-        await tx.user.delete({ where: { id: c.id } });
-        if (familyId) {
-          const guardians = await tx.guardian.count({ where: { familyId } });
-          const students = await tx.student.count({ where: { familyId } });
-          if (guardians === 0 && students === 0) {
-            await tx.family.delete({ where: { id: familyId } });
-          }
-        }
-      });
-    } catch (e) {
-      console.error(
-        `[parents] hard delete skipped ${c.id}:`,
-        e instanceof Error ? e.message : e,
-      );
-      out.skippedOther++;
-      continue;
-    }
-    out.processed++;
-    purgedEmails.push(c.email);
-    orphanedPaths.push(...paths);
-  }
-
-  for (const email of purgedEmails) await deleteAdminGrantsForEmail(tenantId, email);
-  // Storage cleanup is best-effort: the rows are already gone, an orphan
-  // object in the bucket is acceptable, a failed toast is not.
-  await Promise.all(
-    orphanedPaths.map((p) =>
-      deleteFromStorage(p).catch((e) => {
-        console.error(
-          `[parents] storage delete failed for ${p}:`,
-          e instanceof Error ? e.message : e,
-        );
-      }),
-    ),
-  );
-  return out;
-}
+// ── Hard delete ────────────────────────────────────────────
+// The core lives in src/lib/parent-hard-delete.ts (NOT in this "use server"
+// file: an export here would be a public server action). The automatic purge
+// of abandoned sign-ups shares it.
 
 /**
  * Permanently delete one parent (trash view). Refuses while the parent still

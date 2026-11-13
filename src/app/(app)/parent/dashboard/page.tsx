@@ -12,6 +12,7 @@ import { runWithTenant } from "@/lib/tenant-context";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { startRenewal } from "../applications/_actions";
+import { SignupDeadlineNotice } from "../_signup-deadline-notice";
 
 const CARD_HOVER =
   "transition-shadow duration-200 ease-out hover:shadow-[var(--shadow-card-hover)] hover:border-[color:var(--color-border-strong)]";
@@ -312,6 +313,10 @@ async function NoChildrenState({
           title={t("dashboardTitle")}
           description={t("welcome", { name: user.name ?? user.email })}
         />
+
+        {/* Self-registered family with no dossier yet: the date after which
+            the account is deleted (nothing when the rule does not apply). */}
+        <SignupDeadlineNotice userId={user.id} tenantId={user.tenantId} />
 
         <Card className={CARD_HOVER}>
           <CardBody>

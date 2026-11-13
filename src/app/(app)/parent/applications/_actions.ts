@@ -11,6 +11,7 @@ import {
 import { db, unscopedDb } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
+import { restartSignupCountdownFor } from "@/lib/signup-retention";
 import { COUNTRIES_FR } from "@/lib/lookups";
 import { serviceAnswersFromRecord } from "@/lib/dossier-content";
 import { sendApplicationSubmittedEmail } from "@/lib/emails/notifications";
@@ -795,6 +796,11 @@ export async function cancelDraftApplication(
     if (app.submittedByUserId !== user.id)
       return { ok: false, error: "forbidden" };
     if (app.status !== "DRAFT") return { ok: false, error: "not-draft" };
+    // If this is the family's last dossier, the account is about to be
+    // "without a dossier" again: its automatic-deletion countdown starts now,
+    // in full, instead of being measured from the day the account was created.
+    // Restarted BEFORE the delete: if it fails, nothing is deleted.
+    await restartSignupCountdownFor(tenantId, [user.id]);
     await db.application.delete({ where: { id } });
 
     revalidatePath("/parent/applications");

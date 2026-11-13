@@ -10,6 +10,7 @@ import { requireRole } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
 import { AppStatusBadge } from "./_status-badge";
 import { SwipeableApplicationCard } from "./_swipeable-card";
+import { SignupDeadlineNotice } from "../_signup-deadline-notice";
 
 const STATUS_KEY: Record<string, string> = {
   DRAFT: "statusDraft",
@@ -55,6 +56,10 @@ export default async function ParentApplicationsPage() {
               </LinkButton>
             }
           />
+
+          {/* Self-registered family with no dossier yet: the date after which
+              the account is deleted (nothing when the rule does not apply). */}
+          <SignupDeadlineNotice userId={user.id} tenantId={tenantId} />
 
           {apps.length === 0 ? (
             <div className="flex flex-col items-center rounded-lg border border-dashed border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] py-12 text-center">

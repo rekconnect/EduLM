@@ -12,6 +12,10 @@ import { sendApplicationDecidedEmail } from "@/lib/emails/notifications";
 import { linkStudentToGuardianFamily } from "@/lib/family";
 import { applyDossierToStudent } from "./_apply-dossier";
 import { DOSSIER_STATES } from "@/lib/dossier-state";
+import {
+  keepSignupDeadlinesStable,
+  restartSignupCountdownFor,
+} from "@/lib/signup-retention";
 
 // ── Dossier state (services gate + editability) ─────────────
 
@@ -169,7 +173,10 @@ export async function updateCycle(
     : 0;
 
   await runWithTenant({ tenantId, slug: null }, async () => {
-    await db.admissionCycle.update({
+    // Editing the active flag or the dates can open a campaign, or make it
+    // look as if it had been open for longer: the abandoned-sign-up dates
+    // shown to families must never move earlier because of it.
+    await keepSignupDeadlinesStable(tenantId, () => db.admissionCycle.update({
       where: { id: cycleId },
       data: {
         label: parsed.data.label,
@@ -187,10 +194,11 @@ export async function updateCycle(
         isActive: parsed.data.isActive,
         autoAcceptRenewals: parsed.data.autoAcceptRenewals,
       },
-    });
+    }));
   });
   revalidatePath("/admissions-admin/cycles");
   revalidatePath(`/admissions-admin/cycles/${cycleId}`);
+  revalidatePath("/admissions-admin");
   return { saved: true };
 }
 
@@ -232,6 +240,19 @@ export async function deleteCycle(
       };
     }
 
+    // The cycle's dossiers cascade with it. A family whose only dossier was
+    // here gets a fresh, full abandoned-sign-up countdown — not a deletion
+    // tonight. Restarted BEFORE the delete: if it fails, nothing is deleted.
+    // (Deleting an open cycle itself only ever moves the dates later.)
+    const submitters = await db.application.findMany({
+      where: { cycleId },
+      distinct: ["submittedByUserId"],
+      select: { submittedByUserId: true },
+    });
+    await restartSignupCountdownFor(
+      tenantId,
+      submitters.map((s) => s.submittedByUserId),
+    );
     await db.admissionCycle.delete({ where: { id: cycleId } });
     revalidatePath("/admissions-admin/cycles");
     revalidatePath("/admissions-admin");
@@ -982,12 +1003,16 @@ export async function permanentlyDeleteApplication(
   return runWithTenant({ tenantId, slug: null }, async () => {
     const app = await db.application.findUnique({
       where: { id: applicationId },
-      select: { id: true, resultingStudentId: true },
+      select: { id: true, resultingStudentId: true, submittedByUserId: true },
     });
     if (!app) return { ok: false, error: "not-found" };
     if (app.resultingStudentId) {
       return { ok: false, error: "produced-student" };
     }
+    // If this is the family's last dossier, its abandoned-sign-up countdown
+    // starts now, in full (src/lib/signup-retention.ts). Restarted BEFORE the
+    // delete: if it fails, nothing is deleted.
+    await restartSignupCountdownFor(tenantId, [app.submittedByUserId]);
     await db.application.delete({ where: { id: applicationId } });
     revalidatePath("/admissions-admin");
     return { ok: true };
@@ -1066,10 +1091,20 @@ export async function bulkRestoreApplications(
 export async function bulkPermanentlyDeleteApplications(
   ids: string[],
 ): Promise<BulkResult> {
-  return withParents(ids, "full", async () => {
-    const r = await db.application.deleteMany({
-      where: { id: { in: ids }, resultingStudentId: null },
+  return withParents(ids, "full", async (tenantId) => {
+    const doomed = { id: { in: ids }, resultingStudentId: null };
+    const submitters = await db.application.findMany({
+      where: doomed,
+      distinct: ["submittedByUserId"],
+      select: { submittedByUserId: true },
     });
+    // Same as the single delete: families left without a dossier get a fresh,
+    // full abandoned-sign-up countdown — restarted before the delete.
+    await restartSignupCountdownFor(
+      tenantId,
+      submitters.map((s) => s.submittedByUserId),
+    );
+    const r = await db.application.deleteMany({ where: doomed });
     revalidatePath("/admissions-admin");
     return { ok: true, processed: r.count, skipped: ids.length - r.count };
   }) as Promise<BulkResult>;
@@ -1091,12 +1126,17 @@ export async function toggleCycleActive(cycleId: string): Promise<void> {
       select: { isActive: true },
     });
     if (!cur) return;
-    await db.admissionCycle.update({
-      where: { id: cycleId },
-      data: { isActive: !cur.isActive },
-    });
+    // Switching a campaign back on must not pull the abandoned-sign-up dates
+    // earlier (see src/lib/signup-retention.ts).
+    await keepSignupDeadlinesStable(tenantId, () =>
+      db.admissionCycle.update({
+        where: { id: cycleId },
+        data: { isActive: !cur.isActive },
+      }),
+    );
   });
   revalidatePath("/admissions-admin/cycles");
+  revalidatePath("/admissions-admin");
 }
 
 /**

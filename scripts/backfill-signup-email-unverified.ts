@@ -132,7 +132,10 @@ async function main() {
           emailVerified: { not: null },
           createdAt: { lt: CUTOFF },
         },
-        data: { emailVerified: null },
+        // updatedAt is bumped on purpose: these accounts become subject to
+        // the automatic purge of abandoned sign-ups (src/lib/signup-retention.ts)
+        // and must get the full delay from today, not be due at once.
+        data: { emailVerified: null, updatedAt: new Date() },
       });
       console.log(`  → ${res.count} account(s) reset to "e-mail non vérifié".`);
     }

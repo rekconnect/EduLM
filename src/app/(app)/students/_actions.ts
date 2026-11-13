@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db, unscopedDb } from "@/lib/db";
 import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
+import { restartSignupCountdownFor } from "@/lib/signup-retention";
 import {
   parseEntityFieldsConfig,
   type EntityFieldsConfig,
@@ -164,6 +165,27 @@ export async function deleteStudent(id: string) {
   const tenantId = user.tenantId;
   if (!tenantId) return;
   await runWithTenant({ tenantId, slug: null }, async () => {
+    // The student's child links cascade and its family may be left without
+    // any student: the parents it confirmed (through a link, or simply by
+    // sharing its family) can become "abandoned sign-ups" again. They get a
+    // fresh, full automatic-deletion countdown instead of being due the same
+    // night. Done BEFORE the delete: if it fails, nothing is deleted.
+    const affected = await db.user.findMany({
+      where: {
+        role: "PARENT",
+        guardianProfile: {
+          OR: [
+            { childLinks: { some: { studentId: id } } },
+            { family: { students: { some: { id } } } },
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    await restartSignupCountdownFor(
+      tenantId,
+      affected.map((u) => u.id),
+    );
     await db.student.delete({ where: { id } });
   });
   revalidatePath("/students");

@@ -20,6 +20,7 @@ import {
   SIGNUP_RETENTION_MIN_DAYS,
   getRetentionState,
   hasOpenCampaign,
+  nextSignupRetentionSince,
 } from "@/lib/signup-retention";
 
 export type SettingsResult =
@@ -371,17 +372,24 @@ export async function updateSignupRetention(
 
   const current = await unscopedDb().tenant.findUnique({
     where: { id: user.tenantId },
-    select: { signupRetentionDays: true },
+    select: { signupRetentionDays: true, signupRetentionSince: true },
   });
-  // Only an actual change restarts the countdowns: every account then gets
-  // the full (new) delay from now, so switching the rule on — or shortening
-  // it — never deletes anyone by surprise. Saving the same value is a no-op.
+  // Only an actual change touches the clock; saving the same value is a
+  // no-op. The new starting point is chosen so that NO date already shown to
+  // a family moves earlier — switching the rule on starts from now, and
+  // shortening the delay leaves existing accounts the time they were promised
+  // (see nextSignupRetentionSince).
   if (current && current.signupRetentionDays !== days) {
     await unscopedDb().tenant.update({
       where: { id: user.tenantId },
       data: {
         signupRetentionDays: days,
-        signupRetentionSince: days === null ? null : new Date(),
+        signupRetentionSince: nextSignupRetentionSince({
+          now: new Date(),
+          oldDays: current.signupRetentionDays,
+          oldSince: current.signupRetentionSince,
+          newDays: days,
+        }),
       },
     });
   }

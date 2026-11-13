@@ -17,6 +17,7 @@ import {
 } from "@/lib/staff-identity";
 import { ensureFamilyForGuardian } from "@/lib/family";
 import { hardDeleteParentAccounts } from "@/lib/parent-hard-delete";
+import { restartSignupCountdownFor } from "@/lib/signup-retention";
 import { joinName } from "@/lib/names";
 import {
   parseEntityFieldsConfig,
@@ -517,6 +518,11 @@ export async function unlinkGuardianFromStudent(studentId: string, parentUserId:
       select: { id: true },
     });
     if (!guardian) return;
+    // Losing its child link can turn a self-registered account back into an
+    // "abandoned sign-up": it then gets a fresh, full automatic-deletion
+    // countdown (with the other responsables of its family) instead of being
+    // due the same night. Done BEFORE the unlink: if it fails, nothing changes.
+    await restartSignupCountdownFor(tenantId, [parentUserId]);
     await db.studentGuardian.deleteMany({
       where: { studentId, guardianId: guardian.id },
     });

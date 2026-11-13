@@ -19,7 +19,12 @@ export function SignupRetentionForm({
   minDays,
   maxDays,
 }: {
-  initial: { days: number | null; jobConfigured: boolean; campaignOpen: boolean };
+  initial: {
+    days: number | null;
+    jobConfigured: boolean;
+    campaignOpen: boolean;
+    transition: { noDeletionBefore: string; newDelayFrom: string } | null;
+  };
   minDays: number;
   maxDays: number;
 }) {
@@ -82,10 +87,27 @@ export function SignupRetentionForm({
           <li>{t("signupRetention.ruleWho")}</li>
           <li>{t("signupRetention.ruleKept")}</li>
           <li>{t("signupRetention.ruleClock")}</li>
+          <li>{t("signupRetention.rulePromise")}</li>
           <li>{t("signupRetention.ruleNotice")}</li>
         </ul>
       </div>
 
+      {/* A shortened delay that is not in force yet. Comes from the server
+          (refreshed after each save), so it always describes what is stored. */}
+      {saved !== null && initial.transition ? (
+        <p
+          role="status"
+          className="flex items-start gap-2 rounded-md border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-sunken)] px-4 py-3 text-sm text-[color:var(--color-foreground-muted)]"
+        >
+          <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>
+            {t("signupRetention.transition", {
+              date: initial.transition.noDeletionBefore,
+              from: initial.transition.newDelayFrom,
+            })}
+          </span>
+        </p>
+      ) : null}
       {saved !== null && !initial.jobConfigured ? (
         <p
           role="status"

@@ -205,7 +205,7 @@
       "invalid": "Enter a whole number of days between {min} and {max}, or leave it empty.",
       "ruleWho": "Only accounts that families created themselves on the sign-up page, and that have no application at all, are affected.",
       "ruleKept": "Accounts created by the school, disabled accounts, and accounts with an application in the trash are never deleted automatically.",
-      "ruleClock": "The delay runs from the account's creation. It starts over when you change this setting or reopen a campaign, and when the account is edited or loses its last application. Nothing is deleted while no campaign is open.",
+      "ruleClock": "The delay runs from the account's creation, or from the opening of the campaign if that is more recent. It starts over when you switch this setting on or lengthen the delay, when a campaign opens while none was open, and when the account is edited or loses its last application or its last linked child. A date already announced to a family is never moved earlier, even if you shorten the delay. Nothing is deleted while no campaign is open.",
       "ruleNotice": "The family sees the deadline in their space. Deletion is permanent; they can create a new account at any time.",
       "jobMissing": "The daily task that performs the deletions is not enabled on the server yet: no account will be deleted for now.",
       "campaignClosed": "No admission campaign is open: the countdown is paused until the next one opens."

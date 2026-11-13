@@ -125,7 +125,9 @@ model Tenant {
   // `signupRetentionDays` days after the LATEST of: its creation, the moment
   // this rule was switched on or changed (`signupRetentionSince`), and the
   // opening of the admission campaign. Nothing is deleted while no campaign
-  // is open. Null days = never delete automatically.
+  // is open. Null days = never delete automatically. `signupRetentionSince`
+  // only ever moves forward; while the rule is OFF it keeps the latest date a
+  // family may have been shown, so switching it back on cannot undercut it.
   // See src/lib/signup-retention.ts.
   signupRetentionDays  Int?
   signupRetentionSince DateTime?

@@ -15,7 +15,7 @@ import { db } from "@/lib/db";
 import { displayName } from "@/lib/names";
 import { hasModule, requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
-import { getSignupDeadlines } from "@/lib/signup-retention";
+import { getSignupDeadlines, isoDayInZone } from "@/lib/signup-retention";
 import { AppStatusBadge } from "@/app/(app)/parent/applications/_status-badge";
 import {
   PENDING_WITHOUT_DOSSIER_WHERE,
@@ -305,14 +305,22 @@ export default async function AdmissionsAdminListPage({
     // itself, no dossier at all) has a date from which it is deleted — shown
     // on its row. Accounts the rule spares simply have no date.
     const renderedAt = new Date();
-    const { state: retention, deadlines: signupDeadlines } =
+    const {
+      state: retention,
+      deadlines: signupDeadlines,
+      timeZone: schoolTimeZone,
+    } =
       showNoDossier && noDossierAccounts.length > 0
         ? await getSignupDeadlines(
             tenantId,
             noDossierAccounts.map((a) => a.id),
             renderedAt,
           )
-        : { state: { status: "off" as const }, deadlines: new Map<string, Date>() };
+        : {
+            state: { status: "off" as const },
+            deadlines: new Map<string, Date>(),
+            timeZone: null,
+          };
 
     const newFamilyApps: AdminApp[] = [];
     const existingFamilyApps: AdminApp[] = [];
@@ -499,6 +507,7 @@ export default async function AdmissionsAdminListPage({
                 retention.status === "active" ? retention.window.days : null
               }
               deadlines={signupDeadlines}
+              timeZone={schoolTimeZone}
               renderedAt={renderedAt}
               expandHref={hrefWith(BASE, { ...preserve, accounts: "all" })}
               collapseHref={hrefWith(BASE, { ...preserve, accounts: undefined })}
@@ -772,6 +781,7 @@ function NoDossierAccounts({
   canOpenParents,
   autoDeleteDays,
   deadlines,
+  timeZone,
   renderedAt,
   expandHref,
   collapseHref,
@@ -784,8 +794,13 @@ function NoDossierAccounts({
   canOpenParents: boolean;
   /** Delay of the automatic purge, or null when it is off or suspended. */
   autoDeleteDays: number | null;
-  /** Deletion date per account id — only for accounts the purge applies to. */
+  /**
+   * Deletion date per account id — only for accounts the purge applies to and
+   * whose countdown ends while a campaign is still open.
+   */
   deadlines: Map<string, Date>;
+  /** The school's time zone, to print those dates as local days. */
+  timeZone: string | null;
   renderedAt: Date;
   expandHref: string;
   collapseHref: string;
@@ -881,7 +896,7 @@ function NoDossierAccounts({
                       {deadline <= renderedAt
                         ? t("noDossierAutoDeleteDue")
                         : t("noDossierAutoDeleteOn", {
-                            date: deadline.toISOString().slice(0, 10),
+                            date: isoDayInZone(deadline, timeZone),
                           })}
                     </div>
                   ) : null}

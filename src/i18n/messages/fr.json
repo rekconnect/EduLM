@@ -138,7 +138,7 @@
       "invalid": "Saisissez un nombre entier de jours entre {min} et {max}, ou laissez vide.",
       "ruleWho": "Seuls sont concernés les comptes créés par les familles elles-mêmes sur la page d'inscription, et qui n'ont aucun dossier.",
       "ruleKept": "Les comptes créés par l'école, les comptes désactivés et ceux dont un dossier se trouve dans la corbeille ne sont jamais supprimés automatiquement.",
-      "ruleClock": "Le délai court à partir de la création du compte. Il repart de zéro quand vous modifiez ce réglage ou rouvrez une campagne, et quand le compte est modifié ou perd son dernier dossier. Rien n'est supprimé tant qu'aucune campagne n'est ouverte.",
+      "ruleClock": "Le délai court à partir de la création du compte, ou de l'ouverture de la campagne si elle est plus récente. Il repart de zéro quand vous activez ou allongez ce délai, quand une campagne s'ouvre alors qu'aucune ne l'était, et quand le compte est modifié ou perd son dernier dossier ou son dernier enfant lié. Une date déjà annoncée à une famille n'est jamais avancée, même si vous raccourcissez le délai. Rien n'est supprimé tant qu'aucune campagne n'est ouverte.",
       "ruleNotice": "La famille voit la date limite dans son espace. La suppression est définitive ; elle peut créer un nouveau compte à tout moment.",
       "jobMissing": "La tâche quotidienne qui effectue les suppressions n'est pas encore activée sur le serveur : aucun compte ne sera supprimé pour l'instant.",
       "campaignClosed": "Aucune campagne d'inscription n'est ouverte : le décompte est suspendu jusqu'à la prochaine ouverture."

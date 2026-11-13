@@ -13,8 +13,10 @@ import { ABANDONED_SIGNUP_WHERE } from "@/app/(app)/admin/parents/_pending";
  * (ABANDONED_SIGNUP_WHERE) is then hard-deleted once its countdown ends.
  *
  * The countdown is `days` long and starts at the LATEST of four instants, so
- * nobody is ever deleted without having had `days` full days to act, and a
- * date shown to a family can only ever move LATER:
+ * nobody is ever deleted without having had `days` full days to act, and an
+ * account is never deleted before a date it has on screen (the date SHOWN to
+ * a family can still move earlier in one honest case: the campaign itself is
+ * closed sooner, and the family's date is capped at that closing):
  *   1. the account's creation;
  *   2. the account's last modification (`User.updatedAt`) — which is also how
  *      "the family just lost its last dossier" is recorded: every code path
@@ -233,10 +235,25 @@ export async function getSignupDeadlines(
   const { lastClose } = state.window;
   for (const r of rows) {
     const deadline = signupDeadline(r, state.window);
-    if (lastClose && lastClose < deadline) continue;
+    // The delete happens at the first daily run at or after the deadline. If
+    // the campaign has closed by then the rule is suspended and nothing is
+    // deleted — so no date is announced.
+    if (lastClose && lastClose < firstDailyRunAtOrAfter(deadline)) continue;
     deadlines.set(r.id, deadline);
   }
   return { state, deadlines, timeZone: tenant?.timeZone ?? null };
+}
+
+/** Hour (UTC) of the daily purge — keep in sync with "schedule" in vercel.json. */
+const CRON_HOUR_UTC = 2;
+
+/** Earliest instant the daily job can run at or after `d`. */
+export function firstDailyRunAtOrAfter(d: Date): Date {
+  const run = new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), CRON_HOUR_UTC),
+  );
+  if (run < d) run.setUTCDate(run.getUTCDate() + 1);
+  return run;
 }
 
 /**
@@ -264,34 +281,82 @@ export function isoDayInZone(d: Date, timeZone: string | null | undefined): stri
  * The `signupRetentionSince` to store when the delay changes from `oldDays`
  * to `newDays` (null = off). Pure.
  *
- * It keeps one promise: no date already shown to a family moves earlier —
- * not when the delay is shortened, not when the rule is switched off and on
- * again. H below is the latest date anyone may have been shown so far; the
- * new `since` is the earliest instant that still honours it:
- *   - rule on:  H = max(now, since) + oldDays
+ * It keeps one promise: an account that has a date on screen is never deleted
+ * before it — not when the delay is shortened, not when the rule is switched
+ * off and on again. H below is the latest date any family may currently be
+ * looking at; the new `since` is the earliest instant that still honours it:
+ *   - rule on:  H = `latestPromise` when the caller measured it (see
+ *               `latestSignupPromise`: null = no account has a date, so
+ *               H = now), otherwise the safe upper bound
+ *               max(now, since) + oldDays
  *   - rule off: H = since (while the rule is off, the column holds H itself)
  *   - new since = max(now, H − newDays); switching off stores H.
- * Shortening 60 → 7 therefore leaves every existing account its 60 days and
- * applies 7 days to accounts created once that transition is over; a plain
- * first switch-on, or lengthening the delay, starts from now.
+ * `since` is one clock for the whole school, so shortening 60 → 7 while a
+ * family holds a date makes EVERY account wait until that date, new sign-ups
+ * included; the 7 days apply once it has passed (Settings says so). A first
+ * switch-on, lengthening, or shortening while nobody has a date starts from
+ * now.
  */
 export function nextSignupRetentionSince(args: {
   now: Date;
   oldDays: number | null | undefined;
   oldSince: Date | null | undefined;
   newDays: number | null;
+  /**
+   * Latest deletion date an eligible account currently has; null when no
+   * account has one; undefined when not measured (the upper bound is used).
+   */
+  latestPromise?: Date | null;
 }): Date | null {
   const now = args.now.getTime();
   const wasOn = validDays(args.oldDays);
   const oldSince = args.oldSince?.getTime() ?? null;
-  const highWater = wasOn
-    ? Math.max(now, oldSince ?? now) + (args.oldDays as number) * DAY_MS
-    : oldSince;
+  const upperBound = Math.max(now, oldSince ?? now) + (args.oldDays ?? 0) * DAY_MS;
+  const measured =
+    args.latestPromise === undefined
+      ? upperBound
+      : args.latestPromise === null
+        ? now
+        : // never above the bound: a measurement cannot promise more than the rule did
+          Math.min(upperBound, Math.max(now, args.latestPromise.getTime()));
+  const highWater = wasOn ? measured : oldSince;
   if (args.newDays === null) {
     // Off: remember H so a later switch-on cannot undercut it.
     return highWater === null ? null : new Date(highWater);
   }
   return new Date(Math.max(now, (highWater ?? now) - args.newDays * DAY_MS));
+}
+
+/**
+ * The latest deletion date an eligible account of this tenant currently has,
+ * for `nextSignupRetentionSince`:
+ *   - null: no account is eligible, so nobody has a date on screen;
+ *   - a Date: rule active — the furthest deadline among the eligible accounts;
+ *   - undefined: rule off, or suspended while eligible accounts exist (dates
+ *     were shown before the campaign closed and cannot be recomputed) — the
+ *     caller falls back to the safe upper bound.
+ * An account that is NOT eligible right now (it has a dossier, a linked
+ * child…) is not counted: if it becomes eligible again later it gets a fresh,
+ * full countdown and a fresh notice at that moment.
+ */
+export async function latestSignupPromise(
+  tenantId: string,
+  now: Date = new Date(),
+): Promise<Date | null | undefined> {
+  const state = await getRetentionState(tenantId, now);
+  if (state.status === "off") return undefined;
+  const agg = await unscopedDb().user.aggregate({
+    where: await eligibleWhere(tenantId),
+    _count: { _all: true },
+    _max: { createdAt: true, updatedAt: true },
+  });
+  if (agg._count._all === 0) return null;
+  if (state.status !== "active" || !agg._max.createdAt || !agg._max.updatedAt) return undefined;
+  // max over accounts of max(createdAt, updatedAt, floor) + days
+  return signupDeadline(
+    { createdAt: agg._max.createdAt, updatedAt: agg._max.updatedAt },
+    state.window,
+  );
 }
 
 /**

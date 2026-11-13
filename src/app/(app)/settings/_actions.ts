@@ -20,6 +20,7 @@ import {
   SIGNUP_RETENTION_MIN_DAYS,
   getRetentionState,
   hasOpenCampaign,
+  latestSignupPromise,
   nextSignupRetentionSince,
 } from "@/lib/signup-retention";
 
@@ -330,23 +331,55 @@ export async function loadSignupRetention(): Promise<{
   days: number | null;
   jobConfigured: boolean;
   campaignOpen: boolean;
+  /**
+   * Set while a SHORTENED delay is not in force yet (families were holding a
+   * later date): the two days to show the admin, already formatted in the
+   * request locale and the school's time zone.
+   */
+  transition: { noDeletionBefore: string; newDelayFrom: string } | null;
 }> {
   const user = await requireRole("SCHOOL_ADMIN");
   const jobConfigured = Boolean(process.env.CRON_SECRET);
-  if (!user.tenantId) return { days: null, jobConfigured, campaignOpen: false };
-  const [state, campaignOpen] = await Promise.all([
-    getRetentionState(user.tenantId),
-    hasOpenCampaign(user.tenantId),
+  if (!user.tenantId) {
+    return { days: null, jobConfigured, campaignOpen: false, transition: null };
+  }
+  const now = new Date();
+  const [state, campaignOpen, tenant, locale] = await Promise.all([
+    getRetentionState(user.tenantId, now),
+    hasOpenCampaign(user.tenantId, now),
+    unscopedDb().tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { signupRetentionSince: true, timeZone: true },
+    }),
+    getLocale(),
   ]);
+  const days =
+    state.status === "off"
+      ? null
+      : state.status === "active"
+        ? state.window.days
+        : state.days;
+  const since = tenant?.signupRetentionSince ?? null;
+  const longDay = (d: Date) => {
+    const format = (timeZone: string) =>
+      new Intl.DateTimeFormat(locale, { dateStyle: "long", timeZone }).format(d);
+    try {
+      return format(tenant?.timeZone || "UTC");
+    } catch {
+      return format("UTC");
+    }
+  };
   return {
-    days:
-      state.status === "off"
-        ? null
-        : state.status === "active"
-          ? state.window.days
-          : state.days,
+    days,
     jobConfigured,
     campaignOpen,
+    transition:
+      days !== null && since && since > now
+        ? {
+            noDeletionBefore: longDay(new Date(since.getTime() + days * 86_400_000)),
+            newDelayFrom: longDay(since),
+          }
+        : null,
   };
 }
 
@@ -375,20 +408,23 @@ export async function updateSignupRetention(
     select: { signupRetentionDays: true, signupRetentionSince: true },
   });
   // Only an actual change touches the clock; saving the same value is a
-  // no-op. The new starting point is chosen so that NO date already shown to
-  // a family moves earlier — switching the rule on starts from now, and
-  // shortening the delay leaves existing accounts the time they were promised
+  // no-op. The new starting point is chosen so that no account is deleted
+  // before a date it has on screen: switching the rule on, lengthening it, or
+  // changing it while no family holds a date starts from now; shortening it
+  // while families hold a date takes effect once those dates have passed
   // (see nextSignupRetentionSince).
   if (current && current.signupRetentionDays !== days) {
+    const now = new Date();
     await unscopedDb().tenant.update({
       where: { id: user.tenantId },
       data: {
         signupRetentionDays: days,
         signupRetentionSince: nextSignupRetentionSince({
-          now: new Date(),
+          now,
           oldDays: current.signupRetentionDays,
           oldSince: current.signupRetentionSince,
           newDays: days,
+          latestPromise: await latestSignupPromise(user.tenantId, now),
         }),
       },
     });

@@ -828,7 +828,7 @@ function NoDossierAccounts({
           <p className="mt-0.5 text-xs text-[color:var(--color-foreground-muted)]">
             {t("groupNoDossierHint")}
             {autoDeleteDays !== null ? (
-              <> {t("noDossierAutoDeleteHint", { count: autoDeleteDays })}</>
+              <> {t("noDossierAutoDeleteHint")}</>
             ) : null}
           </p>
         </div>

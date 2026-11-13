@@ -120,6 +120,15 @@ model Tenant {
   // typed shape (TenantInscriptionFormConfig). Distinct from the
   // *FieldsConfig columns above (which configure tenant custom fields).
   inscriptionFormConfig    Json @default("{}")
+  // Automatic purge of abandoned self-registrations. A parent account created
+  // by the PUBLIC sign-up form that never started a dossier is hard-deleted
+  // `signupRetentionDays` days after the LATEST of: its creation, the moment
+  // this rule was switched on or changed (`signupRetentionSince`), and the
+  // opening of the admission campaign. Nothing is deleted while no campaign
+  // is open. Null days = never delete automatically.
+  // See src/lib/signup-retention.ts.
+  signupRetentionDays  Int?
+  signupRetentionSince DateTime?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 

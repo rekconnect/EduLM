@@ -196,6 +196,20 @@
       "inscription": "New inscription",
       "renewal": "Re-inscription"
     },
+    "signupRetention": {
+      "title": "Accounts without an application",
+      "description": "Automatically delete accounts that families created online and that stay without an application.",
+      "daysLabel": "Delay before deletion (days)",
+      "daysHint": "Leave empty to never delete automatically.",
+      "daysPlaceholder": "Never",
+      "invalid": "Enter a whole number of days between {min} and {max}, or leave it empty.",
+      "ruleWho": "Only accounts that families created themselves on the sign-up page, and that have no application at all, are affected.",
+      "ruleKept": "Accounts created by the school, disabled accounts, and accounts with an application in the trash are never deleted automatically.",
+      "ruleClock": "The delay runs from the account's creation. It starts over when you change this setting or reopen a campaign, and when the account is edited or loses its last application. Nothing is deleted while no campaign is open.",
+      "ruleNotice": "The family sees the deadline in their space. Deletion is permanent; they can create a new account at any time.",
+      "jobMissing": "The daily task that performs the deletions is not enabled on the server yet: no account will be deleted for now.",
+      "campaignClosed": "No admission campaign is open: the countdown is paused until the next one opens."
+    },
     "parentFields": {
       "title": "Parent fields",
       "description": "Define categories and custom fields for the parent profile. They appear in the inscription form and on the parent record."
@@ -665,6 +679,9 @@
     "childTitle": "{firstName} {lastName}",
     "viewChild": "View details",
     "noChildren": "No children linked to your account. Contact the school.",
+    "signupDeadlineTitle": "Start an application before {date}",
+    "signupDeadlinePassedTitle": "Start an application now",
+    "signupDeadlineBody": "An account left without an application is deleted automatically. You can always create a new one later.",
     "tabAttendance": "Attendance (30d)",
     "tabDiscipline": "Discipline",
     "tabInvoices": "Invoices",
@@ -1410,6 +1427,9 @@
     "noDossierShowMax": "Show the {max} most recent",
     "noDossierDeleted": "{count, plural, one {1 deleted application} other {# deleted applications}}",
     "noDossierShowLess": "Show fewer",
+    "noDossierAutoDeleteHint": "{count, plural, one {Automatic deletion after # day without an application: the date is shown on each account it applies to.} other {Automatic deletion after # days without an application: the date is shown on each account it applies to.}}",
+    "noDossierAutoDeleteOn": "Automatic deletion from {date}",
+    "noDossierAutoDeleteDue": "Automatic deletion at the next daily run",
     "signUpEmailStaffDomain": "This address belongs to school staff. Please sign up with a personal e-mail address.",
     "signUpErrorUnknownTenant": "School not found. Please use the sign-up link provided by the school.",
     "signUpTooMany": "Too many attempts from your connection. Please try again in an hour.",

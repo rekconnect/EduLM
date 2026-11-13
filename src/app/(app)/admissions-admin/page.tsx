@@ -15,6 +15,7 @@ import { db } from "@/lib/db";
 import { displayName } from "@/lib/names";
 import { hasModule, requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
+import { getSignupDeadlines } from "@/lib/signup-retention";
 import { AppStatusBadge } from "@/app/(app)/parent/applications/_status-badge";
 import {
   PENDING_WITHOUT_DOSSIER_WHERE,
@@ -299,6 +300,20 @@ export default async function AdmissionsAdminListPage({
       ]);
     const unverifiedSubmitterIds = new Set(unverifiedSubmitters.map((u) => u.id));
 
+    // Automatic purge (Settings → Formulaires). When the school set a delay
+    // and a campaign is open, each account the rule applies to (registered by
+    // itself, no dossier at all) has a date from which it is deleted — shown
+    // on its row. Accounts the rule spares simply have no date.
+    const renderedAt = new Date();
+    const { state: retention, deadlines: signupDeadlines } =
+      showNoDossier && noDossierAccounts.length > 0
+        ? await getSignupDeadlines(
+            tenantId,
+            noDossierAccounts.map((a) => a.id),
+            renderedAt,
+          )
+        : { state: { status: "off" as const }, deadlines: new Map<string, Date>() };
+
     const newFamilyApps: AdminApp[] = [];
     const existingFamilyApps: AdminApp[] = [];
     const typeCounts: Record<AppType, number> = {
@@ -480,6 +495,11 @@ export default async function AdmissionsAdminListPage({
               total={noDossierTotal}
               expanded={accountsExpanded}
               canOpenParents={canOpenParents}
+              autoDeleteDays={
+                retention.status === "active" ? retention.window.days : null
+              }
+              deadlines={signupDeadlines}
+              renderedAt={renderedAt}
               expandHref={hrefWith(BASE, { ...preserve, accounts: "all" })}
               collapseHref={hrefWith(BASE, { ...preserve, accounts: undefined })}
               t={t}
@@ -750,6 +770,9 @@ function NoDossierAccounts({
   total,
   expanded,
   canOpenParents,
+  autoDeleteDays,
+  deadlines,
+  renderedAt,
   expandHref,
   collapseHref,
   t,
@@ -759,6 +782,11 @@ function NoDossierAccounts({
   total: number;
   expanded: boolean;
   canOpenParents: boolean;
+  /** Delay of the automatic purge, or null when it is off or suspended. */
+  autoDeleteDays: number | null;
+  /** Deletion date per account id — only for accounts the purge applies to. */
+  deadlines: Map<string, Date>;
+  renderedAt: Date;
   expandHref: string;
   collapseHref: string;
   t: Translator;
@@ -784,6 +812,9 @@ function NoDossierAccounts({
           </h2>
           <p className="mt-0.5 text-xs text-[color:var(--color-foreground-muted)]">
             {t("groupNoDossierHint")}
+            {autoDeleteDays !== null ? (
+              <> {t("noDossierAutoDeleteHint", { count: autoDeleteDays })}</>
+            ) : null}
           </p>
         </div>
         {canOpenParents ? (
@@ -807,6 +838,7 @@ function NoDossierAccounts({
         <tbody>
           {accounts.map((a) => {
             const label = displayName(a) || a.email;
+            const deadline = deadlines.get(a.id);
             return (
               <TR key={a.id}>
                 <TD>
@@ -844,6 +876,15 @@ function NoDossierAccounts({
                 </TD>
                 <TD className="tabular-nums text-[color:var(--color-foreground-muted)]">
                   {a.createdAt.toISOString().slice(0, 10)}
+                  {deadline ? (
+                    <div className="mt-0.5 text-xs text-[color:var(--color-warning-soft-fg)]">
+                      {deadline <= renderedAt
+                        ? t("noDossierAutoDeleteDue")
+                        : t("noDossierAutoDeleteOn", {
+                            date: deadline.toISOString().slice(0, 10),
+                          })}
+                    </div>
+                  ) : null}
                 </TD>
               </TR>
             );

@@ -129,6 +129,20 @@
       "inscription": "Nouvelle inscription",
       "renewal": "Ré-inscription"
     },
+    "signupRetention": {
+      "title": "Comptes sans dossier",
+      "description": "Supprimer automatiquement les comptes que des familles ont créés en ligne et qui restent sans dossier.",
+      "daysLabel": "Délai avant suppression (jours)",
+      "daysHint": "Laissez vide pour ne jamais supprimer automatiquement.",
+      "daysPlaceholder": "Jamais",
+      "invalid": "Saisissez un nombre entier de jours entre {min} et {max}, ou laissez vide.",
+      "ruleWho": "Seuls sont concernés les comptes créés par les familles elles-mêmes sur la page d'inscription, et qui n'ont aucun dossier.",
+      "ruleKept": "Les comptes créés par l'école, les comptes désactivés et ceux dont un dossier se trouve dans la corbeille ne sont jamais supprimés automatiquement.",
+      "ruleClock": "Le délai court à partir de la création du compte. Il repart de zéro quand vous modifiez ce réglage ou rouvrez une campagne, et quand le compte est modifié ou perd son dernier dossier. Rien n'est supprimé tant qu'aucune campagne n'est ouverte.",
+      "ruleNotice": "La famille voit la date limite dans son espace. La suppression est définitive ; elle peut créer un nouveau compte à tout moment.",
+      "jobMissing": "La tâche quotidienne qui effectue les suppressions n'est pas encore activée sur le serveur : aucun compte ne sera supprimé pour l'instant.",
+      "campaignClosed": "Aucune campagne d'inscription n'est ouverte : le décompte est suspendu jusqu'à la prochaine ouverture."
+    },
     "parentFields": {
       "title": "Champs des parents",
       "description": "Définissez les catégories et les champs personnalisés du profil parent. Ils apparaissent dans le formulaire d'inscription puis sur la fiche du parent."
@@ -665,6 +679,9 @@
     "childTitle": "{firstName} {lastName}",
     "viewChild": "Voir le détail",
     "noChildren": "Aucun enfant lié à votre compte. Contactez l'établissement.",
+    "signupDeadlineTitle": "Commencez un dossier d'inscription avant le {date}",
+    "signupDeadlinePassedTitle": "Commencez un dossier d'inscription dès maintenant",
+    "signupDeadlineBody": "Un compte resté sans dossier est supprimé automatiquement. Vous pourrez toujours en créer un nouveau par la suite.",
     "tabAttendance": "Présences (30j)",
     "tabDiscipline": "Discipline",
     "tabInvoices": "Factures",
@@ -1410,6 +1427,9 @@
     "noDossierShowMax": "Afficher les {max} plus récents",
     "noDossierDeleted": "{count, plural, one {1 dossier supprimé} other {# dossiers supprimés}}",
     "noDossierShowLess": "Réduire",
+    "noDossierAutoDeleteHint": "{count, plural, one {Suppression automatique après # jour sans dossier : la date figure sur chaque compte concerné.} other {Suppression automatique après # jours sans dossier : la date figure sur chaque compte concerné.}}",
+    "noDossierAutoDeleteOn": "Suppression automatique à partir du {date}",
+    "noDossierAutoDeleteDue": "Suppression automatique au prochain passage quotidien",
     "signUpEmailStaffDomain": "Cette adresse appartient au personnel de l'école. Inscrivez-vous avec une adresse personnelle.",
     "signUpErrorUnknownTenant": "Établissement introuvable. Utilisez le lien d'inscription fourni par l'école.",
     "signUpTooMany": "Trop de tentatives depuis votre connexion. Réessayez dans une heure.",

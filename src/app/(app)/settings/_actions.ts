@@ -15,6 +15,12 @@ import {
   type DossierLocale,
 } from "@/lib/inscription-fields-resolver";
 import { fieldsForTab, type DossierTab } from "@/lib/inscription-fields-registry";
+import {
+  SIGNUP_RETENTION_MAX_DAYS,
+  SIGNUP_RETENTION_MIN_DAYS,
+  getRetentionState,
+  hasOpenCampaign,
+} from "@/lib/signup-retention";
 
 export type SettingsResult =
   | { ok: true }
@@ -308,6 +314,79 @@ export async function updateFamilyCodeSettings(
     },
   });
   revalidatePath("/settings");
+  return { ok: true };
+}
+
+// ── Abandoned sign-ups: automatic purge ─────────────────────────
+
+/**
+ * The delay after which a self-registered parent account that never started a
+ * dossier is deleted (null = never), plus what the form needs to explain why
+ * nothing happens: is the daily job configured, is a campaign open.
+ * Rules: src/lib/signup-retention.ts.
+ */
+export async function loadSignupRetention(): Promise<{
+  days: number | null;
+  jobConfigured: boolean;
+  campaignOpen: boolean;
+}> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  const jobConfigured = Boolean(process.env.CRON_SECRET);
+  if (!user.tenantId) return { days: null, jobConfigured, campaignOpen: false };
+  const [state, campaignOpen] = await Promise.all([
+    getRetentionState(user.tenantId),
+    hasOpenCampaign(user.tenantId),
+  ]);
+  return {
+    days:
+      state.status === "off"
+        ? null
+        : state.status === "active"
+          ? state.window.days
+          : state.days,
+    jobConfigured,
+    campaignOpen,
+  };
+}
+
+export async function updateSignupRetention(
+  formData: FormData,
+): Promise<SettingsResult> {
+  const user = await requireRole("SCHOOL_ADMIN");
+  if (!user.tenantId) return { ok: false, error: "no-tenant" };
+
+  const raw = String(formData.get("signupRetentionDays") ?? "").trim();
+  let days: number | null = null;
+  if (raw !== "") {
+    const n = Number(raw);
+    if (
+      !Number.isInteger(n) ||
+      n < SIGNUP_RETENTION_MIN_DAYS ||
+      n > SIGNUP_RETENTION_MAX_DAYS
+    ) {
+      return { ok: false, error: "validation" };
+    }
+    days = n;
+  }
+
+  const current = await unscopedDb().tenant.findUnique({
+    where: { id: user.tenantId },
+    select: { signupRetentionDays: true },
+  });
+  // Only an actual change restarts the countdowns: every account then gets
+  // the full (new) delay from now, so switching the rule on — or shortening
+  // it — never deletes anyone by surprise. Saving the same value is a no-op.
+  if (current && current.signupRetentionDays !== days) {
+    await unscopedDb().tenant.update({
+      where: { id: user.tenantId },
+      data: {
+        signupRetentionDays: days,
+        signupRetentionSince: days === null ? null : new Date(),
+      },
+    });
+  }
+  revalidatePath("/settings");
+  revalidatePath("/admissions-admin");
   return { ok: true };
 }
 

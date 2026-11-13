@@ -121,3 +121,39 @@ export const UNVERIFIED_PENDING_PARENT_WHERE = {
   ...PENDING_PARENT_WHERE,
   emailVerified: null,
 } satisfies Prisma.UserWhereInput;
+
+/**
+ * What the automatic purge (src/lib/signup-retention.ts) is allowed to delete:
+ * a pending account that registered ITSELF through the public form and whose
+ * family never started a dossier — no dossier in ANY state, trash included.
+ *
+ *  - `emailVerified: null` is the "public form" marker: the form leaves it
+ *    null, whereas an account the school creates in the Parents console gets a
+ *    date. The school's own creations are therefore never purged.
+ *  - "no dossier at all" is stricter than PENDING_WITHOUT_DOSSIER_WHERE, which
+ *    ignores trashed dossiers: purging an account also removes its drafts, and
+ *    a dossier sitting in the trash is still restorable — that decision stays
+ *    with a human.
+ *  - a DISABLED account is spared: disabling is how the school blocks an
+ *    address, and deleting the row would free that address for a new sign-up.
+ *
+ * When verification by e-mail ships, confirmed sign-ups will carry a date and
+ * drop out of this predicate; decide then whether they need their own rule.
+ */
+export const ABANDONED_SIGNUP_WHERE = {
+  AND: [
+    PENDING_PARENT_WHERE,
+    { emailVerified: null },
+    { status: { not: "DISABLED" } },
+    { submittedApps: { none: {} } },
+    {
+      NOT: {
+        guardianProfile: {
+          family: {
+            guardians: { some: { user: { submittedApps: { some: {} } } } },
+          },
+        },
+      },
+    },
+  ],
+} satisfies Prisma.UserWhereInput;

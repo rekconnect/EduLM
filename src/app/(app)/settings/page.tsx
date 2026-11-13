@@ -4,6 +4,7 @@ import {
   Building2,
   CreditCard,
   Hash,
+  Hourglass,
   IdCard,
   MapPin,
   Network,
@@ -30,6 +31,11 @@ import { FamilyCodeForm } from "./_family-code";
 import { EstablishmentsForm, type EstablishmentRow } from "./_establishments";
 import { FieldsEditorTabs } from "./_fields-editor-tabs";
 import { DossierStateDefaultsForm } from "./_dossier-state-defaults";
+import { SignupRetentionForm } from "./_signup-retention";
+import {
+  SIGNUP_RETENTION_MAX_DAYS,
+  SIGNUP_RETENTION_MIN_DAYS,
+} from "@/lib/signup-retention";
 import {
   listEstablishments,
   loadEntityFieldsConfig,
@@ -37,6 +43,7 @@ import {
   loadStudentCreateConfig,
   loadDossierStateDefaults,
   loadInscriptionRegistry,
+  loadSignupRetention,
   loadTenantSettings,
 } from "./_actions";
 
@@ -119,6 +126,7 @@ export default async function SettingsPage({
     studentCreateConfig,
     dossierStateDefaults,
     inscriptionRegistry,
+    signupRetention,
   ] = await Promise.all([
     needsTenant ? loadTenantSettings() : Promise.resolve(null),
     needsEstablishments
@@ -142,6 +150,7 @@ export default async function SettingsPage({
           config: { version: 1 as const, fields: {} },
           locale: "fr" as const,
         }),
+    needsParentCreate ? loadSignupRetention() : Promise.resolve(null),
   ]);
 
   const visibleCategories: Category[] = isAdmin ? [...CATEGORIES] : ["appearance"];
@@ -317,6 +326,19 @@ export default async function SettingsPage({
               >
                 <DossierStateDefaultsForm initial={dossierStateDefaults} />
               </SettingsSection>
+              {signupRetention ? (
+                <SettingsSection
+                  icon={Hourglass}
+                  title={t("signupRetention.title")}
+                  description={t("signupRetention.description")}
+                >
+                  <SignupRetentionForm
+                    initial={signupRetention}
+                    minDays={SIGNUP_RETENTION_MIN_DAYS}
+                    maxDays={SIGNUP_RETENTION_MAX_DAYS}
+                  />
+                </SettingsSection>
+              ) : null}
             </>
           ) : null}
 

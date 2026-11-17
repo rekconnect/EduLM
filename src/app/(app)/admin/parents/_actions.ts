@@ -19,10 +19,6 @@ import { ensureFamilyForGuardian } from "@/lib/family";
 import { hardDeleteParentAccounts } from "@/lib/parent-hard-delete";
 import { restartSignupCountdownFor } from "@/lib/signup-retention";
 import { joinName } from "@/lib/names";
-import {
-  parseEntityFieldsConfig,
-  type EntityFieldsConfig,
-} from "@/lib/entity-fields";
 import { unscopedDb } from "@/lib/db";
 
 const LOCALES = ["fr", "en", "ar"] as const;
@@ -102,6 +98,7 @@ export async function updateParentIdentity(
   const persistedPassport =
     lebaneseValue === true ? parsed.data.passportLebanese || null : null;
 
+  let notFound = false;
   await runWithTenant({ tenantId, slug: null }, async () => {
     // Same rule as every other PARENT-targeting write: PARENT accounts only,
     // and never a hat-holder for non-admins (its Guardian row is staff identity).
@@ -109,7 +106,10 @@ export async function updateParentIdentity(
       where: { id: parentId, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
       select: { id: true },
     });
-    if (!target) return;
+    if (!target) {
+      notFound = true;
+      return;
+    }
     // Guardian is the canonical store — admin can set identity here
     // even when the parent has no application yet. Upsert (create if
     // missing) so new parents work as expected.
@@ -149,6 +149,8 @@ export async function updateParentIdentity(
     });
   });
 
+  // Nothing was written: say so instead of confirming a save.
+  if (notFound) return { formError: "not-found" };
   revalidatePath(`/admin/parents/${parentId}`);
   return { ok: true };
 }
@@ -532,61 +534,6 @@ export async function unlinkGuardianFromStudent(studentId: string, parentUserId:
 }
 
 // ─── Custom answers (Round 6) ──────────────────────────────────
-
-/**
- * Update the parent's tenant-defined custom field answers. The admin form
- * sends every visible field id as a `f-<id>` form entry; we collect those
- * and rebuild the answers JSON, then persist on User.customAnswers.
- *
- * Hidden-by-showIf fields aren't sent at all (the renderer skips them) and
- * we deliberately don't try to preserve previously-stored answers for fields
- * the admin has since removed — that data is orphan and going away.
- */
-export async function updateParentCustomAnswers(
-  parentUserId: string,
-  formData: FormData,
-): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await requireModuleAccess("eleves", "write");
-  const tenantId = user.tenantId;
-  if (!tenantId) return { ok: false, error: "no-tenant" };
-
-  // Load the tenant's config so we know which field ids are valid.
-  const tenant = await unscopedDb().tenant.findUnique({
-    where: { id: tenantId },
-    select: { parentFieldsConfig: true },
-  });
-  const config: EntityFieldsConfig = parseEntityFieldsConfig(
-    tenant?.parentFieldsConfig,
-  );
-  const validIds = new Set(config.fields.map((f) => f.id));
-
-  const answers: Record<string, string> = {};
-  for (const [k, v] of formData.entries()) {
-    if (!k.startsWith("f-")) continue;
-    const fieldId = k.slice(2);
-    if (!validIds.has(fieldId)) continue;
-    const value = String(v).trim();
-    if (value.length === 0) continue;
-    if (value.length > 2000) continue; // hard cap
-    answers[fieldId] = value;
-  }
-
-  const ok = await runWithTenant({ tenantId, slug: null }, async () => {
-    const parent = await db.user.findFirst({
-      where: { id: parentUserId, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
-      select: { id: true },
-    });
-    if (!parent) return false;
-    await db.user.update({
-      where: { id: parentUserId },
-      data: { customAnswers: answers },
-    });
-    return true;
-  });
-  if (!ok) return { ok: false, error: "not-found" };
-  revalidatePath(`/admin/parents/${parentUserId}`);
-  return { ok: true };
-}
 
 // ── Archive / soft-delete / restore (admin row actions) ─────
 // Same three-state lifecycle as admissions:

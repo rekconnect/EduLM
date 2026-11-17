@@ -164,6 +164,9 @@ export function FieldsRenderer({
   editableOnlyCategoryId,
   onEditField,
   onEditCategory,
+  hideCategoryHeadings = false,
+  columns = 1,
+  keepUnlistedValues = false,
 }: {
   config: EntityFieldsConfig;
   answers: FieldAnswers;
@@ -199,6 +202,24 @@ export function FieldsRenderer({
    * edit affordance and empty categories still render (so they can be managed).
    */
   onEditCategory?: (categoryId: string) => void;
+  /**
+   * Drop the category heading above each section. For surfaces that already
+   * name the category themselves (e.g. one category per tab).
+   */
+  hideCategoryHeadings?: boolean;
+  /**
+   * 2 lays the fields out on a two-column grid from the `sm` breakpoint up;
+   * wide inputs (long text, repeater, compound pickers…) span both columns.
+   * Defaults to the single stacked column every existing form uses.
+   */
+  columns?: 1 | 2;
+  /**
+   * When a dropdown's stored value is not among its options (imported data
+   * spelled differently, an option removed since), still offer that value so
+   * it is DISPLAYED instead of the dropdown looking empty. Off by default:
+   * parent-facing forms keep their current behaviour.
+   */
+  keepUnlistedValues?: boolean;
 }) {
   const grouped = fieldsByCategory(config);
   const sortedCategories = [...config.categories]
@@ -220,27 +241,33 @@ export function FieldsRenderer({
         if (fields.length === 0 && !onEditCategory) return null;
         return (
           <section key={cat.id} className="space-y-3">
-            <div className="group/cat flex items-center gap-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
-                {cat.name}
-              </h3>
-              {onEditCategory ? (
-                <button
-                  type="button"
-                  onClick={() => onEditCategory(cat.id)}
-                  className="inline-flex items-center gap-1 rounded border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] px-1.5 py-0.5 text-[10px] font-medium text-[color:var(--color-foreground-muted)] opacity-0 transition-opacity duration-150 ease-out group-hover/cat:opacity-100 hover:text-[color:var(--color-brand-600)]"
-                >
-                  <Pencil className="size-3" aria-hidden />
-                  Section
-                </button>
-              ) : null}
-            </div>
+            {hideCategoryHeadings ? null : (
+              <div className="group/cat flex items-center gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--color-foreground-subtle)]">
+                  {cat.name}
+                </h3>
+                {onEditCategory ? (
+                  <button
+                    type="button"
+                    onClick={() => onEditCategory(cat.id)}
+                    className="inline-flex items-center gap-1 rounded border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-raised)] px-1.5 py-0.5 text-[10px] font-medium text-[color:var(--color-foreground-muted)] opacity-0 transition-opacity duration-150 ease-out group-hover/cat:opacity-100 hover:text-[color:var(--color-brand-600)]"
+                  >
+                    <Pencil className="size-3" aria-hidden />
+                    Section
+                  </button>
+                ) : null}
+              </div>
+            )}
             {fields.length === 0 && onEditCategory ? (
               <p className="text-xs italic text-[color:var(--color-foreground-subtle)]">
                 Section vide
               </p>
             ) : null}
-            <div className="space-y-4">
+            <div
+              className={
+                columns === 2 ? "grid gap-4 sm:grid-cols-2" : "space-y-4"
+              }
+            >
               {fields.map((f) =>
                 onEditField ? (
                   <div key={f.id} className="group/edit relative">
@@ -261,8 +288,29 @@ export function FieldsRenderer({
                         allAnswers={answers}
                         disabled={disabled || (renewal && f.renewalPrefill === "locked") || (!!editableOnlyCategoryId && f.categoryId !== editableOnlyCategoryId)}
                         unlockBound={unlockBound}
+                        keepUnlisted={keepUnlistedValues}
                       />
                     </div>
+                  </div>
+                ) : columns === 2 ? (
+                  <div
+                    key={f.id}
+                    className={
+                      WIDE_FIELD_TYPES.has(f.type)
+                        ? "min-w-0 sm:col-span-2"
+                        : "min-w-0"
+                    }
+                  >
+                    <FieldInput
+                      field={f}
+                      value={answers[f.id] ?? ""}
+                      onChange={(v) => onChange(f.id, v)}
+                      extras={extras}
+                      allAnswers={answers}
+                      disabled={disabled || (renewal && f.renewalPrefill === "locked") || (!!editableOnlyCategoryId && f.categoryId !== editableOnlyCategoryId)}
+                      unlockBound={unlockBound}
+                      keepUnlisted={keepUnlistedValues}
+                    />
                   </div>
                 ) : (
                   <FieldInput
@@ -274,6 +322,7 @@ export function FieldsRenderer({
                     allAnswers={answers}
                     disabled={disabled || (renewal && f.renewalPrefill === "locked") || (!!editableOnlyCategoryId && f.categoryId !== editableOnlyCategoryId)}
                     unlockBound={unlockBound}
+                    keepUnlisted={keepUnlistedValues}
                   />
                 ),
               )}
@@ -285,6 +334,33 @@ export function FieldsRenderer({
   );
 }
 
+/** Field types whose input needs the full row on a two-column layout. */
+const WIDE_FIELD_TYPES: ReadonlySet<string> = new Set([
+  "long_text",
+  "multi_select",
+  "repeater",
+  "file",
+  "establishment_with_niveau",
+  "lebanon_kaza_with_town",
+]);
+
+/**
+ * Extra <option> carrying a stored value the dropdown does not list, so the
+ * value is shown (and kept) rather than the select silently looking empty.
+ */
+function unlistedOption(
+  enabled: boolean,
+  value: string,
+  listed: readonly string[],
+): React.ReactNode {
+  if (!enabled || !value || listed.includes(value)) return null;
+  return (
+    <option key="__unlisted" value={value}>
+      {value}
+    </option>
+  );
+}
+
 function FieldInput({
   field,
   value,
@@ -293,6 +369,7 @@ function FieldInput({
   allAnswers,
   disabled,
   unlockBound = false,
+  keepUnlisted = false,
 }: {
   field: FieldDef;
   value: string;
@@ -302,6 +379,8 @@ function FieldInput({
   allAnswers: FieldAnswers;
   disabled: boolean;
   unlockBound?: boolean;
+  /** See FieldsRenderer `keepUnlistedValues`. */
+  keepUnlisted?: boolean;
 }) {
   // Fields bound to a canonical column (dossier identity, Guardian, or
   // Family) are read-only on the fiche — the canonical edit happens on the
@@ -352,6 +431,14 @@ function FieldInput({
               </option>
             );
           })}
+          {unlistedOption(
+            keepUnlisted,
+            value,
+            opts.map((o) => {
+              const sep = o.indexOf("|");
+              return sep >= 0 ? o.slice(0, sep) : o;
+            }),
+          )}
         </Select>
       );
       break;
@@ -379,6 +466,7 @@ function FieldInput({
               {o}
             </option>
           ))}
+          {unlistedOption(keepUnlisted, value, opts)}
         </Select>
       );
       break;
@@ -396,6 +484,11 @@ function FieldInput({
               {est.name}
             </option>
           ))}
+          {unlistedOption(
+            keepUnlisted,
+            value,
+            opts.map((est) => est.name),
+          )}
         </Select>
       );
       break;
@@ -412,6 +505,7 @@ function FieldInput({
           onChange={onChange}
           establishments={extras?.establishments ?? []}
           disabled={effectiveDisabled}
+          keepUnlisted={keepUnlisted}
         />
       );
     }
@@ -424,6 +518,7 @@ function FieldInput({
           value={value}
           onChange={onChange}
           disabled={effectiveDisabled}
+          keepUnlisted={keepUnlisted}
         />
       );
     }
@@ -448,6 +543,7 @@ function FieldInput({
               {tw}
             </option>
           ))}
+          {unlistedOption(keepUnlisted, value, opts)}
         </Select>
       );
       break;
@@ -478,6 +574,7 @@ function FieldInput({
               {lv}
             </option>
           ))}
+          {unlistedOption(keepUnlisted, value, opts)}
         </Select>
       );
       break;
@@ -901,12 +998,15 @@ function EstablishmentNiveauField({
   onChange,
   establishments,
   disabled,
+  keepUnlisted = false,
 }: {
   field: FieldDef;
   value: string;
   onChange: (v: string) => void;
   establishments: Array<{ id: string; name: string; levels?: string[] }>;
   disabled: boolean;
+  /** Offer a stored half that is no longer in the lists (see FieldsRenderer). */
+  keepUnlisted?: boolean;
 }) {
   // Parse the stored "X / Y" back into its parts. Tolerate missing second
   // half (admin may have only picked the establishment so far).
@@ -942,7 +1042,10 @@ function EstablishmentNiveauField({
           value={currentEstablishment}
           onChange={(e) => setEstablishment(e.target.value)}
           required={field.required}
-          disabled={disabled || establishments.length === 0}
+          disabled={
+            disabled ||
+            (establishments.length === 0 && !(keepUnlisted && currentEstablishment))
+          }
         >
           <option value="">—</option>
           {establishments.map((est) => (
@@ -950,6 +1053,11 @@ function EstablishmentNiveauField({
               {est.name}
             </option>
           ))}
+          {unlistedOption(
+            keepUnlisted,
+            currentEstablishment,
+            establishments.map((est) => est.name),
+          )}
         </Select>
         <Select
           id={`f-${field.id}-niveau`}
@@ -957,7 +1065,11 @@ function EstablishmentNiveauField({
           value={currentNiveau}
           onChange={(e) => setNiveau(e.target.value)}
           required={field.required}
-          disabled={disabled || !currentEstablishment || niveauOptions.length === 0}
+          disabled={
+            disabled ||
+            !currentEstablishment ||
+            (niveauOptions.length === 0 && !(keepUnlisted && currentNiveau))
+          }
         >
           <option value="">—</option>
           {niveauOptions.map((lv) => (
@@ -965,6 +1077,7 @@ function EstablishmentNiveauField({
               {lv}
             </option>
           ))}
+          {unlistedOption(keepUnlisted, currentNiveau, niveauOptions)}
         </Select>
       </FormRow>
       {/* Hidden field so the form's serializer captures the combined value
@@ -984,11 +1097,14 @@ function KazaTownField({
   value,
   onChange,
   disabled,
+  keepUnlisted = false,
 }: {
   field: FieldDef;
   value: string;
   onChange: (v: string) => void;
   disabled: boolean;
+  /** Offer a stored half that is no longer in the lists (see FieldsRenderer). */
+  keepUnlisted?: boolean;
 }) {
   const sepIdx = value.indexOf(ESTABLISHMENT_NIVEAU_SEPARATOR);
   const currentKaza = sepIdx >= 0 ? value.slice(0, sepIdx) : value;
@@ -1027,6 +1143,7 @@ function KazaTownField({
               {k}
             </option>
           ))}
+          {unlistedOption(keepUnlisted, currentKaza, LEBANON_REGIONS_FR)}
         </Select>
         <Select
           id={`f-${field.id}-town`}
@@ -1034,7 +1151,11 @@ function KazaTownField({
           value={currentTown}
           onChange={(e) => setTown(e.target.value)}
           required={field.required}
-          disabled={disabled || !currentKaza || townOptions.length === 0}
+          disabled={
+            disabled ||
+            !currentKaza ||
+            (townOptions.length === 0 && !(keepUnlisted && currentTown))
+          }
         >
           <option value="">—</option>
           {townOptions.map((tw) => (
@@ -1042,6 +1163,7 @@ function KazaTownField({
               {tw}
             </option>
           ))}
+          {unlistedOption(keepUnlisted, currentTown, townOptions)}
         </Select>
       </FormRow>
       <input type="hidden" name={`f-${field.id}`} value={value} />

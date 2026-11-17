@@ -597,6 +597,52 @@ export function evaluateShowIf(
 }
 
 /**
+ * Name of the parent-field category that holds the HOUSEHOLD address. Its
+ * values belong to the family, not to one responsable: the admin fiche and
+ * the parent edit page show and save them once per family.
+ */
+export const HOUSEHOLD_CATEGORY_NAME = "Adresse";
+
+/** True for a category that holds the household's shared values. */
+export function isHouseholdCategory(category: Pick<FieldCategory, "name">): boolean {
+  return category.name === HOUSEHOLD_CATEGORY_NAME;
+}
+
+/**
+ * The household fields that have no column of their own (building, floor,
+ * caza… — everything in the household category that is not bound to a User,
+ * Guardian or Family column). They are stored in each responsable's
+ * `customAnswers`, so every guardian of a family carries a copy that has to be
+ * kept identical.
+ */
+export function householdAnswerFields(config: EntityFieldsConfig): FieldDef[] {
+  const categoryIds = new Set(
+    config.categories.filter(isHouseholdCategory).map((c) => c.id),
+  );
+  return config.fields.filter(
+    (f) =>
+      categoryIds.has(f.categoryId) &&
+      !f.userBoundTo &&
+      !f.guardianBoundTo &&
+      !f.familyBoundTo,
+  );
+}
+
+/**
+ * A stored answer of `field`. Answers written by the parent-facing forms sit
+ * under the field id, those written by the import under the field key; the
+ * two only differ for fields created in Settings. The id wins: it is the one
+ * the inscription forms keep up to date.
+ */
+export function storedAnswer(
+  answers: Record<string, unknown> | null | undefined,
+  field: Pick<FieldDef, "id" | "key">,
+): string {
+  const raw = answers?.[field.id] ?? answers?.[field.key];
+  return typeof raw === "string" ? raw : raw == null ? "" : String(raw);
+}
+
+/**
  * Live "inherit from the father" fallback for DISPLAY. For each student field
  * with `inheritParentKey`, when the student has no value of its own, surface the
  * father's current answer for that parent key. Unlike the acceptance-time seed

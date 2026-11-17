@@ -7,10 +7,6 @@ import { db, unscopedDb } from "@/lib/db";
 import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { restartSignupCountdownFor } from "@/lib/signup-retention";
-import {
-  parseEntityFieldsConfig,
-  type EntityFieldsConfig,
-} from "@/lib/entity-fields";
 import { parseStudentCreateConfig } from "@/lib/student-create-config";
 
 const STATUSES = ["PROSPECT", "ENROLLED", "WITHDRAWN", "GRADUATED"] as const;
@@ -799,45 +795,4 @@ export async function saveStudentMedicalRecord(
     revalidatePath("/infirmerie");
     return { ok: true };
   });
-}
-
-// ─── Custom answers (Round 6) ──────────────────────────────────
-
-/** See updateParentCustomAnswers for the storage contract — same shape. */
-export async function updateStudentCustomAnswers(
-  studentId: string,
-  formData: FormData,
-): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await requireModuleAccess("eleves", "write");
-  const tenantId = user.tenantId;
-  if (!tenantId) return { ok: false, error: "no-tenant" };
-
-  const tenant = await unscopedDb().tenant.findUnique({
-    where: { id: tenantId },
-    select: { studentFieldsConfig: true },
-  });
-  const config: EntityFieldsConfig = parseEntityFieldsConfig(
-    tenant?.studentFieldsConfig,
-  );
-  const validIds = new Set(config.fields.map((f) => f.id));
-
-  const answers: Record<string, string> = {};
-  for (const [k, v] of formData.entries()) {
-    if (!k.startsWith("f-")) continue;
-    const fieldId = k.slice(2);
-    if (!validIds.has(fieldId)) continue;
-    const value = String(v).trim();
-    if (value.length === 0) continue;
-    if (value.length > 2000) continue;
-    answers[fieldId] = value;
-  }
-
-  await runWithTenant({ tenantId, slug: null }, async () => {
-    await db.student.update({
-      where: { id: studentId },
-      data: { customAnswers: answers },
-    });
-  });
-  revalidatePath(`/students/${studentId}`);
-  return { ok: true };
 }

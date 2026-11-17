@@ -1,6 +1,7 @@
 import { Users, Home, Baby, History } from "lucide-react";
 import {
   applyInheritedValues,
+  HOUSEHOLD_CATEGORY_NAME,
   type EntityFieldsConfig,
   type FieldDef,
 } from "@/lib/entity-fields";
@@ -107,7 +108,7 @@ export function FamilyFiche({
   const pInfo = fieldsIn(parentConfig, "Info générale");
   const pContact = fieldsIn(parentConfig, "Contact");
   const pPro = fieldsIn(parentConfig, "Professionnel");
-  const pAdr = fieldsIn(parentConfig, "Adresse");
+  const pAdr = fieldsIn(parentConfig, HOUSEHOLD_CATEGORY_NAME);
   const pAr = fieldsIn(parentConfig, "Info Arabe");
 
   const sInfo = fieldsIn(studentConfig, "Info générale").filter((f) => !f.dossierBoundTo);

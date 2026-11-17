@@ -1,7 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { ArrowRight, Pencil, ArrowLeft, User, Users, Home, IdCard, Phone, Briefcase, Baby } from "lucide-react";
+import {
+  ArrowRight,
+  Pencil,
+  ArrowLeft,
+  User,
+  Users,
+  Home,
+  IdCard,
+  Phone,
+  Briefcase,
+  Baby,
+  ClipboardList,
+  KeyRound,
+  Languages,
+} from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -10,8 +24,15 @@ import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { cn } from "@/lib/utils";
 import { splitLegacyName } from "@/lib/names";
+import {
+  isHouseholdCategory,
+  storedAnswer,
+  type FieldDef,
+} from "@/lib/entity-fields";
+import { isStaffDomainEmail, staffDomainsFor } from "@/lib/staff-identity";
+import { EditTabs, type EditTab } from "@/components/fiche/edit-tabs";
 import { listEstablishments, loadEntityFieldsConfig } from "../../../settings/_actions";
-import { ParentCustomAnswersForm } from "./_custom-answers";
+import { ParentCategoryForm } from "./_category-form";
 import {
   toggleParentStatus,
   unlinkGuardianFromStudent,
@@ -152,6 +173,7 @@ export default async function ParentDetailPage({
                             lastName: true,
                             name: true,
                             email: true,
+                            staffRole: true,
                             customAnswers: true,
                           },
                         },
@@ -208,10 +230,20 @@ export default async function ParentDetailPage({
         }),
       ]);
     if (!parent || parent.role !== "PARENT") notFound();
-    // Double profil: a staff hat makes this a staff identity — its login
-    // (password, status) is managed by SCHOOL_ADMIN only.
+    // Double profil: a parent wearing a staff hat, or on a staff e-mail
+    // domain, is a staff identity — managed by SCHOOL_ADMIN only. Same rule
+    // as staffIdentityGuard, which every write of this page goes through, so
+    // the page never offers a form whose save would be refused.
     const hat = await db.user.findFirst({ where: { id: parent.id }, select: { staffRole: true } });
-    const staffLocked = !!hat?.staffRole && user.role !== "SCHOOL_ADMIN";
+    const staffDomains =
+      user.role === "SCHOOL_ADMIN" ? [] : await staffDomainsFor(tenantId);
+    const isLockedIdentity = (u: { staffRole: unknown; email: string }) =>
+      user.role !== "SCHOOL_ADMIN" &&
+      (u.staffRole != null || isStaffDomainEmail(u.email, staffDomains));
+    const staffLocked = isLockedIdentity({
+      staffRole: hat?.staffRole,
+      email: parent.email,
+    });
 
     // Levels feed the cascading establishment_with_niveau renderer in edit mode.
     const establishmentsForRenderer = establishmentsRaw
@@ -347,6 +379,17 @@ export default async function ParentDetailPage({
       }
       return out;
     };
+    // The fiche reads answers by field KEY. Where a field's id differs from
+    // its key (fields created in Settings) the id slot is the one the
+    // inscription forms keep current: surface it under the key too.
+    const byKey = (answers: Record<string, string>): Record<string, string> => {
+      const out = { ...answers };
+      for (const f of parentFieldsConfig.fields) {
+        const underId = out[f.id];
+        if (f.id !== f.key && underId !== undefined) out[f.key] = underId;
+      }
+      return out;
+    };
     const relRank = (r: string) => (r === "pere" ? 0 : r === "mere" ? 1 : 2);
     const ficheGuardians: FicheGuardian[] = (fam?.guardians ?? [])
       .map((gg) => ({
@@ -362,9 +405,15 @@ export default async function ParentDetailPage({
         phone: gg.phone,
         nationality1: gg.nationality1,
         nationality2: gg.nationality2,
-        answers: toAnswers(gg.user.customAnswers),
+        answers: byKey(toAnswers(gg.user.customAnswers)),
       }))
-      .sort((a, b) => relRank(a.relation) - relRank(b.relation));
+      // Père first, then mère. The id breaks ties, so the family's address
+      // holder (the first guardian) is the same on every load.
+      .sort(
+        (a, b) =>
+          relRank(a.relation) - relRank(b.relation) ||
+          a.guardianId.localeCompare(b.guardianId),
+      );
 
     const shapeStudent = (st: {
       id: string;
@@ -441,16 +490,305 @@ export default async function ParentDetailPage({
     };
 
     // ─────────────────────────────────────────────────────────────────
-    // Edit mode — old forms, plus a "back to preview" link
+    // Edit mode — one tab per form: the account, the responsable's
+    // identity, one tab per category of the tenant's parent fields, and
+    // account access last. Every tab saves on its own.
     // ─────────────────────────────────────────────────────────────────
     if (isEditMode) {
+      const g = parent.guardianProfile;
+      const boolStr = (b: boolean | null | undefined) =>
+        b == null ? "" : b ? "yes" : "no";
+
+      // Where a tab's values are read from and saved to. The household
+      // category goes through the SAME guardian as the fiche's "Adresse du
+      // foyer" block (the first one, père first), so both screens show and
+      // change the same thing whichever parent is open.
+      type ValueSource = {
+        userId: string;
+        phone: string | null;
+        answers: Record<string, string>;
+      };
+      const self: ValueSource = {
+        userId: parent.id,
+        phone: g?.phone ?? null,
+        answers: toAnswers(parent.customAnswers),
+      };
+      const holder = ficheGuardians[0];
+      const household: ValueSource = holder
+        ? { userId: holder.userId, phone: holder.phone, answers: holder.answers }
+        : self;
+      // The household tab saves through that guardian's account: when it is
+      // a staff identity this operator may not write, show why instead of a
+      // form that cannot save.
+      const holderUser = holder
+        ? fam?.guardians.find((x) => x.userId === holder.userId)?.user
+        : undefined;
+      const householdLocked = holderUser
+        ? isLockedIdentity(holderUser)
+        : staffLocked;
+
+      // Current value of a field, in the shape the form inputs expect
+      // (yes/no for booleans). Canonical columns win over the answers JSON.
+      const valueOf = (f: FieldDef, src: ValueSource): string => {
+        switch (f.userBoundTo) {
+          case "firstName":
+            return parent.firstName ?? splitLegacyName(parent.name).firstName;
+          case "lastName":
+            return parent.lastName ?? splitLegacyName(parent.name).lastName;
+          case "name":
+            return parent.name ?? "";
+          case "email":
+            return parent.email;
+        }
+        switch (f.guardianBoundTo) {
+          case "phone":
+            return src.phone ?? "";
+          case "nationality1":
+            return g?.nationality1 ?? "";
+          case "nationality2":
+            return g?.nationality2 ?? "";
+          case "isLebanese":
+            return boolStr(g?.isLebanese);
+          case "passportLebanese":
+            return g?.passportLebanese ?? "";
+          case "relation":
+            return g?.relation ?? "";
+        }
+        switch (f.familyBoundTo) {
+          case "addressStreet":
+            return fam?.addressStreet ?? "";
+          case "addressHood":
+            return fam?.addressHood ?? "";
+          case "addressCity":
+            return fam?.addressCity ?? "";
+          case "addressCountry":
+            return fam?.addressCountry ?? "";
+          case "imageRightsSite":
+            return boolStr(fam?.imageRightsSite);
+          case "imageRightsBook":
+            return boolStr(fam?.imageRightsBook);
+          case "imageRightsSocial":
+            return boolStr(fam?.imageRightsSocial);
+          case "imageRightsRadio":
+            return boolStr(fam?.imageRightsRadio);
+        }
+        // The id slot (inscription forms, acceptance bridge) wins over the
+        // key slot (import); they only differ for fields made in Settings.
+        return storedAnswer(src.answers, f);
+      };
+
+      // Every answer of this parent, keyed by field id — read-only context
+      // so a field can depend on one that lives in another tab.
+      const contextAnswers: Record<string, string> = {};
+      for (const f of parentFieldsConfig.fields) {
+        contextAnswers[f.id] = valueOf(f, self);
+      }
+
+      // Which fields a category tab shows. Left out: what another tab owns
+      // (name and e-mail → Compte; nationalities and the other identity
+      // columns → Identité), household columns when there is no household
+      // to store them on, and "Actuel(le)", a mother-only field in Dars
+      // (same rule as the fiche).
+      const isMother = g?.relation === "mere";
+      const tabFields = (categoryId: string): FieldDef[] =>
+        parentFieldsConfig.fields
+          .filter((f) => f.categoryId === categoryId && f.active !== false)
+          .filter((f) => !f.userBoundTo)
+          .filter((f) => !f.guardianBoundTo || f.guardianBoundTo === "phone")
+          .filter((f) => !f.familyBoundTo || !!fam)
+          .filter((f) => f.key !== "actuel" || isMother)
+          .sort((a, b) => a.order - b.order);
+
+      const categoryIcon = (name: string) => {
+        const n = name.toLowerCase();
+        if (n.includes("contact")) return <Phone className="size-4" aria-hidden />;
+        if (n.includes("profession"))
+          return <Briefcase className="size-4" aria-hidden />;
+        if (n.includes("adresse") || n.includes("address"))
+          return <Home className="size-4" aria-hidden />;
+        if (n.includes("arab")) return <Languages className="size-4" aria-hidden />;
+        return <ClipboardList className="size-4" aria-hidden />;
+      };
+
+      const categoryTabs: EditTab[] = [];
+      const activeCategories = parentFieldsConfig.categories
+        .filter((c) => c.active !== false)
+        .sort((a, b) => a.order - b.order);
+      for (const cat of activeCategories) {
+        const fields = tabFields(cat.id);
+        if (fields.length === 0) continue;
+        // Same convention as the fiche (_fiche.tsx): the household category
+        // is the family's, the others are the parent's own.
+        const shared = isHouseholdCategory(cat);
+        const src = shared ? household : self;
+        // A staff identity's own tabs are left out (the notice above the
+        // tabs says why); the household tab stays whenever its holder can
+        // be written.
+        if (staffLocked && (!shared || householdLocked)) continue;
+        const initialValues: Record<string, string> = {};
+        for (const f of fields) initialValues[f.id] = valueOf(f, src);
+        categoryTabs.push({
+          id: `cat-${cat.id}`,
+          label: cat.name,
+          icon: categoryIcon(cat.name),
+          content: shared && householdLocked ? (
+            <div className="rounded-lg border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-sunken)] px-4 py-3 text-sm text-[color:var(--color-foreground-muted)]">
+              {t("householdLockedNotice")}
+            </div>
+          ) : (
+            <Card>
+              <CardHeader title={cat.name} />
+              <CardBody>
+                <ParentCategoryForm
+                  // Remount when the account saved to, or the set of fields,
+                  // changes (a relation edit in Compte can do both): the
+                  // form's values must never outlive their target.
+                  key={`${src.userId}:${fields.map((f) => f.id).join(",")}`}
+                  targetUserId={src.userId}
+                  category={cat}
+                  fields={fields}
+                  initialValues={initialValues}
+                  contextAnswers={contextAnswers}
+                  establishments={establishmentsForRenderer}
+                  // Arabic-script values: same right-to-left block as the fiche.
+                  rtl={/arab/i.test(cat.name)}
+                  note={shared && fam ? t("sharedAddressNote") : undefined}
+                />
+              </CardBody>
+            </Card>
+          ),
+        });
+      }
+
+      const statusPill = (
+        <span
+          className={cn(
+            "inline-flex rounded-full px-3 py-1 text-sm font-medium",
+            STATUS_TONE[parent.status],
+          )}
+        >
+          {t(STATUS_KEY[parent.status] ?? "statusActive")}
+        </span>
+      );
+
+      const editTabs: EditTab[] = staffLocked ? categoryTabs : [
+        {
+          id: "compte",
+          label: t("tabAccount"),
+          icon: <User className="size-4" aria-hidden />,
+          content: (
+            <Card>
+              <CardHeader
+                title={t("tabAccount")}
+                description={t("accountCardHint")}
+              />
+              <CardBody>
+                <EditParentForm
+                  action={boundUpdate}
+                  initial={{
+                    firstName:
+                      parent.firstName ?? splitLegacyName(parent.name).firstName,
+                    lastName:
+                      parent.lastName ?? splitLegacyName(parent.name).lastName,
+                    email: parent.email,
+                    relation: g?.relation ?? "",
+                    locale: parent.locale ?? "fr",
+                  }}
+                  labels={{
+                    firstName: labelForBoundProp("firstName", t("fieldFirstName")),
+                    lastName: labelForBoundProp("lastName", t("fieldLastName")),
+                    email: labelForBoundProp("email", t("fieldEmail")),
+                  }}
+                />
+              </CardBody>
+            </Card>
+          ),
+        },
+        {
+          // Lebanese, passport, nationality 1/2, mono-parental. Guardian is
+          // the canonical source; the latest application's submitter*
+          // columns are only a fallback for data older than those columns.
+          // Writes propagate to every application the parent has submitted.
+          id: "identite",
+          label: t("tabIdentity"),
+          icon: <IdCard className="size-4" aria-hidden />,
+          content: (
+            <Card>
+              <CardHeader
+                title={t("identityCardTitle")}
+                description={t("identityCardHint")}
+              />
+              <CardBody>
+                <ParentIdentityForm
+                  action={boundUpdateIdentity}
+                  hasApplications={!!latestApp}
+                  initial={{
+                    isLebanese:
+                      g?.isLebanese ?? latestApp?.submitterIsLebanese ?? null,
+                    passportLebanese:
+                      g?.passportLebanese ??
+                      latestApp?.submitterPassportLebanese ??
+                      "",
+                    nationality1:
+                      g?.nationality1 ?? latestApp?.submitterNationality ?? "",
+                    nationality2:
+                      g?.nationality2 ?? latestApp?.submitterNationality2 ?? "",
+                    monoParental:
+                      g?.monoParental ?? latestApp?.monoParental ?? false,
+                  }}
+                />
+              </CardBody>
+            </Card>
+          ),
+        },
+        ...categoryTabs,
+        {
+          id: "acces",
+          label: t("tabAccess"),
+          icon: <KeyRound className="size-4" aria-hidden />,
+          content: (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader
+                  title={t("resetPassword")}
+                  description={t("resetPasswordHint")}
+                />
+                <CardBody>
+                  <ResetPasswordButton parentId={parent.id} />
+                </CardBody>
+              </Card>
+              <Card>
+                <CardHeader
+                  title={t("accessStatusTitle")}
+                  description={t("accessStatusHint")}
+                  action={statusPill}
+                />
+                <CardBody>
+                  <form action={boundToggle}>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      variant={parent.status === "DISABLED" ? "secondary" : "danger"}
+                    >
+                      {parent.status === "DISABLED"
+                        ? t("enableAction")
+                        : t("disableAction")}
+                    </Button>
+                  </form>
+                </CardBody>
+              </Card>
+            </div>
+          ),
+        },
+      ];
+
       return (
-        <main className="mx-auto max-w-3xl space-y-6 px-6 py-10">
+        <main className="mx-auto max-w-5xl space-y-6 px-6 py-10">
           <PageHeader
             title={parent.name ?? parent.email}
             description={
               fam?.code
-                ? `${parent.email} · Code famille ${fam.code}`
+                ? t("familyCodeLine", { email: parent.email, code: fam.code })
                 : parent.email
             }
             action={
@@ -458,157 +796,30 @@ export default async function ParentDetailPage({
                 href={`/admin/parents/${id}`}
                 className="inline-flex items-center gap-1.5 text-sm text-[color:var(--color-foreground-muted)] transition-colors hover:text-[color:var(--color-foreground)] hover:underline"
               >
-                <ArrowLeft className="size-3.5" aria-hidden />
-                Retour à la fiche
+                <ArrowLeft className="size-3.5 rtl:rotate-180" aria-hidden />
+                {t("backToFiche")}
               </Link>
             }
           />
 
-          <div className="flex items-center gap-3">
-            <span
-              className={cn(
-                "inline-flex rounded-full px-3 py-1 text-sm font-medium",
-                STATUS_TONE[parent.status],
-              )}
-            >
-              {t(STATUS_KEY[parent.status] ?? "statusActive")}
-            </span>
-          </div>
-
-          <Card>
-            <CardHeader title={t("editTitle")} />
-            <CardBody>
-              <EditParentForm
-                action={boundUpdate}
-                initial={{
-                  firstName:
-                    parent.firstName ?? splitLegacyName(parent.name).firstName,
-                  lastName:
-                    parent.lastName ?? splitLegacyName(parent.name).lastName,
-                  email: parent.email,
-                  relation: parent.guardianProfile?.relation ?? "",
-                  locale: parent.locale ?? "fr",
-                }}
-                labels={{
-                  firstName: labelForBoundProp("firstName", t("fieldFirstName")),
-                  lastName: labelForBoundProp("lastName", t("fieldLastName")),
-                  email: labelForBoundProp("email", t("fieldEmail")),
-                }}
-              />
-            </CardBody>
-          </Card>
-
-          {/* Identité du responsable — Lebanese, passport, nationality 1/2,
-              mono-parental. Writes propagate to every application the
-              parent has submitted. Same fields the parent fills on the
-              dossier's Responsables identity card. */}
-          <Card>
-            <CardHeader
-              title="Identité du responsable"
-              description="Nationalité libanaise, passeport, nationalités, mono-parental"
-            />
-            <CardBody>
-              {(() => {
-                // Guardian is the canonical source. Fall back to the
-                // latest application's submitter* columns only when
-                // Guardian is blank (covers legacy data pre-Guardian-
-                // identity-columns). New parents with no application
-                // still get their identity persisted on Guardian.
-                const g = parent.guardianProfile;
-                return (
-                  <ParentIdentityForm
-                    action={boundUpdateIdentity}
-                    hasApplications={!!latestApp}
-                    initial={{
-                      isLebanese:
-                        g?.isLebanese ?? latestApp?.submitterIsLebanese ?? null,
-                      passportLebanese:
-                        g?.passportLebanese ??
-                        latestApp?.submitterPassportLebanese ??
-                        "",
-                      nationality1:
-                        g?.nationality1 ?? latestApp?.submitterNationality ?? "",
-                      nationality2:
-                        g?.nationality2 ?? latestApp?.submitterNationality2 ?? "",
-                      monoParental:
-                        g?.monoParental ?? latestApp?.monoParental ?? false,
-                    }}
-                  />
-                );
-              })()}
-            </CardBody>
-          </Card>
-
-          {/* Strip out bound fields — userBoundTo maps to User columns
-              (handled by EditParentForm), and guardianBoundTo/familyBoundTo
-              are read-only mirrors of canonical Guardian/Family columns
-              (populated by the Dars import, edited via the Identité tab).
-              Showing them here would duplicate inputs / show empty mirrors. */}
-          {(() => {
-            const filteredConfig = {
-              ...parentFieldsConfig,
-              fields: parentFieldsConfig.fields.filter(
-                (f) => !f.userBoundTo && !f.guardianBoundTo && !f.familyBoundTo,
-              ),
-            };
-            if (filteredConfig.fields.length === 0) return null;
-            return (
-              <Card>
-                <CardHeader title={t("customFieldsTitle")} />
-                <CardBody>
-                  <ParentCustomAnswersForm
-                    parentUserId={parent.id}
-                    config={filteredConfig}
-                    initialAnswers={initialAnswers}
-                    extras={{
-                      establishments: establishmentsForRenderer,
-                      user: {
-                        firstName: parent.firstName ?? null,
-                        lastName: parent.lastName ?? null,
-                        name: parent.name ?? null,
-                        email: parent.email ?? null,
-                      },
-                    }}
-                  />
-                </CardBody>
-              </Card>
-            );
-          })()}
+          <div className="flex items-center gap-3">{statusPill}</div>
 
           {staffLocked ? (
-            <div className="rounded-lg border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-sunken)] px-4 py-3 text-sm text-[color:var(--color-foreground-muted)]">
-              {t("staffAccountNotice")}
+            <div
+              role="note"
+              className="rounded-lg border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-sunken)] px-4 py-3 text-sm text-[color:var(--color-foreground-muted)]"
+            >
+              {t("staffLockedNotice")}
             </div>
-          ) : (
-          <Card>
-            <CardHeader
-              title={t("resetPassword")}
-              description={t("resetPasswordHint")}
-            />
-            <CardBody>
-              <ResetPasswordButton parentId={parent.id} />
-            </CardBody>
-          </Card>
-          )}
-
-          {!staffLocked ? (
-          <div className="flex justify-end">
-            <form action={boundToggle}>
-              <Button
-                type="submit"
-                size="sm"
-                variant={parent.status === "DISABLED" ? "secondary" : "danger"}
-              >
-                {parent.status === "DISABLED"
-                  ? t("enableAction")
-                  : t("disableAction")}
-              </Button>
-            </form>
-          </div>
           ) : null}
 
-          {/* unused vars get tree-shaken; keep for type checks */}
-          {tCommon("save")[0] === "" ? null : null}
+          <EditTabs
+            tabs={editTabs}
+            initialTab={tab}
+            ariaLabel={t("editTabsLabel")}
+            unsavedLabel={t("unsavedChanges")}
+            leaveConfirmLabel={t("unsavedLeaveConfirm")}
+          />
         </main>
       );
     }

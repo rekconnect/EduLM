@@ -1,13 +1,68 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Field, FormRow } from "@/components/ui/field";
 import { NATIONALITIES_FR } from "@/lib/lookups";
+import { useEditTab } from "@/components/fiche/edit-tabs";
 import type { ParentIdentityFormState } from "../_actions";
+
+type IdentityValues = {
+  isLebanese: boolean | null;
+  passportLebanese: string;
+  nationality1: string;
+  nationality2: string;
+  monoParental: boolean;
+};
+
+/** The passport only counts (and is only stored) for a Lebanese responsable. */
+const passportOf = (v: IdentityValues) =>
+  v.isLebanese === true ? v.passportLebanese.trim() : "";
+
+const sameIdentity = (a: IdentityValues, b: IdentityValues) =>
+  a.isLebanese === b.isLebanese &&
+  passportOf(a) === passportOf(b) &&
+  a.nationality1 === b.nationality1 &&
+  a.nationality2 === b.nationality2 &&
+  a.monoParental === b.monoParental;
+
+/**
+ * A nationality dropdown that also offers the stored value when the built-in
+ * list does not have it (imported spellings such as "Armenienne"), so the
+ * field shows what is stored instead of "—".
+ */
+function NationalitySelect({
+  id,
+  value,
+  stored,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  /** The saved value: stays on offer after another one is picked. */
+  stored: string;
+  onChange: (value: string) => void;
+}) {
+  const unlisted =
+    stored && !(NATIONALITIES_FR as readonly string[]).includes(stored)
+      ? stored
+      : null;
+  return (
+    <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">—</option>
+      {unlisted ? <option value={unlisted}>{unlisted}</option> : null}
+      {NATIONALITIES_FR.map((n) => (
+        <option key={n} value={n}>
+          {n}
+        </option>
+      ))}
+    </Select>
+  );
+}
 
 /**
  * Admin-side edit for the parent's "Identité du responsable" data
@@ -29,149 +84,142 @@ export function ParentIdentityForm({
     state: ParentIdentityFormState,
     formData: FormData,
   ) => Promise<ParentIdentityFormState>;
-  initial: {
-    isLebanese: boolean | null;
-    passportLebanese: string;
-    nationality1: string;
-    nationality2: string;
-    monoParental: boolean;
-  };
+  initial: IdentityValues;
   hasApplications?: boolean;
 }) {
-  const [state, formAction, pending] = useActionState<
-    ParentIdentityFormState,
-    FormData
-  >(action, {});
-  const [isLebanese, setIsLebanese] = useState<boolean | null>(
-    initial.isLebanese,
-  );
-  const [passportLebanese, setPassportLebanese] = useState(
-    initial.passportLebanese,
-  );
-  const [nationality1, setNationality1] = useState(initial.nationality1);
-  const [nationality2, setNationality2] = useState(initial.nationality2);
-  const [monoParental, setMonoParental] = useState(initial.monoParental);
+  const t = useTranslations("parents");
+  const { markDirty, markClean } = useEditTab();
+  // `saved` is what the server holds; `values` is what the form shows.
+  const [saved, setSaved] = useState<IdentityValues>(initial);
+  const [values, setValues] = useState<IdentityValues>(initial);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
-  // Show a toast on save success — the action returns ok=true but no
-  // redirect, so otherwise the admin has no visible confirmation.
-  if (state.ok && !pending) {
-    // Once per render: schedule a toast then reset by leaving state alone
-    // (next form interaction will reset state.ok via React's normal flow).
+  const set = (patch: Partial<IdentityValues>) =>
+    setValues((prev) => ({ ...prev, ...patch }));
+
+  const dirty = !sameIdentity(values, saved);
+  useEffect(() => {
+    if (dirty) markDirty();
+    else markClean();
+  }, [dirty, markDirty, markClean]);
+
+  // Submitted by hand rather than through `<form action>`: React resets a
+  // form after an action, which put these radios, dropdowns and the checkbox
+  // back on their page-load state while the saved values were different.
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (pending) return;
+    const sent: IdentityValues = { ...values, passportLebanese: passportOf(values) };
+    const fd = new FormData();
+    fd.set(
+      "isLebanese",
+      sent.isLebanese === true ? "yes" : sent.isLebanese === false ? "no" : "",
+    );
+    fd.set("passportLebanese", sent.passportLebanese);
+    fd.set("nationality1", sent.nationality1);
+    fd.set("nationality2", sent.nationality2);
+    fd.set("monoParental", sent.monoParental ? "yes" : "no");
+    startTransition(async () => {
+      let result: ParentIdentityFormState;
+      try {
+        result = await action({}, fd);
+      } catch {
+        result = { formError: "failed" };
+      }
+      if (result.ok) {
+        setSaved(sent);
+        setFormError(null);
+        toast.success("Identité enregistrée");
+      } else {
+        setFormError(result.formError ?? "failed");
+      }
+    });
   }
 
   return (
-    <form
-      action={(fd) => {
-        // Inject controlled values into the FormData (we manage state
-        // locally so the UI can toggle the passport field's visibility).
-        fd.set("isLebanese", isLebanese === true ? "yes" : isLebanese === false ? "no" : "");
-        fd.set(
-          "passportLebanese",
-          isLebanese === true ? passportLebanese : "",
-        );
-        fd.set("nationality1", nationality1);
-        fd.set("nationality2", nationality2);
-        fd.set("monoParental", monoParental ? "yes" : "no");
-        formAction(fd);
-        // Best-effort toast — the action's revalidation will refresh
-        // the underlying preview when admin navigates back.
-        setTimeout(() => {
-          toast.success("Identité enregistrée");
-        }, 50);
-      }}
-      className="space-y-5"
-    >
+    <form onSubmit={onSubmit} className="space-y-5">
+      {/* Locked while saving: a change made during the round trip would not
+          be part of what was sent, yet the tab would be marked as saved. */}
+      <fieldset disabled={pending} className="min-w-0 space-y-5">
+        <FormRow>
+          <Field label="Nationalité libanaise" htmlFor="isLebanese" required>
+            <div className="flex h-9 items-center gap-4">
+              <label className="inline-flex items-center gap-1.5 text-sm">
+                <input
+                  type="radio"
+                  name="isLebanese"
+                  checked={values.isLebanese === true}
+                  onChange={() => set({ isLebanese: true })}
+                />
+                Oui
+              </label>
+              <label className="inline-flex items-center gap-1.5 text-sm">
+                <input
+                  type="radio"
+                  name="isLebanese"
+                  checked={values.isLebanese === false}
+                  onChange={() => set({ isLebanese: false, passportLebanese: "" })}
+                />
+                Non
+              </label>
+            </div>
+          </Field>
+          {values.isLebanese === true ? (
+            <Field
+              label="N° passeport ou carte d'identité libanaise"
+              htmlFor="passportLebanese"
+              required
+            >
+              <Input
+                id="passportLebanese"
+                value={values.passportLebanese}
+                onChange={(e) => set({ passportLebanese: e.target.value })}
+                maxLength={40}
+              />
+            </Field>
+          ) : (
+            <div />
+          )}
+        </FormRow>
 
-      <FormRow>
-        <Field label="Nationalité libanaise" htmlFor="isLebanese" required>
-          <div className="flex h-9 items-center gap-4">
-            <label className="inline-flex items-center gap-1.5 text-sm">
-              <input
-                type="radio"
-                name="isLebanese"
-                checked={isLebanese === true}
-                onChange={() => setIsLebanese(true)}
-              />
-              Oui
-            </label>
-            <label className="inline-flex items-center gap-1.5 text-sm">
-              <input
-                type="radio"
-                name="isLebanese"
-                checked={isLebanese === false}
-                onChange={() => {
-                  setIsLebanese(false);
-                  setPassportLebanese("");
-                }}
-              />
-              Non
-            </label>
-          </div>
-        </Field>
-        {isLebanese === true ? (
-          <Field
-            label="N° passeport ou carte d'identité libanaise"
-            htmlFor="passportLebanese"
-            required
-          >
-            <Input
-              id="passportLebanese"
-              value={passportLebanese}
-              onChange={(e) => setPassportLebanese(e.target.value)}
-              maxLength={40}
+        <FormRow>
+          <Field label="Nationalité 1" htmlFor="nationality1">
+            <NationalitySelect
+              id="nationality1"
+              value={values.nationality1}
+              stored={saved.nationality1}
+              onChange={(v) => set({ nationality1: v })}
             />
           </Field>
-        ) : (
-          <div />
-        )}
-      </FormRow>
+          <Field label="Nationalité 2" htmlFor="nationality2">
+            <NationalitySelect
+              id="nationality2"
+              value={values.nationality2}
+              stored={saved.nationality2}
+              onChange={(v) => set({ nationality2: v })}
+            />
+          </Field>
+        </FormRow>
 
-      <FormRow>
-        <Field label="Nationalité 1" htmlFor="nationality1">
-          <Select
-            id="nationality1"
-            value={nationality1}
-            onChange={(e) => setNationality1(e.target.value)}
-          >
-            <option value="">—</option>
-            {NATIONALITIES_FR.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Nationalité 2" htmlFor="nationality2">
-          <Select
-            id="nationality2"
-            value={nationality2}
-            onChange={(e) => setNationality2(e.target.value)}
-          >
-            <option value="">—</option>
-            {NATIONALITIES_FR.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      </FormRow>
+        <label className="inline-flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={values.monoParental}
+            onChange={(e) => set({ monoParental: e.target.checked })}
+            className="size-4 rounded border-[color:var(--color-border-strong)]"
+          />
+          Famille monoparentale
+        </label>
+      </fieldset>
 
-      <label className="inline-flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={monoParental}
-          onChange={(e) => setMonoParental(e.target.checked)}
-          className="size-4 rounded border-[color:var(--color-border-strong)]"
-        />
-        Famille monoparentale
-      </label>
-
-      {state.formError ? (
+      {formError ? (
         <p className="text-sm text-[color:var(--color-danger)]" role="alert">
-          {state.formError === "validation"
+          {formError === "validation"
             ? "Une valeur est invalide."
-            : state.formError}
+            : formError === "not-found"
+              ? t("staffLockedNotice")
+              : t("editSaveError")}
         </p>
       ) : null}
 

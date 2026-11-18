@@ -59,10 +59,22 @@ export function ParentCategoryForm({
   const [values, setValues] = useState(initialValues);
   const [pending, startTransition] = useTransition();
 
+  // A field can join the tab after it mounted (the page re-rendered with
+  // another set of fields — "Actuel(le)" follows the relation): it has no
+  // entry in state yet and takes its stored value from the fresh props.
+  const current = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const f of fields) out[f.id] = values[f.id] ?? initialValues[f.id] ?? "";
+    return out;
+  }, [fields, values, initialValues]);
   const changed = useMemo(
     () =>
-      fields.filter((f) => (values[f.id] ?? "") !== (baseline[f.id] ?? "")),
-    [fields, values, baseline],
+      fields.filter(
+        (f) =>
+          (current[f.id] ?? "") !==
+          (baseline[f.id] ?? initialValues[f.id] ?? ""),
+      ),
+    [fields, current, baseline, initialValues],
   );
   const dirty = changed.length > 0;
 
@@ -70,14 +82,16 @@ export function ParentCategoryForm({
     if (dirty) markDirty();
     else markClean();
   }, [dirty, markDirty, markClean]);
+  // A form that goes away takes its unsaved flag with it.
+  useEffect(() => () => markClean(), [markClean]);
 
   const config = useMemo<EntityFieldsConfig>(
     () => ({ categories: [{ ...category, active: true }], fields }),
     [category, fields],
   );
   const answers = useMemo(
-    () => ({ ...contextAnswers, ...values }),
-    [contextAnswers, values],
+    () => ({ ...contextAnswers, ...current }),
+    [contextAnswers, current],
   );
   const extras = useMemo<FieldExtras>(
     () => ({ establishments }),
@@ -88,7 +102,7 @@ export function ParentCategoryForm({
     e.preventDefault();
     if (!dirty || pending) return;
     const sent = changed;
-    const snapshot = values;
+    const snapshot = current;
     // Named by field id, so each value reaches exactly the field it was
     // typed in — even if two fields of the config share a storage key.
     const payload: Record<string, string> = {};

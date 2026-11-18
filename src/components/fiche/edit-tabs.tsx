@@ -51,6 +51,9 @@ function subscribeSideLayout(onChange: () => void) {
 const sideLayoutNow = () => window.matchMedia(SIDE_LAYOUT_QUERY).matches;
 const sideLayoutOnServer = () => false;
 
+/** One memory per page: two parents open in two tabs do not share it. */
+const storageKey = () => `edulm:edit-tab:${window.location.pathname}`;
+
 function Panel({
   tab,
   active,
@@ -98,6 +101,11 @@ function Panel({
  *
  * Tabs sit in a column on the left from `lg` up, and in a scrollable row above
  * the form on narrower screens.
+ *
+ * The open tab is remembered per page in sessionStorage, so a reload reopens
+ * it. It is deliberately NOT mirrored in the URL: the router would then see a
+ * different query string on the refresh that follows a save, treat it as a
+ * navigation and scroll the page back to the top.
  */
 export function EditTabs({
   tabs,
@@ -105,18 +113,15 @@ export function EditTabs({
   ariaLabel,
   unsavedLabel,
   leaveConfirmLabel,
-  queryParam = "tab",
 }: {
   tabs: EditTab[];
-  /** Tab to open first; ignored when it matches no tab. */
+  /** Tab to open first (from the page's URL); ignored when it matches no tab. */
   initialTab?: string;
   ariaLabel: string;
   /** Screen-reader / tooltip text for the unsaved-changes dot. */
   unsavedLabel: string;
   /** Question asked before following an in-app link with unsaved changes. */
   leaveConfirmLabel: string;
-  /** Query-string key mirroring the open tab, so a reload reopens it. */
-  queryParam?: string;
 }) {
   const baseId = useId();
   const [active, setActive] = useState(
@@ -194,35 +199,54 @@ export function EditTabs({
 
   // In the scrollable row (narrow screens) the open tab can start outside the
   // visible part of the strip — after a reload on the last tab, for instance.
+  // Only the strip is scrolled, never the page.
   const reveal = useCallback((id: string) => {
     const list = listRef.current;
     const el = tabRefs.current[id];
     if (!list || !el || list.scrollWidth <= list.clientWidth) return;
-    el.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const strip = list.getBoundingClientRect();
+    const tab = el.getBoundingClientRect();
+    if (tab.left < strip.left) list.scrollLeft -= strip.left - tab.left;
+    else if (tab.right > strip.right) list.scrollLeft += tab.right - strip.right;
   }, []);
-  // Once, for the tab the page opened on: later moves go through select().
-  const revealedInitial = useRef(false);
+
+  // Once, after the first render: reopen the tab this page was last left on.
+  // The memory only counts for the URL it was recorded under — a link that
+  // names another tab wins.
+  const restored = useRef(false);
   useEffect(() => {
-    if (revealedInitial.current) return;
-    revealedInitial.current = true;
-    reveal(currentId);
-  }, [reveal, currentId]);
+    if (restored.current) return;
+    restored.current = true;
+    let open = currentId;
+    try {
+      const raw = window.sessionStorage.getItem(storageKey());
+      const memo = raw ? (JSON.parse(raw) as { id?: unknown; from?: unknown }) : null;
+      if (
+        memo &&
+        typeof memo.id === "string" &&
+        memo.from === (initialTab ?? null) &&
+        tabs.some((t) => t.id === memo.id)
+      ) {
+        open = memo.id;
+        setActive(memo.id);
+      }
+    } catch {
+      /* No storage (private mode, blocked): the tab from the URL stays. */
+    }
+    reveal(open);
+  }, [currentId, initialTab, reveal, tabs]);
 
   function select(id: string, focus = false) {
     setActive(id);
     if (focus) tabRefs.current[id]?.focus();
     reveal(id);
-    // Mirror the open tab in the URL without a navigation, so a reload (or
-    // the refresh that follows a save) keeps the admin where they were.
-    // `null` state is the form Next documents: the router then records the
-    // new URL itself. Handing it back its own state object would be ignored,
-    // and the next save would push the old URL again.
     try {
-      const url = new URL(window.location.href);
-      url.searchParams.set(queryParam, id);
-      window.history.replaceState(null, "", url);
+      window.sessionStorage.setItem(
+        storageKey(),
+        JSON.stringify({ id, from: initialTab ?? null }),
+      );
     } catch {
-      /* URL sync is a convenience — never block the tab switch on it. */
+      /* Remembering the tab is a convenience — never block the switch on it. */
     }
   }
 

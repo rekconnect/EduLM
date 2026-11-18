@@ -6,11 +6,7 @@ import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
 import { db } from "@/lib/db";
 import { joinName } from "@/lib/names";
-import {
-  householdAnswerFields,
-  storedAnswer,
-  type FieldDef,
-} from "@/lib/entity-fields";
+import { householdAnswerFields, storedAnswer } from "@/lib/entity-fields";
 import { isStaffDomainEmail, moveAdminGrantEmail, staffDomainsFor, staffIdentityGuard } from "@/lib/staff-identity";
 import { loadEntityFieldsConfig } from "../../../settings/_actions";
 
@@ -70,10 +66,15 @@ export async function saveGuardianFiche(
     const userData: Record<string, unknown> = {};
     const guardianData: Record<string, unknown> = {};
     const familyData: Record<string, unknown> = {};
-    // Household answers this save actually changes: [field, new value].
+    // Household answers this save actually changes: [storage slots, new value].
     const householdIds = new Set(householdAnswerFields(config).map((f) => f.id));
-    const shared: Array<[FieldDef, string]> = [];
+    const shared: Array<[string[], string]> = [];
     let matched = 0;
+    // Nothing forbids two fields with the same label, hence the same key.
+    const keyUses = new Map<string, number>();
+    for (const f of config.fields) {
+      keyUses.set(f.key, (keyUses.get(f.key) ?? 0) + 1);
+    }
 
     const toBool = (v: string) =>
       v === "yes" || v === "Oui" || v === "true"
@@ -104,13 +105,26 @@ export async function saveGuardianFiche(
       else if (f.familyBoundTo === "imageRightsSocial") familyData.imageRightsSocial = toBool(v);
       else if (f.familyBoundTo === "imageRightsRadio") familyData.imageRightsRadio = toBool(v);
       else {
-        if (householdIds.has(f.id) && v !== storedAnswer(stored, f).trim()) {
-          shared.push([f, v]);
+        // Stored under both slots: the fiche and the import read the key, the
+        // inscription forms read the id (they only differ for fields created
+        // in Settings). When several fields share the key, only the slot the
+        // caller named is written: the other one may belong to another field.
+        const ambiguous = (keyUses.get(f.key) ?? 0) > 1;
+        const slots = ambiguous
+          ? [byId ? f.id : f.key]
+          : f.id === f.key
+            ? [f.key]
+            : [f.key, f.id];
+        // A value named by a key that several fields share cannot be tied to
+        // the household field: it stays on this parent.
+        if (
+          householdIds.has(f.id) &&
+          !(ambiguous && !byId) &&
+          v !== storedAnswer(stored, f).trim()
+        ) {
+          shared.push([slots, v]);
         }
-        // Both slots: the fiche and the import read the key, the inscription
-        // forms read the id (they only differ for fields created in Settings).
-        answers[f.key] = v;
-        if (f.id !== f.key) answers[f.id] = v;
+        for (const slot of slots) answers[slot] = v;
       }
     }
 
@@ -199,9 +213,8 @@ export async function saveGuardianFiche(
           // Read just above, patched key by key: the rest of that parent's
           // answers is written back untouched.
           const next: Record<string, unknown> = { ...asAnswers(other.customAnswers) };
-          for (const [f, v] of shared) {
-            next[f.key] = v;
-            if (f.id !== f.key) next[f.id] = v;
+          for (const [slots, v] of shared) {
+            for (const slot of slots) next[slot] = v;
           }
           await tx.user.updateMany({
             where: { id: other.id, role: "PARENT" },

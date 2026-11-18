@@ -640,10 +640,10 @@ export default async function ParentDetailPage({
               <CardHeader title={cat.name} />
               <CardBody>
                 <ParentCategoryForm
-                  // Remount when the account saved to, or the set of fields,
-                  // changes (a relation edit in Compte can do both): the
-                  // form's values must never outlive their target.
-                  key={`${src.userId}:${fields.map((f) => f.id).join(",")}`}
+                  // Remount when the account saved to changes (a relation
+                  // edit in Compte can move the address holder): the form's
+                  // values must never outlive their target.
+                  key={src.userId}
                   targetUserId={src.userId}
                   category={cat}
                   fields={fields}

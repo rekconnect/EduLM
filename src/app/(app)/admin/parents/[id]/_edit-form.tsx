@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -46,6 +46,18 @@ export function EditParentForm({
   const [result, setResult] = useState<ParentFormState>({});
   const [pending, startTransition] = useTransition();
 
+  // The fields are locked while a save is in flight, which takes the keyboard
+  // focus away from the one being edited: hand it back afterwards.
+  const focusedAtSubmit = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (pending) return;
+    const el = focusedAtSubmit.current;
+    focusedAtSubmit.current = null;
+    if (el && el.isConnected && document.activeElement === document.body) {
+      el.focus();
+    }
+  }, [pending]);
+
   const storedLocale = (LOCALES as readonly string[]).includes(initial.locale)
     ? initial.locale
     : "fr";
@@ -80,6 +92,11 @@ export function EditParentForm({
     e.preventDefault();
     if (pending) return;
     const fd = new FormData(e.currentTarget);
+    const active = document.activeElement;
+    focusedAtSubmit.current =
+      active instanceof HTMLElement && e.currentTarget.contains(active)
+        ? active
+        : null;
     startTransition(async () => {
       let next: ParentFormState;
       try {
@@ -107,9 +124,10 @@ export function EditParentForm({
       : t("editSaveError")
     : null;
 
-  // Each control is keyed on its stored value: once a save lands, it comes
-  // back showing exactly what was stored (trimmed name, lower-cased e-mail).
-  // An unsaved edit is untouched by a save made in another tab.
+  // The two dropdowns are keyed on their stored value, so each comes back on
+  // exactly what was saved. The text inputs are left alone: they keep the
+  // keyboard focus and what was typed (the stored value only differs by
+  // trimming and letter case, which the unsaved check ignores).
   return (
     <form
       ref={formRef}
@@ -117,6 +135,9 @@ export function EditParentForm({
       onChange={syncDirty}
       className="space-y-5"
     >
+      {/* Locked while saving: a change made during the round trip would not
+          be part of what was sent, yet the tab would be marked as saved. */}
+      <fieldset disabled={pending} className="min-w-0 space-y-5">
       <FormRow>
         <Field
           label={labels?.firstName ?? t("fieldFirstName")}
@@ -125,7 +146,6 @@ export function EditParentForm({
           error={result.errors?.firstName}
         >
           <Input
-            key={initial.firstName}
             id="firstName"
             name="firstName"
             defaultValue={initial.firstName}
@@ -139,7 +159,6 @@ export function EditParentForm({
           error={result.errors?.lastName}
         >
           <Input
-            key={initial.lastName}
             id="lastName"
             name="lastName"
             defaultValue={initial.lastName}
@@ -155,7 +174,6 @@ export function EditParentForm({
         error={emailError}
       >
         <Input
-          key={initial.email}
           id="email"
           name="email"
           type="email"
@@ -172,7 +190,9 @@ export function EditParentForm({
             name="relation"
             defaultValue={initial.relation}
           >
-            <option value="">—</option>
+            {/* No blank choice once a relation is stored: the save does not
+                clear it ("Non défini" is the explicit choice for that). */}
+            {initial.relation ? null : <option value="">—</option>}
             {relationListed ? null : (
               <option value={initial.relation}>{initial.relation}</option>
             )}
@@ -196,6 +216,7 @@ export function EditParentForm({
           </Select>
         </Field>
       </FormRow>
+      </fieldset>
 
       {formError ? (
         <p className="text-sm text-[color:var(--color-danger)]" role="alert">

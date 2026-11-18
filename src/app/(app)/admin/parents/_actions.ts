@@ -338,7 +338,11 @@ export async function updateParent(
     // (User is tenant-scoped but not role-scoped).
     const parent = await db.user.findFirst({
       where: { id, role: "PARENT", ...(await staffIdentityGuard(user, tenantId)) },
-      select: { id: true, email: true },
+      select: {
+        id: true,
+        email: true,
+        guardianProfile: { select: { relation: true } },
+      },
     });
     if (!parent) {
       notParent = true;
@@ -373,7 +377,14 @@ export async function updateParent(
         locale: parsed.data.locale ?? "fr",
       },
     });
-    if (parsed.data.relation !== undefined) {
+    // Only when the admin picked another relation. The form always posts the
+    // stored one back, and re-writing it would also overwrite the relation
+    // recorded on each of this parent's dossiers, which can legitimately be
+    // more precise (a grandmother's dossier vs. a generic stored value).
+    if (
+      parsed.data.relation !== undefined &&
+      parsed.data.relation !== (parent.guardianProfile?.relation ?? "")
+    ) {
       await db.guardian.upsert({
         where: { userId: id },
         update: { relation: parsed.data.relation || null },

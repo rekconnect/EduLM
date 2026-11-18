@@ -122,6 +122,7 @@ type GuardianLite = {
     lastName: string | null;
     name: string | null;
     email: string;
+    customAnswers?: unknown;
   };
 };
 function pickGuardian(guardians: GuardianLite[], relation: string): GContact {
@@ -132,6 +133,53 @@ function pickGuardian(guardians: GuardianLite[], relation: string): GContact {
     mobile: g.phone ?? "",
     email: realEmail(g.user.email),
   };
+}
+
+/**
+ * A CHILD's father and mother for a report row.
+ *
+ * A family code can hold two mothers (a remarriage: the former wife and the
+ * current one are both recorded under the father's code), so "the mother of
+ * the family" is not always this child's mother — only the child's own parent
+ * links say which one is. Order of preference:
+ *   1. a linked parent recorded under the child's own code,
+ *   2. a linked parent recorded under another code (someone with children
+ *      under two codes is recorded once per code),
+ *   3. the family's parents, for a child with no linked parent of that kind.
+ */
+function studentParents(st: {
+  familyId: string | null;
+  guardianLinks: Array<{ guardian: GuardianLite & { familyId: string | null } }>;
+  family: { guardians: GuardianLite[] } | null;
+}): { pere: GContact; mere: GContact } {
+  const linked = st.guardianLinks.map((l) => l.guardian);
+  const ordered: GuardianLite[] = [
+    ...linked.filter((g) => g.familyId === st.familyId),
+    ...linked.filter((g) => g.familyId !== st.familyId),
+    ...(st.family?.guardians ?? []),
+  ];
+  return {
+    pere: pickGuardian(ordered, "pere"),
+    mere: pickGuardian(ordered, "mere"),
+  };
+}
+
+/**
+ * A FAMILY's father / mother for a one-row-per-family report. When the code
+ * holds several (remarriage), the current spouse comes first: Dars marks it
+ * with "Actuel(le)", stored as the parent answer `actuel`.
+ */
+function pickFamilyGuardian(guardians: GuardianLite[], relation: string): GContact {
+  const isFormer = (g: GuardianLite) => {
+    const ca = g.user.customAnswers;
+    const v =
+      ca && typeof ca === "object"
+        ? String((ca as Record<string, unknown>).actuel ?? "").toLowerCase()
+        : "";
+    return v === "no" || v === "non" || v === "false";
+  };
+  const same = guardians.filter((g) => g.relation === relation);
+  return pickGuardian([...same.filter((g) => !isFormer(g)), ...same], relation);
 }
 
 async function resolveYear(yearId?: string) {
@@ -222,6 +270,27 @@ async function loadStudentEnrollments(yearId: string, classId?: string) {
           nationality: true,
           status: true,
           customAnswers: true,
+          familyId: true,
+          // The child's OWN parents (see studentParents).
+          guardianLinks: {
+            select: {
+              guardian: {
+                select: {
+                  familyId: true,
+                  relation: true,
+                  phone: true,
+                  user: {
+                    select: {
+                      firstName: true,
+                      lastName: true,
+                      name: true,
+                      email: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
           family: {
             select: {
               code: true,
@@ -277,6 +346,7 @@ async function loadFamilies() {
               lastName: true,
               name: true,
               email: true,
+              customAnswers: true,
             },
           },
         },
@@ -297,8 +367,8 @@ async function loadFamilies() {
 }
 type FamilyRaw = Awaited<ReturnType<typeof loadFamilies>>[number];
 function familyParts(f: FamilyRaw) {
-  const pere = pickGuardian(f.guardians, "pere");
-  const mere = pickGuardian(f.guardians, "mere");
+  const pere = pickFamilyGuardian(f.guardians, "pere");
+  const mere = pickFamilyGuardian(f.guardians, "mere");
   const adresse = [
     f.addressStreet,
     f.addressHood,
@@ -337,9 +407,7 @@ const ELEVE_COLS: ReportColumn[] = [
 function eleveRow(e: Awaited<ReturnType<typeof loadStudentEnrollments>>[number]): ReportRow {
   const st = e.student;
   const ca = (st.customAnswers ?? {}) as Record<string, unknown>;
-  const guardians = st.family?.guardians ?? [];
-  const pere = pickGuardian(guardians, "pere");
-  const mere = pickGuardian(guardians, "mere");
+  const { pere, mere } = studentParents(st);
   return {
     classe: e.class.name,
     niveau: e.class.level,
@@ -401,9 +469,7 @@ function makeServiceReport(
         const ca = (e.student.customAnswers ?? {}) as Record<string, unknown>;
         const svc = servicesForYear(ca, year.label, year.isActive);
         if (!svc.has(token)) continue;
-        const guardians = e.student.family?.guardians ?? [];
-        const pere = pickGuardian(guardians, "pere");
-        const mere = pickGuardian(guardians, "mere");
+        const { pere, mere } = studentParents(e.student);
         const row: ReportRow = {
           classe: e.class.name,
           nom: e.student.lastName,
@@ -538,9 +604,7 @@ export const REPORTS: ReportDef[] = [
             (b.student.dob?.getUTCDate() ?? 0),
         )
         .map((e) => {
-          const guardians = e.student.family?.guardians ?? [];
-          const pere = pickGuardian(guardians, "pere");
-          const mere = pickGuardian(guardians, "mere");
+          const { pere, mere } = studentParents(e.student);
           return {
             jour: e.student.dob?.getUTCDate() ?? 0,
             classe: e.class.name,
@@ -601,9 +665,7 @@ export const REPORTS: ReportDef[] = [
             a.e.student.lastName.localeCompare(b.e.student.lastName, "fr"),
         );
       const rows: ReportRow[] = list.map(({ e, nat }) => {
-        const guardians = e.student.family?.guardians ?? [];
-        const pere = pickGuardian(guardians, "pere");
-        const mere = pickGuardian(guardians, "mere");
+        const { pere, mere } = studentParents(e.student);
         return {
           nationalite: nat,
           classe: e.class.name,
@@ -671,9 +733,7 @@ export const REPORTS: ReportDef[] = [
         .filter((e) => !activeIds.has(e.studentId))
         .map((e) => {
           const ca = (e.student.customAnswers ?? {}) as Record<string, unknown>;
-          const guardians = e.student.family?.guardians ?? [];
-          const pere = pickGuardian(guardians, "pere");
-          const mere = pickGuardian(guardians, "mere");
+          const { pere, mere } = studentParents(e.student);
           return {
             derniereClasse: e.class.name,
             nom: e.student.lastName,
@@ -718,9 +778,7 @@ export const REPORTS: ReportDef[] = [
       const cohort = await loadStudentEnrollments(year.id, classId);
       const rows: ReportRow[] = cohort.map((e) => {
         const ca = (e.student.customAnswers ?? {}) as Record<string, unknown>;
-        const guardians = e.student.family?.guardians ?? [];
-        const pere = pickGuardian(guardians, "pere");
-        const mere = pickGuardian(guardians, "mere");
+        const { pere, mere } = studentParents(e.student);
         return {
           classe: e.class.name,
           nom: e.student.lastName,

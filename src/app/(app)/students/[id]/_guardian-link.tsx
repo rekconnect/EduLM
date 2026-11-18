@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/input";
 import {
@@ -48,7 +49,36 @@ export function GuardianManager({
     fd.set("parentUserId", selected);
     if (primary) fd.set("isPrimary", "on");
     startTransition(async () => {
-      await linkGuardianToStudent(fd);
+      let result: Awaited<ReturnType<typeof linkGuardianToStudent>>;
+      try {
+        result = await linkGuardianToStudent(fd);
+      } catch {
+        result = { ok: false, placement: null };
+      }
+      if (!result.ok) {
+        toast.error(t("linkFailed"));
+        return;
+      }
+      // Linking can also change the family code a parent is recorded under:
+      // say so, it is not visible on this screen otherwise.
+      const pl = result.placement;
+      if (pl?.kind === "moved") {
+        toast.success(
+          pl.removedCode
+            ? t("linkMovedRemoved", { code: pl.code, removed: pl.removedCode })
+            : t("linkMoved", { code: pl.code }),
+          { duration: 10000 },
+        );
+      } else if (pl?.kind === "kept") {
+        toast.info(
+          t("linkKept", { parentCode: pl.parentCode, childCode: pl.childCode }),
+          { duration: 10000 },
+        );
+      } else if (pl?.kind === "child-placed") {
+        toast.success(t("linkChildPlaced", { code: pl.code }), { duration: 10000 });
+      } else {
+        toast.success(t("linkDone"));
+      }
       setOpen(false);
       setSelected("");
       setPrimary(false);
@@ -160,7 +190,7 @@ export function GuardianManager({
               + {t("addExistingGuardian")}
             </Button>
             <Link
-              href="/admin/parents/new"
+              href={`/admin/parents/new?studentId=${encodeURIComponent(studentId)}`}
               className="text-sm text-[color:var(--primary)] hover:underline"
             >
               {t("createNewParent")}

@@ -145,6 +145,219 @@ export async function ensureFamilyForGuardian(
   return family;
 }
 
+/** Why a parent was left under their own code when linked to a child of another one. */
+export type KeptReason =
+  /** Their code also holds children or another parent. */
+  | "shared-code"
+  /** They are already linked to a child recorded under a third code. */
+  | "children-elsewhere"
+  /** They have a dossier in progress, whose address and consents live on their code. */
+  | "open-dossier"
+  /** Their code carries an address or image-rights answers. */
+  | "household-data";
+
+export type FamilyPlacement =
+  /** Parent and child were already under the same code. */
+  | { kind: "same"; code: string }
+  /** The parent joined the child's code; `removedCode` is the emptied one. */
+  | { kind: "moved"; code: string; removedCode: string | null }
+  /** Both keep their code. */
+  | { kind: "kept"; parentCode: string; childCode: string; reason: KeptReason }
+  /** The child had no code and took the parent's. */
+  | { kind: "child-placed"; code: string }
+  | { kind: "not-found" };
+
+/** Family columns that hold what a household told the school. */
+const HOUSEHOLD_COLUMNS = [
+  "addressStreet",
+  "addressHood",
+  "addressPostal",
+  "addressCity",
+  "addressCountry",
+  "imageRightsSite",
+  "imageRightsBook",
+  "imageRightsSocial",
+  "imageRightsRadio",
+] as const;
+
+/** A dossier the school has not decided yet. */
+const OPEN_DOSSIER_STATUSES = [
+  "DRAFT",
+  "SUBMITTED",
+  "UNDER_REVIEW",
+  "INTERVIEW_SCHEDULED",
+  "WAITLISTED",
+] as const;
+
+/**
+ * Called once a parent is linked to a child: bring the two under one family
+ * code when that is safe. The code is the school's ACCOUNTING unit — a child
+ * has exactly one, and the people responsible for that child are recorded
+ * under it (as in Dars, where a former wife stays under the father's code).
+ *
+ *  - The child has a code and the parent has none, or one that holds nothing
+ *    but that parent: the parent JOINS the child's code and the emptied code
+ *    is removed.
+ *  - The parent is KEPT under their own code whenever something hangs on it
+ *    (see `KeptReason`): other people, another child's code, a dossier in
+ *    progress, an address. The link alone then ties them to this child.
+ *  - The child has no code: it takes the parent's (created when the parent
+ *    has none either) and gets its child code.
+ *
+ * Never changes the code of a child that already has one. The caller is told
+ * what happened, to say it on screen: a move changes which family a parent is
+ * shown and written to under.
+ */
+export async function placeGuardianWithStudent(
+  guardianId: string,
+  studentId: string,
+  retry = true,
+): Promise<FamilyPlacement> {
+  const u = unscopedDb();
+  const [guardian, student] = await Promise.all([
+    u.guardian.findUnique({
+      where: { id: guardianId },
+      select: {
+        tenantId: true,
+        userId: true,
+        familyId: true,
+        family: { select: { code: true } },
+      },
+    }),
+    u.student.findUnique({
+      where: { id: studentId },
+      select: {
+        tenantId: true,
+        familyId: true,
+        family: { select: { code: true } },
+      },
+    }),
+  ]);
+  if (!guardian || !student || guardian.tenantId !== student.tenantId) {
+    return { kind: "not-found" };
+  }
+
+  // The child has no code yet: it takes the parent's.
+  if (!student.familyId || !student.family) {
+    const family =
+      guardian.familyId && guardian.family
+        ? { id: guardian.familyId, code: guardian.family.code }
+        : await createFamily(guardian.tenantId);
+    if (!guardian.familyId) {
+      await u.guardian.update({
+        where: { id: guardianId },
+        data: { familyId: family.id },
+      });
+    }
+    // Only if it is still without a code: someone may have placed it since.
+    const placed = await u.student.updateMany({
+      where: { id: studentId, familyId: null },
+      data: { familyId: family.id },
+    });
+    if (placed.count === 0) {
+      return retry
+        ? placeGuardianWithStudent(guardianId, studentId, false)
+        : { kind: "not-found" };
+    }
+    await assignKidCode(studentId);
+    return { kind: "child-placed", code: family.code };
+  }
+
+  const childCode = student.family.code;
+  const childFamilyId = student.familyId;
+  if (guardian.familyId === childFamilyId) {
+    return { kind: "same", code: childCode };
+  }
+  const parentCode = guardian.family?.code ?? "";
+  const kept = (reason: KeptReason): FamilyPlacement => ({
+    kind: "kept",
+    parentCode,
+    childCode,
+    reason,
+  });
+
+  // Already tied to a child of yet another code: this parent has children
+  // under several codes and belongs to none of them more than the others.
+  const otherLinks = await u.studentGuardian.findMany({
+    where: { guardianId, NOT: { studentId } },
+    select: { student: { select: { familyId: true } } },
+  });
+  if (
+    otherLinks.some(
+      (l) => l.student.familyId !== null && l.student.familyId !== childFamilyId,
+    )
+  ) {
+    return kept("children-elsewhere");
+  }
+
+  // A dossier in progress reads and writes the address and the consents of
+  // its author's family: moving the author would swap them under their feet.
+  const openDossiers = await u.application.count({
+    where: {
+      submittedByUserId: guardian.userId,
+      deletedAt: null,
+      status: { in: [...OPEN_DOSSIER_STATUSES] },
+    },
+  });
+  if (openDossiers > 0) return kept("open-dossier");
+
+  const oldFamilyId = guardian.familyId;
+  return u.$transaction(async (tx) => {
+    if (oldFamilyId) {
+      // Lock the code being left, so nobody joins it between the check and
+      // its removal (a child being accepted into it, for instance).
+      await tx.$queryRaw`SELECT "id" FROM "Family" WHERE "id" = ${oldFamilyId} FOR UPDATE`;
+      const old = await tx.family.findUnique({
+        where: { id: oldFamilyId },
+        include: { _count: { select: { guardians: true, students: true } } },
+      });
+      if (old) {
+        if (old._count.students > 0 || old._count.guardians > 1) {
+          return kept("shared-code");
+        }
+        if (HOUSEHOLD_COLUMNS.some((k) => old[k] != null)) {
+          return kept("household-data");
+        }
+      }
+    }
+    await tx.guardian.update({
+      where: { id: guardianId },
+      data: { familyId: childFamilyId },
+    });
+    if (oldFamilyId) {
+      // Empty by the checks above, and nothing else references a family.
+      await tx.family.deleteMany({ where: { id: oldFamilyId } });
+    }
+    return {
+      kind: "moved" as const,
+      code: childCode,
+      removedCode: oldFamilyId ? parentCode : null,
+    };
+  });
+}
+
+/**
+ * Take a parent out of the family code they sit under and give them a fresh
+ * one of their own. The way back from a link that placed a parent under the
+ * wrong family. Touches no child and no link.
+ */
+export async function giveGuardianOwnFamily(
+  guardianId: string,
+): Promise<{ id: string; code: string } | null> {
+  const u = unscopedDb();
+  const guardian = await u.guardian.findUnique({
+    where: { id: guardianId },
+    select: { tenantId: true },
+  });
+  if (!guardian) return null;
+  const family = await createFamily(guardian.tenantId);
+  await u.guardian.update({
+    where: { id: guardianId },
+    data: { familyId: family.id },
+  });
+  return family;
+}
+
 /**
  * Link a Student to its guardian's Family (creating one if needed). Used
  * during application acceptance when a new Student is created and we need to

@@ -235,6 +235,13 @@ export default async function ParentsListPage({
                       relation: { contains: query, mode: "insensitive" },
                     },
                   },
+                  // By family code ("R0032", or just "r00"): every parent
+                  // recorded under a matching code.
+                  {
+                    guardianProfile: {
+                      family: { code: { contains: query, mode: "insensitive" } },
+                    },
+                  },
                 ],
               } satisfies Prisma.UserWhereInput,
             ]
@@ -269,11 +276,22 @@ export default async function ParentsListPage({
         deletedAt: true,
         guardianProfile: {
           select: {
-            _count: { select: { childLinks: true } },
+            familyId: true,
             family: { select: { code: true } },
+            // Every link (a parent has a handful at most): the row counts the
+            // children currently enrolled, and tells those of this account's
+            // own family code from those it is linked to under another code.
             childLinks: {
-              select: { student: { select: { firstName: true, lastName: true } } },
-              take: 3,
+              select: {
+                student: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                    familyId: true,
+                    status: true,
+                  },
+                },
+              },
             },
           },
         },
@@ -543,11 +561,30 @@ export default async function ParentsListPage({
               </THead>
               <tbody>
                 {parents.map((p) => {
-                  const childPreview = p.guardianProfile?.childLinks
+                  // A parent with children from two unions is linked to
+                  // children of two family codes. The count shows those of
+                  // this account's own code; the others are flagged apart,
+                  // so the figure matches what the parent's page lists.
+                  // Children who left the school are not counted here:
+                  // the parent's page lists them under "Historique".
+                  const links = (p.guardianProfile?.childLinks ?? []).filter(
+                    (l) => l.student.status === "ENROLLED",
+                  );
+                  const ownCode = p.guardianProfile?.familyId ?? null;
+                  const ownLinks = links.filter(
+                    (l) => l.student.familyId === ownCode,
+                  );
+                  const otherLinks = links.filter(
+                    (l) => l.student.familyId !== ownCode,
+                  );
+                  const previewLinks = [...ownLinks, ...otherLinks].slice(0, 3);
+                  const childPreview = previewLinks
                     .map((l) => `${l.student.firstName} ${l.student.lastName}`)
                     .join(", ");
-                  const totalKids = p.guardianProfile?._count.childLinks ?? 0;
-                  const shownKids = p.guardianProfile?.childLinks.length ?? 0;
+                  const totalKids = links.length;
+                  const shownKids = previewLinks.length;
+                  const ownKids = ownLinks.length;
+                  const otherKids = otherLinks.length;
                   const isDeleted = p.deletedAt !== null;
                   const isArchived = p.archived;
                   const totalApps = p._count.submittedApps;
@@ -652,15 +689,22 @@ export default async function ParentsListPage({
                       ) : (
                         <>
                           <TD className="text-end tabular-nums">
-                            {totalKids > 0 ? (
-                              <span className="inline-flex min-w-[24px] items-center justify-center rounded-full bg-[color:var(--color-brand-50)] px-2 py-0.5 text-xs font-semibold text-[color:var(--color-brand-700)]">
-                                {totalKids}
-                              </span>
-                            ) : (
-                              <span className="text-[color:var(--color-foreground-subtle)]">
-                                0
-                              </span>
-                            )}
+                            <div className="flex flex-col items-end gap-0.5">
+                              {ownKids > 0 ? (
+                                <span className="inline-flex min-w-[24px] items-center justify-center rounded-full bg-[color:var(--color-brand-50)] px-2 py-0.5 text-xs font-semibold text-[color:var(--color-brand-700)]">
+                                  {ownKids}
+                                </span>
+                              ) : (
+                                <span className="text-[color:var(--color-foreground-subtle)]">
+                                  0
+                                </span>
+                              )}
+                              {otherKids > 0 ? (
+                                <span className="whitespace-nowrap text-[11px] text-[color:var(--color-foreground-muted)]">
+                                  {t("childrenOtherCode", { count: otherKids })}
+                                </span>
+                              ) : null}
+                            </div>
                           </TD>
                           <TD>
                             <span

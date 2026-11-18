@@ -149,14 +149,23 @@ function pickGuardian(guardians: GuardianLite[], relation: string): GContact {
  */
 function studentParents(st: {
   familyId: string | null;
-  guardianLinks: Array<{ guardian: GuardianLite & { familyId: string | null } }>;
+  guardianLinks: Array<{
+    guardian: GuardianLite & { id: string; familyId: string | null };
+  }>;
   family: { guardians: GuardianLite[] } | null;
 }): { pere: GContact; mere: GContact } {
-  const linked = st.guardianLinks.map((l) => l.guardian);
+  // By id, so that two linked parents of the same kind always come out in
+  // the same order (the older record first) instead of in database order.
+  const linked = st.guardianLinks
+    .map((l) => l.guardian)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  // Family fallback: the current spouse before a former one.
+  const family = st.family?.guardians ?? [];
   const ordered: GuardianLite[] = [
     ...linked.filter((g) => g.familyId === st.familyId),
     ...linked.filter((g) => g.familyId !== st.familyId),
-    ...(st.family?.guardians ?? []),
+    ...family.filter((g) => !isFormerSpouse(g)),
+    ...family.filter(isFormerSpouse),
   ];
   return {
     pere: pickGuardian(ordered, "pere"),
@@ -170,16 +179,21 @@ function studentParents(st: {
  * with "Actuel(le)", stored as the parent answer `actuel`.
  */
 function pickFamilyGuardian(guardians: GuardianLite[], relation: string): GContact {
-  const isFormer = (g: GuardianLite) => {
-    const ca = g.user.customAnswers;
-    const v =
-      ca && typeof ca === "object"
-        ? String((ca as Record<string, unknown>).actuel ?? "").toLowerCase()
-        : "";
-    return v === "no" || v === "non" || v === "false";
-  };
   const same = guardians.filter((g) => g.relation === relation);
-  return pickGuardian([...same.filter((g) => !isFormer(g)), ...same], relation);
+  return pickGuardian(
+    [...same.filter((g) => !isFormerSpouse(g)), ...same],
+    relation,
+  );
+}
+
+/** Dars "Actuel(le)" unticked: a former spouse still recorded under the code. */
+function isFormerSpouse(g: GuardianLite): boolean {
+  const ca = g.user.customAnswers;
+  const v =
+    ca && typeof ca === "object"
+      ? String((ca as Record<string, unknown>).actuel ?? "").toLowerCase()
+      : "";
+  return v === "no" || v === "non" || v === "false";
 }
 
 async function resolveYear(yearId?: string) {
@@ -276,6 +290,7 @@ async function loadStudentEnrollments(yearId: string, classId?: string) {
             select: {
               guardian: {
                 select: {
+                  id: true,
                   familyId: true,
                   relation: true,
                   phone: true,
@@ -304,6 +319,8 @@ async function loadStudentEnrollments(yearId: string, classId?: string) {
                       lastName: true,
                       name: true,
                       email: true,
+                      // For the "actuel" flag (see isFormerSpouse).
+                      customAnswers: true,
                     },
                   },
                 },

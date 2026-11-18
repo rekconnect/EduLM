@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireModuleAccess } from "@/lib/permissions";
 import { runWithTenant } from "@/lib/tenant-context";
@@ -15,7 +16,14 @@ import {
   staffDomainsFor,
   staffIdentityGuard,
 } from "@/lib/staff-identity";
-import { ensureFamilyForGuardian } from "@/lib/family";
+import {
+  ensureFamilyForGuardian,
+  giveGuardianOwnFamily,
+  placeGuardianWithStudent,
+  type FamilyPlacement,
+} from "@/lib/family";
+import { householdAnswerFields, storedAnswer } from "@/lib/entity-fields";
+import { loadEntityFieldsConfig } from "../../settings/_actions";
 import { hardDeleteParentAccounts } from "@/lib/parent-hard-delete";
 import { restartSignupCountdownFor } from "@/lib/signup-retention";
 import { joinName } from "@/lib/names";
@@ -172,6 +180,57 @@ function genTempPassword(): string {
   return out;
 }
 
+/**
+ * A parent who just joined a family code receives the household answers that
+ * code's parents hold (building, floor, caza… — the address details stored on
+ * each responsable), wherever they have none of their own. The screens read
+ * those details from the code's first parent (père first): without this, a
+ * newly added father would come first and the address block would go blank.
+ * Never overwrites a value the joining parent already has.
+ */
+async function inheritHouseholdAnswers(
+  joinerUserId: string,
+  familyCode: string,
+): Promise<void> {
+  const fields = householdAnswerFields(await loadEntityFieldsConfig("parent"));
+  if (fields.length === 0) return;
+  const members = await db.guardian.findMany({
+    where: { family: { code: familyCode }, NOT: { userId: joinerUserId } },
+    select: { id: true, relation: true, user: { select: { customAnswers: true } } },
+  });
+  if (members.length === 0) return;
+  // Same order as the family page: père, mère, then the others.
+  const rank = (r: string | null) => (r === "pere" ? 0 : r === "mere" ? 1 : 2);
+  members.sort(
+    (a, b) => rank(a.relation) - rank(b.relation) || a.id.localeCompare(b.id),
+  );
+  const asRecord = (raw: unknown): Record<string, unknown> =>
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : {};
+  const holder = asRecord(members[0]?.user.customAnswers);
+  const joiner = await db.user.findUnique({
+    where: { id: joinerUserId },
+    select: { customAnswers: true },
+  });
+  if (!joiner) return;
+  const mine: Record<string, unknown> = { ...asRecord(joiner.customAnswers) };
+  let changed = false;
+  for (const f of fields) {
+    const theirs = storedAnswer(holder, f).trim();
+    if (!theirs || storedAnswer(mine, f).trim()) continue;
+    mine[f.key] = theirs;
+    if (f.id !== f.key) mine[f.id] = theirs;
+    changed = true;
+  }
+  if (changed) {
+    await db.user.update({
+      where: { id: joinerUserId },
+      data: { customAnswers: mine as Prisma.InputJsonValue },
+    });
+  }
+}
+
 export async function createParent(
   _prev: ParentFormState,
   formData: FormData,
@@ -256,8 +315,13 @@ export async function createParent(
   }
   if (Object.keys(customErrors).length > 0) return { errors: customErrors };
 
+  // Opened from a child's page ("créer un parent et le lier"): the new parent
+  // is linked to that child and recorded under the child's family code.
+  const linkStudentId = String(formData.get("studentId") ?? "").trim();
+
   let newId: string | undefined;
   let conflict = false;
+  let linkedStudentId = "";
   await runWithTenant({ tenantId, slug: null }, async () => {
     const existing = await db.user.findFirst({
       where: { email: parsed.data.email },
@@ -266,6 +330,13 @@ export async function createParent(
       conflict = true;
       return;
     }
+    // Tenant-scoped lookup: an id from another school matches nothing.
+    const linkStudent = linkStudentId
+      ? await db.student.findUnique({
+          where: { id: linkStudentId },
+          select: { id: true },
+        })
+      : null;
     const passwordHash = await bcrypt.hash(parsed.data.password, 10);
     const created = await db.user.create({
       data: {
@@ -295,14 +366,44 @@ export async function createParent(
       },
       select: { id: true },
     });
-    // Auto-create a Family with a unique tenant-scoped code (e.g. "F-0001").
-    // The guardian gets linked to it; children added later inherit it.
-    await ensureFamilyForGuardian(guardian.id);
+    if (linkStudent) {
+      // A child's first parent is its "parent principal".
+      const hasPrincipal = await db.studentGuardian.count({
+        where: { studentId: linkStudent.id, isPrimary: true },
+      });
+      await db.studentGuardian.create({
+        data: {
+          studentId: linkStudent.id,
+          guardianId: guardian.id,
+          isPrimary: hasPrincipal === 0,
+        },
+      });
+      // A brand-new account has nothing of its own: it joins the child's
+      // family code (no new code is used up). The account and the link are
+      // already saved, so a failure here is logged rather than thrown.
+      try {
+        const placement = await placeGuardianWithStudent(guardian.id, linkStudent.id);
+        if (placement.kind === "moved") {
+          await inheritHouseholdAnswers(created.id, placement.code);
+        }
+      } catch (err) {
+        console.error("[createParent] family placement failed", err);
+      }
+      linkedStudentId = linkStudent.id;
+    } else {
+      // A parent created on its own gets a family code of its own; linking a
+      // child later moves the parent under that child's code.
+      await ensureFamilyForGuardian(guardian.id);
+    }
     newId = created.id;
   });
 
   if (conflict) return { errors: { email: "exists" } };
   revalidatePath("/admin/parents");
+  if (linkedStudentId) {
+    revalidatePath(`/students/${linkedStudentId}`);
+    redirect(`/students/${linkedStudentId}`);
+  }
   redirect(`/admin/parents/${newId}`);
 }
 
@@ -458,16 +559,25 @@ export async function toggleParentStatus(parentId: string) {
 
 // ── Guardian links ───────────────────────────────────────────
 
-export async function linkGuardianToStudent(formData: FormData) {
+/** What linking did; `placement` tells whether the parent changed family code. */
+export type LinkGuardianResult = {
+  ok: boolean;
+  placement: FamilyPlacement | null;
+};
+
+export async function linkGuardianToStudent(
+  formData: FormData,
+): Promise<LinkGuardianResult> {
   const { user } = await requireModuleAccess("eleves", "write");
   const tenantId = user.tenantId;
-  if (!tenantId) return;
+  const refused: LinkGuardianResult = { ok: false, placement: null };
+  if (!tenantId) return refused;
   const studentId = String(formData.get("studentId") ?? "");
   const parentUserId = String(formData.get("parentUserId") ?? "");
   const isPrimary = String(formData.get("isPrimary") ?? "") === "on";
-  if (!studentId || !parentUserId) return;
+  if (!studentId || !parentUserId) return refused;
 
-  await runWithTenant({ tenantId, slug: null }, async () => {
+  const result = await runWithTenant({ tenantId, slug: null }, async () => {
     // Only PARENT accounts carry a Guardian: never attach children to a
     // staff or admin account by id. A child link is also the double-profil
     // provenance signal, so for non-admins a parent on a STAFF e-mail domain
@@ -479,13 +589,20 @@ export async function linkGuardianToStudent(formData: FormData) {
       where: { id: parentUserId, role: "PARENT" },
       select: { id: true, email: true, ...PROVENANCE_SELECT },
     });
-    if (!target) return;
+    if (!target) return refused;
+    // The link table carries no tenant column: make sure the child is one of
+    // this school's before writing to it.
+    const child = await db.student.findUnique({
+      where: { id: studentId },
+      select: { id: true },
+    });
+    if (!child) return refused;
     if (
       user.role !== "SCHOOL_ADMIN" &&
       !hasProvenance(target) &&
       isStaffDomainEmail(target.email, await staffDomainsFor(tenantId))
     ) {
-      return;
+      return refused;
     }
     // Ensure the parent has a Guardian row.
     let guardian = await db.guardian.findUnique({
@@ -511,9 +628,64 @@ export async function linkGuardianToStudent(formData: FormData) {
       update: { isPrimary },
       create: { studentId, guardianId: guardian.id, isPrimary },
     });
+    // One family code per child: a parent with nothing under a code of their
+    // own joins the child's (see placeGuardianWithStudent, which leaves the
+    // parent where they are whenever something could be lost). The link
+    // itself is already saved, so a failure here is logged rather than
+    // thrown; the result goes back to the screen, which says what moved.
+    let placement: FamilyPlacement | null = null;
+    try {
+      placement = await placeGuardianWithStudent(guardian.id, studentId);
+      if (placement.kind === "moved") {
+        await inheritHouseholdAnswers(parentUserId, placement.code);
+      }
+    } catch (err) {
+      console.error("[linkGuardianToStudent] family placement failed", err);
+    }
+    return { ok: true, placement } satisfies LinkGuardianResult;
   });
   revalidatePath(`/students/${studentId}`);
-  revalidatePath(`/admin/parents/${parentUserId}`);
+  // Family membership may have changed: every page of the section shows it.
+  revalidatePath("/admin/parents", "layout");
+  return result;
+}
+
+/**
+ * Take a parent out of the family code they sit under and give them a new one
+ * of their own. The way back when a link placed a parent under the wrong
+ * family. Children and links are untouched: only this parent's code changes.
+ */
+export async function separateParentFamilyCode(
+  parentUserId: string,
+): Promise<{ ok: boolean; code?: string; error?: string }> {
+  const { user } = await requireModuleAccess("eleves", "write");
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+  const result = await runWithTenant({ tenantId, slug: null }, async () => {
+    const target = await db.user.findFirst({
+      where: {
+        id: parentUserId,
+        role: "PARENT",
+        ...(await staffIdentityGuard(user, tenantId)),
+      },
+      select: { guardianProfile: { select: { id: true, familyId: true } } },
+    });
+    const g = target?.guardianProfile;
+    if (!g) return { ok: false, error: "not-found" };
+    if (g.familyId) {
+      // Alone under a code already: there is nothing to separate from.
+      const [others, children] = await Promise.all([
+        db.guardian.count({ where: { familyId: g.familyId, NOT: { id: g.id } } }),
+        db.student.count({ where: { familyId: g.familyId } }),
+      ]);
+      if (others === 0 && children === 0) return { ok: false, error: "already-alone" };
+    }
+    const family = await giveGuardianOwnFamily(g.id);
+    if (!family) return { ok: false, error: "not-found" };
+    return { ok: true, code: family.code };
+  });
+  if (result.ok) revalidatePath("/admin/parents", "layout");
+  return result;
 }
 
 export async function unlinkGuardianFromStudent(studentId: string, parentUserId: string) {

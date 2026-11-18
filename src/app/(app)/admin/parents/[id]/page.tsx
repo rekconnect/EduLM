@@ -42,6 +42,7 @@ import {
 import { EditParentForm } from "./_edit-form";
 import { ParentIdentityForm } from "./_identity-form";
 import { ResetPasswordButton } from "./_reset-password";
+import { SeparateFamilyCodeButton } from "./_separate-code";
 import { FamilyFiche, type FicheGuardian, type FicheStudent } from "./_fiche";
 
 const STATUS_KEY: Record<string, string> = {
@@ -186,6 +187,29 @@ export default async function ParentDetailPage({
                         lastName: true,
                         status: true,
                         customAnswers: true,
+                        // The child's OWN parents: a code can hold two
+                        // mothers (remarriage) and only the link says which
+                        // one is this child's.
+                        guardianLinks: {
+                          select: {
+                            isPrimary: true,
+                            guardian: {
+                              select: {
+                                id: true,
+                                relation: true,
+                                familyId: true,
+                                family: { select: { code: true } },
+                                user: {
+                                  select: {
+                                    firstName: true,
+                                    lastName: true,
+                                    name: true,
+                                  },
+                                },
+                              },
+                            },
+                          },
+                        },
                         enrollments: {
                           select: {
                             class: { select: { name: true, level: true } },
@@ -203,7 +227,19 @@ export default async function ParentDetailPage({
                 childLinks: {
                   include: {
                     student: {
-                      select: { id: true, firstName: true, lastName: true },
+                      select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        status: true,
+                        familyId: true,
+                        family: { select: { code: true } },
+                        enrollments: {
+                          where: { academicYear: { isActive: true } },
+                          select: { class: { select: { name: true } } },
+                          take: 1,
+                        },
+                      },
                     },
                   },
                 },
@@ -421,6 +457,16 @@ export default async function ParentDetailPage({
       lastName: string;
       status: string;
       customAnswers: unknown;
+      guardianLinks: Array<{
+        isPrimary: boolean;
+        guardian: {
+          id: string;
+          relation: string | null;
+          familyId: string | null;
+          family: { code: string } | null;
+          user: { firstName: string | null; lastName: string | null; name: string | null };
+        };
+      }>;
       enrollments: Array<{
         class: { name: string; level: string };
         academicYear: { label: string; isActive: boolean };
@@ -456,6 +502,42 @@ export default async function ParentDetailPage({
         services: servicesByYear[e.academicYear.label] ?? "",
         isActive: e.academicYear.isActive,
       }));
+      // This child's own parents, père first.
+      const linkedParents = st.guardianLinks.map((l) => {
+        const u = l.guardian.user;
+        const first = u.firstName ?? splitLegacyName(u.name).firstName;
+        const last = u.lastName ?? splitLegacyName(u.name).lastName;
+        return {
+          guardianId: l.guardian.id,
+          relation: l.guardian.relation ?? "",
+          // An unlisted relation key ("parent", "autre"…) reads as
+          // "Responsable" rather than as the raw key.
+          relationLabel:
+            (l.guardian.relation && RELATION_LABELS_FR[l.guardian.relation]) ||
+            "Responsable",
+          name: `${first} ${last}`.trim() || "—",
+          isPrimary: l.isPrimary,
+          // Set when that parent is recorded under another family code.
+          otherCode:
+            l.guardian.familyId === (fam?.id ?? null)
+              ? null
+              : (l.guardian.family?.code ?? ""),
+        };
+      });
+      // Someone with children under two codes is recorded once per code (as
+      // in Dars) and can be linked through both records: show this code's.
+      const personKey = (r: { relation: string; name: string }) =>
+        `${r.relation}|${r.name.toLowerCase()}`;
+      const underThisCode = new Set(
+        linkedParents.filter((r) => r.otherCode === null).map(personKey),
+      );
+      const parents = linkedParents
+        .filter((r) => r.otherCode === null || !underThisCode.has(personKey(r)))
+        .sort(
+          (a, b) =>
+            relRank(a.relation) - relRank(b.relation) ||
+            a.guardianId.localeCompare(b.guardianId),
+        );
       return {
         id: st.id,
         firstName: st.firstName,
@@ -466,6 +548,7 @@ export default async function ParentDetailPage({
         answers,
         parcours,
         registrationByYear,
+        parents,
       };
     };
     const famStudents = fam?.students ?? [];
@@ -475,6 +558,22 @@ export default async function ParentDetailPage({
     const fichePast = famStudents
       .filter((s) => s.status !== "ENROLLED")
       .map(shapeStudent);
+    // Children this parent is linked to that sit under ANOTHER family code
+    // (a parent with children from two unions): not part of this family's
+    // fiche, but they are this parent's children all the same.
+    const otherCodeChildren = childLinks
+      .filter(
+        (l) =>
+          l.student.status === "ENROLLED" &&
+          l.student.familyId !== (fam?.id ?? null),
+      )
+      .map((l) => ({
+        id: l.student.id,
+        firstName: l.student.firstName,
+        lastName: l.student.lastName,
+        className: l.student.enrollments[0]?.class.name ?? null,
+        code: l.student.family?.code ?? null,
+      }));
     const ficheFamily = {
       code: fam?.code ?? "",
       addressStreet: fam?.addressStreet ?? null,
@@ -757,6 +856,17 @@ export default async function ParentDetailPage({
                   <ResetPasswordButton parentId={parent.id} />
                 </CardBody>
               </Card>
+              {fam && (fam.guardians.length > 1 || fam.students.length > 0) ? (
+                <Card>
+                  <CardHeader
+                    title={t("familyCodeCardTitle")}
+                    description={t("familyCodeCardHint", { code: fam.code })}
+                  />
+                  <CardBody>
+                    <SeparateFamilyCodeButton parentId={parent.id} code={fam.code} />
+                  </CardBody>
+                </Card>
+              ) : null}
               <Card>
                 <CardHeader
                   title={t("accessStatusTitle")}
@@ -876,6 +986,7 @@ export default async function ParentDetailPage({
           family={ficheFamily}
           currentStudents={ficheCurrent}
           pastStudents={fichePast}
+          otherCodeChildren={otherCodeChildren}
         />
 
         {/* legacy tabbed view — retained (hidden) during the fiche rollout */}

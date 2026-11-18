@@ -70,9 +70,14 @@ export async function saveGuardianFiche(
     const householdIds = new Set(householdAnswerFields(config).map((f) => f.id));
     const shared: Array<[string[], string]> = [];
     let matched = 0;
-    // Nothing forbids two fields with the same label, hence the same key.
+    // Fields competing for an answer slot under the same key: nothing forbids
+    // two fields with the same label, hence the same key. A switched-off or
+    // column-bound field does not compete.
     const keyUses = new Map<string, number>();
     for (const f of config.fields) {
+      if (f.active === false || f.userBoundTo || f.guardianBoundTo || f.familyBoundTo) {
+        continue;
+      }
       keyUses.set(f.key, (keyUses.get(f.key) ?? 0) + 1);
     }
 
@@ -107,21 +112,18 @@ export async function saveGuardianFiche(
       else {
         // Stored under both slots: the fiche and the import read the key, the
         // inscription forms read the id (they only differ for fields created
-        // in Settings). When several fields share the key, only the slot the
-        // caller named is written: the other one may belong to another field.
-        const ambiguous = (keyUses.get(f.key) ?? 0) > 1;
-        const slots = ambiguous
-          ? [byId ? f.id : f.key]
+        // in Settings). One exception: a save that names the field by id while
+        // other fields share its key writes the id slot only — the key slot
+        // may hold another field's value. A save named by key (the fiche's
+        // pencils) cannot tell such fields apart and writes both, so the
+        // value lands where every reader looks first.
+        const idOnly = byId && (keyUses.get(f.key) ?? 0) > 1;
+        const slots = idOnly
+          ? [f.id]
           : f.id === f.key
             ? [f.key]
             : [f.key, f.id];
-        // A value named by a key that several fields share cannot be tied to
-        // the household field: it stays on this parent.
-        if (
-          householdIds.has(f.id) &&
-          !(ambiguous && !byId) &&
-          v !== storedAnswer(stored, f).trim()
-        ) {
+        if (householdIds.has(f.id) && v !== storedAnswer(stored, f).trim()) {
           shared.push([slots, v]);
         }
         for (const slot of slots) answers[slot] = v;

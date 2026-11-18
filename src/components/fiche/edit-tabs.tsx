@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -212,9 +213,10 @@ export function EditTabs({
 
   // Once, after the first render: reopen the tab this page was last left on.
   // The memory only counts for the URL it was recorded under — a link that
-  // names another tab wins.
+  // names another tab wins. A layout effect, so that entering the page from
+  // inside the app never paints the first tab before the remembered one.
   const restored = useRef(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (restored.current) return;
     restored.current = true;
     let open = currentId;

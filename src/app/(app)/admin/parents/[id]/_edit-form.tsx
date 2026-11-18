@@ -54,7 +54,8 @@ export function EditParentForm({
     const el = focusedAtSubmit.current;
     focusedAtSubmit.current = null;
     if (el && el.isConnected && document.activeElement === document.body) {
-      el.focus();
+      // Without moving the page: the admin may have scrolled meanwhile.
+      el.focus({ preventScroll: true });
     }
   }, [pending]);
 

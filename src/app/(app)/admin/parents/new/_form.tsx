@@ -28,8 +28,14 @@ import { createParent, type ParentFormState } from "../_actions";
 export function CreateParentForm({
   config,
   labels,
+  linkStudent,
 }: {
   config: ParentCreateConfig;
+  /**
+   * Set when the form is opened from a child's page: the new parent is
+   * linked to that child and recorded under its family code. `note` says so.
+   */
+  linkStudent?: { id: string; note: string };
   /**
    * Override the default i18n labels for built-in fields. Pass the
    * tenant-configured labels (resolved from parentFieldsConfig's
@@ -116,6 +122,14 @@ export function CreateParentForm({
 
   return (
     <form action={formAction} className="space-y-5">
+      {linkStudent ? (
+        <>
+          <input type="hidden" name="studentId" value={linkStudent.id} />
+          <p className="rounded-md bg-[color:var(--color-surface-sunken)] px-3 py-2 text-sm text-[color:var(--color-foreground-muted)]">
+            {linkStudent.note}
+          </p>
+        </>
+      ) : null}
       {orderedBuiltin.map(renderBuiltin)}
 
       <Field

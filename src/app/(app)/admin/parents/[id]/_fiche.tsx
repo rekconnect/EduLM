@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Users, Home, Baby, History } from "lucide-react";
 import {
   applyInheritedValues,
@@ -49,6 +50,26 @@ export type FicheStudent = {
   }>;
   /** Per-year registration snapshot (Isc_ModifStudents by SYear). */
   registrationByYear: Record<string, Record<string, string>>;
+  /**
+   * This child's OWN linked parents, père first. A family code can hold two
+   * mothers (a remarriage); only these links say which one is the child's.
+   */
+  parents: Array<{
+    guardianId: string;
+    relationLabel: string;
+    name: string;
+    isPrimary: boolean;
+    /** Family code of that parent when it is not this family's. */
+    otherCode: string | null;
+  }>;
+};
+/** A child linked to the opened parent but recorded under another family code. */
+export type OtherCodeChild = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  className: string | null;
+  code: string | null;
 };
 export type FicheFamily = {
   code: string;
@@ -97,6 +118,7 @@ export function FamilyFiche({
   family,
   currentStudents,
   pastStudents,
+  otherCodeChildren = [],
 }: {
   parentConfig: EntityFieldsConfig;
   studentConfig: EntityFieldsConfig;
@@ -104,6 +126,7 @@ export function FamilyFiche({
   family: FicheFamily;
   currentStudents: FicheStudent[];
   pastStudents: FicheStudent[];
+  otherCodeChildren?: OtherCodeChild[];
 }) {
   const pInfo = fieldsIn(parentConfig, "Info générale");
   const pContact = fieldsIn(parentConfig, "Contact");
@@ -244,9 +267,24 @@ export function FamilyFiche({
                         {s.className ?? "—"}
                         {s.yearLabel ? ` · ${s.yearLabel}` : ""}
                       </p>
+                      {s.parents.length > 0 ? (
+                        <p className="mt-0.5 text-xs text-[color:var(--color-foreground-muted)]">
+                          {s.parents.map((p, i) => (
+                            <span key={p.guardianId}>
+                              {i > 0 ? " · " : ""}
+                              {p.relationLabel} :{" "}
+                              <span className="font-medium text-[color:var(--color-foreground)]">
+                                {p.name}
+                              </span>
+                              {p.isPrimary ? " (principal)" : ""}
+                              {p.otherCode ? ` (code ${p.otherCode})` : ""}
+                            </span>
+                          ))}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
-                  <span className="inline-flex rounded-full bg-[color:var(--color-success-soft)] px-2 py-0.5 text-xs font-medium text-[color:var(--color-success-soft-fg)]">
+                  <span className="inline-flex shrink-0 rounded-full bg-[color:var(--color-success-soft)] px-2 py-0.5 text-xs font-medium text-[color:var(--color-success-soft-fg)]">
                     Inscrit
                   </span>
                 </div>
@@ -278,6 +316,41 @@ export function FamilyFiche({
           </div>
         )}
       </section>
+
+      {/* ───── Enfants d'un autre code famille que ce compte peut voir ─────
+          "Enfants" above is the family code's own children. These belong to
+          ANOTHER code: this account is merely linked to them, so the parent
+          can follow and re-enrol all their children with one login. */}
+      {otherCodeChildren.length > 0 && (
+        <section>
+          <SectionTitle icon={Baby}>Autres enfants accessibles avec ce compte</SectionTitle>
+          <Panel>
+            <p className="mb-3 text-xs text-[color:var(--color-foreground-muted)]">
+              Ces enfants appartiennent à un autre code famille. Ce compte y a
+              seulement accès dans l&apos;espace parent.
+            </p>
+            <ul className="divide-y divide-[color:var(--color-border-subtle)]">
+              {otherCodeChildren.map((c) => (
+                <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                  <Link
+                    href={`/students/${c.id}`}
+                    className="flex items-center gap-2.5 rounded-md outline-none transition-colors duration-150 ease-out hover:underline focus-visible:ring-2 focus-visible:ring-[color:var(--color-border-focus)]"
+                  >
+                    <Initials first={c.firstName} last={c.lastName} />
+                    <span className="text-sm font-medium text-[color:var(--color-foreground)]">
+                      {c.lastName} {c.firstName}
+                    </span>
+                  </Link>
+                  <span className="text-xs text-[color:var(--color-foreground-muted)]">
+                    {c.className ?? "—"}
+                    {c.code ? ` · Code famille ${c.code}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        </section>
+      )}
 
       {/* ───── Historique ───── */}
       {pastStudents.length > 0 && (

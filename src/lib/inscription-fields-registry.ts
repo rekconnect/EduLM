@@ -332,6 +332,20 @@ export const INSCRIPTION_FIELDS_REGISTRY = {
     },
     defaultRequired: false,
   },
+  // One choice across the responsable cards: who pays (carries the family
+  // code). Listed here so a tenant override can rename or hide it; no admin
+  // screen edits the keys of this section yet.
+  "responsables.family.financiallyResponsible": {
+    tab: "responsables",
+    section: "family",
+    type: "boolean",
+    defaultLabel: {
+      fr: "Responsable financier",
+      en: "Financially responsible",
+      ar: "المسؤول المالي",
+    },
+    defaultRequired: false,
+  },
 
   // ─────────────────────── Foyer ───────────────────────
 

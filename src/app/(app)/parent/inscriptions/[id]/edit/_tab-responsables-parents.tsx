@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Loader2, Plus, Save, Trash2, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,10 +10,12 @@ import { Field } from "@/components/ui/field";
 import { Select } from "@/components/ui/input";
 import { FieldsRenderer, type FieldAnswers } from "@/components/fields-renderer";
 import { useConfirm } from "@/components/ui/confirm";
+import { useField } from "@/components/dossier/tenant-config-context";
 import type { EntityFieldsConfig } from "@/lib/entity-fields";
 import {
   saveResponsableAnswers,
   deleteResponsable,
+  setFinancialResponsable,
 } from "../../_actions";
 
 type Kind = "PERE" | "MERE" | "TUTEUR" | "AUTRE";
@@ -27,13 +30,27 @@ export type ResponsableParent = {
   id: string;
   kind: Kind;
   answers: FieldAnswers;
+  /**
+   * The family declared this responsable as the financially responsible
+   * parent — the one who pays and who carries the family code. At most one
+   * per dossier, and nobody until the family chooses: nothing is pre-ticked.
+   */
+  financial: boolean;
 };
+
+/** A card that exists only on screen so far: it has no saved row behind it. */
+const isUnsaved = (id: string) => id.startsWith("new-");
 
 /**
  * Two-parent editor for the Responsables tab. Each guardian (Père / Mère /
  * Tuteur) is a card rendering the SAME parent dossier fields used on the
  * fiche — prefilled per guardian. Saves each parent's answers into its
  * ApplicationResponsable.customAnswers.
+ *
+ * One of the cards can be marked "Responsable financier" (a single choice
+ * across the cards, never pre-ticked: only what the family chose is stored).
+ * For a saved card the choice is recorded at once; for a card not saved yet
+ * it is recorded when that card is saved.
  */
 export function DossierResponsablesParents({
   applicationId,
@@ -48,14 +65,52 @@ export function DossierResponsablesParents({
   establishments: Array<{ id: string; name: string; levels?: string[] }>;
   disabled: boolean;
 }) {
+  const t = useTranslations("dossier");
+  const tForms = useTranslations("dossierForms");
   const [rows, setRows] = useState<ResponsableParent[]>(
     initial.length
       ? initial
-      : [{ id: "new-pere", kind: "PERE", answers: {} }, { id: "new-mere", kind: "MERE", answers: {} }],
+      : [
+          { id: "new-pere", kind: "PERE", answers: {}, financial: false },
+          { id: "new-mere", kind: "MERE", answers: {}, financial: false },
+        ],
   );
+  const [pickingFinancial, startPick] = useTransition();
+  // A tenant override can rename or hide the control (same mechanism as
+  // "Famille monoparentale").
+  const financialField = useField("responsables.family.financiallyResponsible");
+  const showFinancial = !financialField?.hidden;
 
   function patchRow(idx: number, patch: Partial<ResponsableParent>) {
     setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  }
+
+  function pickFinancial(idx: number) {
+    const picked = rows[idx];
+    if (!picked || picked.financial || disabled || pickingFinancial) return;
+    // Who was marked before, to put back if the save fails. Only the mark is
+    // restored: anything typed in the cards meanwhile is left alone.
+    const previousId = rows.find((r) => r.financial)?.id ?? null;
+    const pickedId = picked.id;
+    setRows((prev) => prev.map((r) => ({ ...r, financial: r.id === pickedId })));
+    // Not saved yet: the choice travels with the card when it is saved.
+    if (isUnsaved(pickedId)) return;
+    startPick(async () => {
+      let ok = false;
+      try {
+        ok = (await setFinancialResponsable(applicationId, pickedId)).ok;
+      } catch {
+        ok = false;
+      }
+      if (ok) {
+        toast.success(t("financialResponsibleSaved"));
+      } else {
+        setRows((prev) =>
+          prev.map((r) => ({ ...r, financial: r.id === previousId })),
+        );
+        toast.error(tForms("saveError"));
+      }
+    });
   }
 
   return (
@@ -68,6 +123,17 @@ export function DossierResponsablesParents({
           establishments={establishments}
           row={row}
           disabled={disabled}
+          financial={
+            showFinancial
+              ? {
+                  label: financialField?.label ?? t("financialResponsible"),
+                  hint: t("financialResponsibleHint"),
+                  unsavedNote: t("financialResponsibleUnsaved"),
+                  busy: pickingFinancial,
+                  onPick: () => pickFinancial(idx),
+                }
+              : null
+          }
           onChangeKind={(kind) => patchRow(idx, { kind })}
           onChangeAnswers={(answers) => patchRow(idx, { answers })}
           onPersistedId={(id) => patchRow(idx, { id })}
@@ -82,7 +148,7 @@ export function DossierResponsablesParents({
           onClick={() =>
             setRows((prev) => [
               ...prev,
-              { id: `new-${Date.now()}`, kind: "TUTEUR", answers: {} },
+              { id: `new-${Date.now()}`, kind: "TUTEUR", answers: {}, financial: false },
             ])
           }
           className="gap-1.5"
@@ -101,6 +167,7 @@ function ParentCard({
   establishments,
   row,
   disabled,
+  financial,
   onChangeKind,
   onChangeAnswers,
   onPersistedId,
@@ -111,6 +178,14 @@ function ParentCard({
   establishments: Array<{ id: string; name: string; levels?: string[] }>;
   row: ResponsableParent;
   disabled: boolean;
+  /** The "responsable financier" choice; null when the tenant hides it. */
+  financial: {
+    label: string;
+    hint: string;
+    unsavedNote: string;
+    busy: boolean;
+    onPick: () => void;
+  } | null;
   onChangeKind: (k: Kind) => void;
   onChangeAnswers: (a: FieldAnswers) => void;
   onPersistedId: (id: string) => void;
@@ -119,18 +194,25 @@ function ParentCard({
   const [pending, start] = useTransition();
   const [removing, startRemove] = useTransition();
   const confirm = useConfirm();
-  const isNew = row.id.startsWith("new-");
+  const isNew = isUnsaved(row.id);
 
   function onSave() {
     start(async () => {
       const r = await saveResponsableAnswers(
         applicationId,
         isNew ? null : row.id,
-        { kind: row.kind, answers: row.answers },
+        {
+          kind: row.kind,
+          answers: row.answers,
+          // Sent only for the card the family ticked: saving any other card
+          // never touches the mark.
+          ...(financial && row.financial ? { financial: true } : {}),
+        },
       );
       if (r.ok) {
         toast.success("Responsable enregistré");
-        if (isNew) onPersistedId(`saved-${Date.now()}`);
+        // The real row id: the next save or delete of this card targets it.
+        if (isNew && r.id) onPersistedId(r.id);
       } else {
         toast.error("Échec de l'enregistrement");
       }
@@ -198,6 +280,42 @@ function ParentCard({
         }
       />
       <CardBody>
+        {financial ? (
+          <label
+            className={
+              "mb-5 flex items-start gap-2.5 rounded-md border px-3 py-2.5 text-sm transition-colors duration-150 ease-out " +
+              (row.financial
+                ? "border-[color:var(--color-brand-200)] bg-[color:var(--color-brand-50)]"
+                : "border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-sunken)]")
+            }
+          >
+            <input
+              type="radio"
+              name={`financial-${applicationId}`}
+              checked={row.financial}
+              onChange={financial.onPick}
+              // Locked while this card's own save is in flight: a tick made
+              // then would not be part of what was sent.
+              disabled={disabled || pending}
+              aria-busy={financial.busy}
+              aria-label={`${financial.label} : ${title}`}
+              className="mt-0.5 size-4 shrink-0"
+            />
+            <span className="min-w-0">
+              <span className="font-medium text-[color:var(--color-foreground)]">
+                {financial.label}
+              </span>
+              <span className="block text-xs text-[color:var(--color-foreground-muted)]">
+                {financial.hint}
+              </span>
+              {row.financial && isNew && !disabled ? (
+                <span className="mt-0.5 block text-xs text-[color:var(--color-warning-soft-fg)]">
+                  {financial.unsavedNote}
+                </span>
+              ) : null}
+            </span>
+          </label>
+        ) : null}
         {/* No `user` in extras — userBoundTo fields (prénom/nom/email) must
             come from THIS responsable's answers, not the logged-in submitter. */}
         <FieldsRenderer

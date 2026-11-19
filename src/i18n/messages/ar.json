@@ -810,7 +810,11 @@
     "addResponsable": "إضافة ولي أمر",
     "responsableTitle": "ولي الأمر {n}: {name}",
     "monoParental": "عائلة وحيدة الوالد",
-    "missingRequiredIntro": "حقول إلزامية يجب إكمالها:"
+    "missingRequiredIntro": "حقول إلزامية يجب إكمالها:",
+    "financialResponsible": "المسؤول المالي",
+    "financialResponsibleHint": "ولي الأمر الذي يسدّد الأقساط المدرسية. تأخذه المدرسة بعين الاعتبار في الفوترة. واحد فقط لكل ملف؛ وإذا لم يُحدَّد أحد تعتمد المدرسة الأب.",
+    "financialResponsibleUnsaved": "احفظ بيانات ولي الأمر هذا لتأكيد هذا الاختيار.",
+    "financialResponsibleSaved": "تم حفظ المسؤول المالي."
   },
   "dossierForms": {
     "saveError": "تعذر حفظ هذا القسم.",

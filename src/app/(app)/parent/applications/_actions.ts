@@ -65,7 +65,16 @@ function copyResponsable(r: ApplicationResponsable, tenantId: string) {
   void createdAt;
   void updatedAt;
   void _t;
-  return { ...rest, tenantId, customAnswers: (customAnswers ?? {}) as Prisma.InputJsonValue };
+  return {
+    ...rest,
+    tenantId,
+    customAnswers: (customAnswers ?? {}) as Prisma.InputJsonValue,
+    // Not carried over from last year's dossier: each year starts from the
+    // child's CURRENT parent principal (the form's default), which the school
+    // may have changed in between, and the family confirms or changes it.
+    financiallyResponsible: null,
+    financiallyResponsibleOther: null,
+  };
 }
 
 /** Recreate a contact row onto a fresh application (renewal prefill). */

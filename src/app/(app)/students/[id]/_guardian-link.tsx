@@ -69,7 +69,7 @@ export function GuardianManager({
             : t("linkMoved", { code: pl.code }),
           { duration: 10000 },
         );
-      } else if (pl?.kind === "kept") {
+      } else if (pl?.kind === "kept" && pl.parentCode) {
         toast.info(
           t("linkKept", { parentCode: pl.parentCode, childCode: pl.childCode }),
           { duration: 10000 },

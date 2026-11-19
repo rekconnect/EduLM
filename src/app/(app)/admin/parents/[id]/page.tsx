@@ -740,9 +740,10 @@ export default async function ParentDetailPage({
               <CardBody>
                 <ParentCategoryForm
                   // Remount when the account saved to changes (a relation
-                  // edit in Compte can move the address holder): the form's
-                  // values must never outlive their target.
-                  key={src.userId}
+                  // edit in Compte can move the address holder) or when the
+                  // parent changes family code: the form's values must never
+                  // outlive their target.
+                  key={`${src.userId}:${fam?.id ?? ""}`}
                   targetUserId={src.userId}
                   category={cat}
                   fields={fields}
@@ -856,7 +857,7 @@ export default async function ParentDetailPage({
                   <ResetPasswordButton parentId={parent.id} />
                 </CardBody>
               </Card>
-              {fam && (fam.guardians.length > 1 || fam.students.length > 0) ? (
+              {fam && fam.guardians.length > 1 ? (
                 <Card>
                   <CardHeader
                     title={t("familyCodeCardTitle")}

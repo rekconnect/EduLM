@@ -181,7 +181,7 @@ const HOUSEHOLD_COLUMNS = [
 ] as const;
 
 /** A dossier the school has not decided yet. */
-const OPEN_DOSSIER_STATUSES = [
+export const OPEN_DOSSIER_STATUSES = [
   "DRAFT",
   "SUBMITTED",
   "UNDER_REVIEW",
@@ -237,8 +237,41 @@ export async function placeGuardianWithStudent(
     return { kind: "not-found" };
   }
 
-  // The child has no code yet: it takes the parent's.
+  // The child has no code yet. A parent ALREADY linked to it decides first —
+  // its "parent principal" (the one who carries the family code), then the
+  // earliest link — and only then the parent being linked now.
   if (!student.familyId || !student.family) {
+    const earlier = await u.studentGuardian.findMany({
+      where: {
+        studentId,
+        NOT: { guardianId },
+        guardian: { familyId: { not: null } },
+      },
+      select: {
+        isPrimary: true,
+        guardianId: true,
+        guardian: {
+          select: { familyId: true, family: { select: { code: true } } },
+        },
+      },
+    });
+    earlier.sort(
+      (a, b) =>
+        Number(b.isPrimary) - Number(a.isPrimary) ||
+        a.guardianId.localeCompare(b.guardianId),
+    );
+    const anchor = earlier[0]?.guardian;
+    if (anchor?.familyId && anchor.family) {
+      const placed = await u.student.updateMany({
+        where: { id: studentId, familyId: null },
+        data: { familyId: anchor.familyId },
+      });
+      if (placed.count > 0) await assignKidCode(studentId);
+      // The child now has a code: place the parent being linked against it.
+      return retry
+        ? placeGuardianWithStudent(guardianId, studentId, false)
+        : { kind: "child-placed", code: anchor.family.code };
+    }
     const family =
       guardian.familyId && guardian.family
         ? { id: guardian.familyId, code: guardian.family.code }
@@ -292,10 +325,10 @@ export async function placeGuardianWithStudent(
 
   // A dossier in progress reads and writes the address and the consents of
   // its author's family: moving the author would swap them under their feet.
+  // (A dossier in the trash counts too: it can be restored.)
   const openDossiers = await u.application.count({
     where: {
       submittedByUserId: guardian.userId,
-      deletedAt: null,
       status: { in: [...OPEN_DOSSIER_STATUSES] },
     },
   });

@@ -23,8 +23,11 @@ export default async function NewParentPage({
   // another school shows nothing and links nothing.
   const linkStudent =
     studentId && user.tenantId
-      ? await runWithTenant({ tenantId: user.tenantId, slug: null }, () =>
-          db.student.findUnique({
+      ? // Awaited INSIDE the callback: a Prisma query only runs when it is
+        // awaited, and it must still be in the tenant context at that point
+        // (returning the pending query would run it outside and be refused).
+        await runWithTenant({ tenantId: user.tenantId, slug: null }, async () => {
+          const found = await db.student.findUnique({
             where: { id: studentId },
             select: {
               id: true,
@@ -32,8 +35,9 @@ export default async function NewParentPage({
               lastName: true,
               family: { select: { code: true } },
             },
-          }),
-        )
+          });
+          return found;
+        })
       : null;
   // Load both configs in parallel:
   //  - parentCreateConfig — drives the form structure (which built-in

@@ -810,7 +810,11 @@
     "addResponsable": "Ajouter un responsable",
     "responsableTitle": "Responsable {n}: {name}",
     "monoParental": "Famille monoparentale",
-    "missingRequiredIntro": "Champs obligatoires à compléter :"
+    "missingRequiredIntro": "Champs obligatoires à compléter :",
+    "financialResponsible": "Responsable financier",
+    "financialResponsibleHint": "Le parent qui règle la scolarité. L'école en tient compte pour la facturation. Un seul par dossier ; si personne n'est indiqué, l'école retient le père.",
+    "financialResponsibleUnsaved": "Enregistrez ce responsable pour valider ce choix.",
+    "financialResponsibleSaved": "Responsable financier enregistré."
   },
   "dossierForms": {
     "saveError": "Impossible d'enregistrer cette section.",

@@ -190,7 +190,12 @@ export default async function DossierEditPage({
           },
           responsables: {
             orderBy: { order: "asc" },
-            select: { id: true, kind: true, customAnswers: true },
+            select: {
+              id: true,
+              kind: true,
+              customAnswers: true,
+              financiallyResponsible: true,
+            },
           },
         },
       }),
@@ -362,6 +367,9 @@ export default async function DossierEditPage({
       id: r.id,
       kind: r.kind as "PERE" | "MERE" | "TUTEUR" | "AUTRE",
       answers: coerceAnswers(r.customAnswers),
+      // Declared by the family as the financially responsible parent (at
+      // most one per dossier; nobody until they choose).
+      financial: r.financiallyResponsible != null,
     }));
     if (responsableRows.length === 0) {
       const guardianSelect = {
@@ -402,6 +410,7 @@ export default async function DossierEditPage({
         id: `new-${relKindOf(g.relation).toLowerCase()}-${i}`,
         kind: relKindOf(g.relation),
         answers: guardianToParentAnswers(g),
+        financial: false,
       }));
     }
 

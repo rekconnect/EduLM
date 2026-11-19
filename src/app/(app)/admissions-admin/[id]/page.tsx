@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { relKindOf } from "@/lib/guardian-prefill";
 import {
   ArrowLeft,
   ArrowRight,
@@ -178,7 +179,14 @@ export default async function AdmissionsAdminDetailPage({
         establishment: { select: { name: true } },
         responsables: {
           orderBy: { order: "asc" },
-          select: { id: true, kind: true, firstName: true, lastName: true, customAnswers: true },
+          select: {
+            id: true,
+            kind: true,
+            firstName: true,
+            lastName: true,
+            customAnswers: true,
+            financiallyResponsible: true,
+          },
         },
         answers: { select: { questionId: true, value: true } },
         documents: {
@@ -395,12 +403,82 @@ export default async function AdmissionsAdminDetailPage({
       app.responsables.length > 0
         ? app.responsables.map((r) => ({
             id: r.id,
+            kind: r.kind as string,
             title: RESP_KIND_LABEL[r.kind] ?? "Responsable",
             answers: coerce(r.customAnswers),
+            // Declared by the family on the form as the parent who pays.
+            financial: r.financiallyResponsible != null,
           }))
         : app.parentAnswers && Object.keys(app.parentAnswers).length > 0
-          ? [{ id: "legacy", title: "Responsable", answers: coerce(app.parentAnswers) }]
+          ? [
+              {
+                id: "legacy",
+                kind: "AUTRE",
+                title: "Responsable",
+                answers: coerce(app.parentAnswers),
+                financial: false,
+              },
+            ]
           : [];
+
+    // ── Financially responsible parent, as declared on the form ──
+    // The parent who pays carries the family code. Only an explicit choice of
+    // the family is stored; with none, the school's usual rule applies.
+    // Acceptance does not act on the declaration yet: for a new child the
+    // parent who SUBMITTED becomes the parent principal, and a re-inscription
+    // changes nothing. So, until the dossier is decided, the school is told
+    // whenever the declaration points at someone else.
+    const declaredPayer = responsableCards.find((c) => c.financial) ?? null;
+    const declaredPayerLabel = declaredPayer
+      ? [
+          declaredPayer.title,
+          [declaredPayer.answers.prenom, declaredPayer.answers.nom]
+            .filter(Boolean)
+            .join(" "),
+        ]
+          .filter(Boolean)
+          .join(" — ")
+      : app.existingStudentId
+        ? "Non précisé — le parent principal actuel est conservé"
+        : "Non précisé — le père par défaut";
+    const undecided = !["ACCEPTED", "DECLINED", "WITHDRAWN"].includes(app.status);
+    let payerWarning: string | null = null;
+    if (declaredPayer && undecided) {
+      if (app.existingStudentId) {
+        // Through the tenant-scoped Student: the link table has no tenant column.
+        const withPrincipal = await db.student.findUnique({
+          where: { id: app.existingStudentId },
+          select: {
+            guardianLinks: {
+              where: { isPrimary: true },
+              select: { guardian: { select: { relation: true } } },
+              take: 1,
+            },
+          },
+        });
+        const relation = withPrincipal?.guardianLinks[0]?.guardian.relation ?? null;
+        // "AUTRE" names nobody in particular: only père / mère / tuteur compare.
+        const principalKind = relation ? relKindOf(relation) : null;
+        if (!principalKind || principalKind === "AUTRE") {
+          payerWarning =
+            "Le lien du parent principal actuel de l'élève n'est pas renseigné : impossible de le comparer au responsable financier déclaré.";
+        } else if (principalKind !== declaredPayer.kind) {
+          payerWarning = `Le responsable financier déclaré (${declaredPayer.title}) n'est pas le parent principal actuel de l'élève (${RESP_KIND_LABEL[principalKind]}). Rien n'est modifié automatiquement : l'élève garde son parent principal et son code famille.`;
+        }
+      } else {
+        const submitterEmail = app.submittedBy.email.trim().toLowerCase();
+        const submitterCards = responsableCards.filter(
+          (c) => (c.answers.email ?? "").trim().toLowerCase() === submitterEmail,
+        );
+        const submitterCard = submitterCards.length === 1 ? submitterCards[0] : null;
+        if (!submitterCard) {
+          payerWarning =
+            "La fiche du parent qui a soumis le dossier n'a pas pu être identifiée (e-mail absent ou différent). À l'acceptation, le parent qui a soumis devient le parent principal de l'enfant : vérifiez-le après acceptation.";
+        } else if (submitterCard.id !== declaredPayer.id) {
+          payerWarning = `Le responsable financier déclaré (${declaredPayer.title}) n'est pas le parent qui a soumis le dossier (${submitterCard.title}). À l'acceptation, le parent qui a soumis devient le parent principal de l'enfant (destinataire des factures) : vérifiez le parent principal après acceptation.`;
+        }
+      }
+    }
 
     // Foyer data — address lives on Family (linked via Guardian), the
     // sub-fields (building/floor/details/notes) live in dossierAnswers.
@@ -766,7 +844,17 @@ export default async function AdmissionsAdminDetailPage({
                 .join(" ");
               return (
                 <Card key={resp.id}>
-                  <CardHeader title={resp.title} description={fullName || undefined} />
+                  <CardHeader
+                    title={resp.title}
+                    description={fullName || undefined}
+                    action={
+                      resp.financial ? (
+                        <span className="inline-flex rounded-full bg-[color:var(--color-brand-50)] px-2.5 py-0.5 text-xs font-medium text-[color:var(--color-brand-700)]">
+                          Responsable financier
+                        </span>
+                      ) : undefined
+                    }
+                  />
                   <CardBody>
                     <dl>
                       {parentFieldsConfig.fields
@@ -789,7 +877,16 @@ export default async function AdmissionsAdminDetailPage({
             <CardBody>
               <dl>
                 <Row label="Famille monoparentale" value={yn(app.monoParental)} />
+                <Row label="Responsable financier" value={declaredPayerLabel} />
               </dl>
+              {payerWarning ? (
+                <p
+                  role="note"
+                  className="mt-3 rounded-md bg-[color:var(--color-warning-soft)] px-3 py-2 text-sm text-[color:var(--color-warning-soft-fg)]"
+                >
+                  {payerWarning}
+                </p>
+              ) : null}
             </CardBody>
           </Card>
         </>

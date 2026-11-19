@@ -810,7 +810,11 @@
     "addResponsable": "Add a parent",
     "responsableTitle": "Parent {n}: {name}",
     "monoParental": "Single-parent family",
-    "missingRequiredIntro": "Required fields still to complete:"
+    "missingRequiredIntro": "Required fields still to complete:",
+    "financialResponsible": "Financially responsible",
+    "financialResponsibleHint": "The parent who pays the school fees. The school takes it into account for invoicing. One per file; if nobody is indicated, the school takes the father.",
+    "financialResponsibleUnsaved": "Save this parent to confirm this choice.",
+    "financialResponsibleSaved": "Financially responsible parent saved."
   },
   "dossierForms": {
     "saveError": "Could not save this section.",

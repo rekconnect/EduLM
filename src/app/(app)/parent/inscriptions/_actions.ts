@@ -8,6 +8,10 @@ import { db, unscopedDb } from "@/lib/db";
 import { requireRole, requireUser } from "@/lib/session";
 import { runWithTenant } from "@/lib/tenant-context";
 import {
+  financialValueFor,
+  type ResponsableKind,
+} from "@/lib/financial-responsible";
+import {
   evaluateShowIf,
   fieldRequiredOnForm,
   fieldVisibleOnForm,
@@ -1515,11 +1519,41 @@ async function refreshResponsablesCompletion(
   });
 }
 
+/**
+ * Make `rowId` the dossier's financially responsible parent — the only one:
+ * the mark is taken off every other responsable of the dossier in the same
+ * transaction. See src/lib/financial-responsible.ts.
+ */
+async function writeFinancialMark(
+  applicationId: string,
+  rowId: string,
+  kind: ResponsableKind,
+): Promise<void> {
+  await db.$transaction(async (tx) => {
+    await tx.applicationResponsable.updateMany({
+      where: { applicationId, NOT: { id: rowId } },
+      data: { financiallyResponsible: null },
+    });
+    await tx.applicationResponsable.updateMany({
+      where: { id: rowId, applicationId },
+      data: { financiallyResponsible: financialValueFor(kind) },
+    });
+  });
+}
+
 export async function saveResponsableAnswers(
   applicationId: string,
   responsableId: string | null,
-  payload: { kind: string; answers: Record<string, string> },
-): Promise<{ ok: boolean; error?: string }> {
+  payload: {
+    kind: string;
+    answers: Record<string, string>;
+    /**
+     * True when the family chose THIS responsable as the financially
+     * responsible parent. Absent otherwise: a card save never removes a mark.
+     */
+    financial?: boolean;
+  },
+): Promise<{ ok: boolean; error?: string; id?: string }> {
   const user = await requireDossierActor();
   const tenantId = user.tenantId;
   if (!tenantId) return { ok: false, error: "no-tenant" };
@@ -1553,6 +1587,7 @@ export async function saveResponsableAnswers(
       lastName,
       customAnswers: answers as Prisma.InputJsonValue,
     };
+    let rowId = responsableId ?? "";
     if (responsableId) {
       const existing = await db.applicationResponsable.findUnique({
         where: { id: responsableId },
@@ -1567,11 +1602,57 @@ export async function saveResponsableAnswers(
         where: { applicationId },
         _max: { order: true },
       });
-      await db.applicationResponsable.create({
+      const created = await db.applicationResponsable.create({
         data: { tenantId, applicationId, order: (maxOrder._max.order ?? -1) + 1, ...data },
+        select: { id: true },
+      });
+      rowId = created.id;
+    }
+    if (payload.financial === true) {
+      await writeFinancialMark(applicationId, rowId, kind);
+    } else {
+      // The stored value names the row's own kind: keep it in step when the
+      // "Lien" of an already marked responsable is changed.
+      await db.applicationResponsable.updateMany({
+        where: { id: rowId, applicationId, financiallyResponsible: { not: null } },
+        data: { financiallyResponsible: financialValueFor(kind) },
       });
     }
     await refreshResponsablesCompletion(applicationId, app.tabsCompleted, tenantId);
+    revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
+    // The id lets the form keep working on the card it just created.
+    return { ok: true, id: rowId };
+  });
+}
+
+/**
+ * The family picks which SAVED responsable is the financially responsible
+ * parent. Saved at once (it is one radio across the cards), separately from
+ * the card's own fields.
+ */
+export async function setFinancialResponsable(
+  applicationId: string,
+  responsableId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireDossierActor();
+  const tenantId = user.tenantId;
+  if (!tenantId) return { ok: false, error: "no-tenant" };
+  return runWithTenant({ tenantId, slug: null }, async () => {
+    const app = await db.application.findUnique({
+      where: dossierWhereFor(applicationId, user),
+      select: { id: true, status: true },
+    });
+    if (!app) return { ok: false, error: "not-found" };
+    if (!statusEditableFor(app.status, user)) return { ok: false, error: "locked" };
+    const row = await db.applicationResponsable.findUnique({
+      where: { id: responsableId },
+      select: { applicationId: true, kind: true },
+    });
+    if (!row || row.applicationId !== applicationId) {
+      return { ok: false, error: "not-found" };
+    }
+    stampAdminEdit(applicationId, user);
+    await writeFinancialMark(applicationId, responsableId, row.kind);
     revalidatePath(`/parent/inscriptions/${applicationId}/edit`);
     return { ok: true };
   });

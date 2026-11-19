@@ -1681,7 +1681,8 @@
     "separateCodeAction": "Donner un code famille séparé",
     "separateCodeConfirm": "Retirer ce parent du code famille {code} et lui créer un code séparé ?",
     "separateCodeDone": "Ce parent a maintenant son propre code famille {code}.",
-    "separateCodeError": "Le code famille n'a pas pu être séparé."
+    "separateCodeError": "Le code famille n'a pas pu être séparé.",
+    "separateCodeOpenDossier": "Ce parent a un dossier en cours : son adresse et ses autorisations sont rattachées à ce code famille. Séparez le code une fois le dossier traité."
   },
   "common": {
     "selectDate": "Sélectionner une date",

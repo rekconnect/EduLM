@@ -1681,7 +1681,8 @@
     "separateCodeAction": "Give a separate family code",
     "separateCodeConfirm": "Take this parent out of family code {code} and create a separate code for them?",
     "separateCodeDone": "This parent now has their own family code {code}.",
-    "separateCodeError": "The family code could not be separated."
+    "separateCodeError": "The family code could not be separated.",
+    "separateCodeOpenDossier": "This parent has a dossier in progress: its address and consents are attached to this family code. Separate the code once the dossier is decided."
   },
   "common": {
     "selectDate": "Select a date",

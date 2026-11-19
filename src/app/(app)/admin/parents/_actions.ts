@@ -17,6 +17,7 @@ import {
   staffIdentityGuard,
 } from "@/lib/staff-identity";
 import {
+  OPEN_DOSSIER_STATUSES,
   ensureFamilyForGuardian,
   giveGuardianOwnFamily,
   placeGuardianWithStudent,
@@ -367,15 +368,17 @@ export async function createParent(
       select: { id: true },
     });
     if (linkStudent) {
-      // A child's first parent is its "parent principal".
-      const hasPrincipal = await db.studentGuardian.count({
-        where: { studentId: linkStudent.id, isPrimary: true },
+      // The very first parent of a child is its "parent principal". A child
+      // that already has parents keeps whatever it has: who is principal
+      // there is the school's decision, not a side effect of adding one.
+      const existingParents = await db.studentGuardian.count({
+        where: { studentId: linkStudent.id },
       });
       await db.studentGuardian.create({
         data: {
           studentId: linkStudent.id,
           guardianId: guardian.id,
-          isPrimary: hasPrincipal === 0,
+          isPrimary: existingParents === 0,
         },
       });
       // A brand-new account has nothing of its own: it joins the child's
@@ -388,6 +391,17 @@ export async function createParent(
         }
       } catch (err) {
         console.error("[createParent] family placement failed", err);
+        // Never leave the new parent without any code: give them one of
+        // their own (this touches no child), as a plain creation would.
+        try {
+          const g = await db.guardian.findUnique({
+            where: { id: guardian.id },
+            select: { familyId: true },
+          });
+          if (g && !g.familyId) await giveGuardianOwnFamily(guardian.id);
+        } catch (err2) {
+          console.error("[createParent] fallback family failed", err2);
+        }
       }
       linkedStudentId = linkStudent.id;
     } else {
@@ -673,13 +687,29 @@ export async function separateParentFamilyCode(
     const g = target?.guardianProfile;
     if (!g) return { ok: false, error: "not-found" };
     if (g.familyId) {
-      // Alone under a code already: there is nothing to separate from.
       const [others, children] = await Promise.all([
         db.guardian.count({ where: { familyId: g.familyId, NOT: { id: g.id } } }),
         db.student.count({ where: { familyId: g.familyId } }),
       ]);
+      // Alone under a code already: there is nothing to separate from.
       if (others === 0 && children === 0) return { ok: false, error: "already-alone" };
+      // The only parent of a code that has children stays: those children
+      // (and their accounting) would be left with no parent under the code.
+      if (others === 0) return { ok: false, error: "only-parent" };
     }
+    // A dossier in progress reads and writes the address and the consents of
+    // its author's family: same guard as the move, the other way round.
+    const openDossiers = await db.application.count({
+      where: {
+        submittedByUserId: parentUserId,
+        status: { in: [...OPEN_DOSSIER_STATUSES] },
+      },
+    });
+    if (openDossiers > 0) return { ok: false, error: "open-dossier" };
+    // Alone under a fresh code, a self-registered account can count again as
+    // an abandoned sign-up: give it a full countdown rather than a due date
+    // in the past. Done first: if it fails, nothing has changed.
+    await restartSignupCountdownFor(tenantId, [parentUserId]);
     const family = await giveGuardianOwnFamily(g.id);
     if (!family) return { ok: false, error: "not-found" };
     return { ok: true, code: family.code };

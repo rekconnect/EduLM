@@ -27,7 +27,7 @@ export function SeparateFamilyCodeButton({
     if (pending) return;
     if (!window.confirm(t("separateCodeConfirm", { code }))) return;
     startTransition(async () => {
-      let result: { ok: boolean; code?: string };
+      let result: { ok: boolean; code?: string; error?: string };
       try {
         result = await separateParentFamilyCode(parentId);
       } catch {
@@ -36,7 +36,12 @@ export function SeparateFamilyCodeButton({
       if (result.ok) {
         toast.success(t("separateCodeDone", { code: result.code ?? "" }));
       } else {
-        toast.error(t("separateCodeError"));
+        toast.error(
+          result.error === "open-dossier"
+            ? t("separateCodeOpenDossier")
+            : t("separateCodeError"),
+          { duration: 10000 },
+        );
       }
     });
   }
